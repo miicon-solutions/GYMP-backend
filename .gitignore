@@ -1,0 +1,73 @@
+# Local configuration and credentials (keep example files)
+.env
+.env.*
+!.env.example
+!.env.*.example
+secrets/
+*-firebase-adminsdk*.json
+service-account*.json
+firebase-credentials*.json
+*.pem
+*.key
+
+# Python environments and bytecode
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+
+# Test, lint, and type-check caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+/coverage/
+
+# Python build and package output
+/build/
+/dist/
+.eggs/
+*.egg-info/
+
+# Django generated assets, uploads, and local databases
+/staticfiles/
+/media/
+/data/
+*.sqlite3
+*.sqlite3-*
+
+# Local Docker Compose overrides
+/compose.override.yml
+/compose.override.yaml
+/docker-compose.override.yml
+/docker-compose.override.yaml
+
+# Logs and temporary files
+*.log
+*.log.*
+/logs/
+/tmp/
+*.swp
+*.swo
+*~
+
+# Editor and operating-system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keep uv.lock, Django migrations, source assets, and API docs in version control.

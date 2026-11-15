@@ -1,0 +1,377 @@
+[
+  {
+    "method": "GET",
+    "old": "/v1/admin/activity",
+    "new": "/api/v1/admin/activity/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/members",
+    "new": "/api/v1/admin/members/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/members/:id",
+    "new": "/api/v1/admin/members/{id}/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/members/:id/cash-preview",
+    "new": "/api/v1/admin/members/{id}/cash-preview/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/members/:id/cash-payments",
+    "new": "/api/v1/admin/members/{id}/cash-payments/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/members/:id/phone",
+    "new": "/api/v1/admin/members/{id}/phone/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/members/:id/fingerprint",
+    "new": "/api/v1/admin/members/{id}/fingerprint/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/attendance",
+    "new": "/api/v1/member/attendance/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/internal/attendance/check-in",
+    "new": "/api/v1/internal/attendance/check-in/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/resolve-phone",
+    "new": "/api/v1/auth/resolve-phone/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/otp/send",
+    "new": "/api/v1/auth/otp/send/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/otp/verify",
+    "new": "/api/v1/auth/otp/verify/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/google",
+    "new": "/api/v1/auth/google/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/google/link-phone",
+    "new": "/api/v1/auth/google/link-phone/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/admin/unlock",
+    "new": "/api/v1/auth/admin/unlock/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/admin/mfa/setup",
+    "new": "/api/v1/auth/admin/mfa/setup/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/admin/mfa/confirm",
+    "new": "/api/v1/auth/admin/mfa/confirm/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/refresh",
+    "new": "/api/v1/auth/refresh/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/auth/logout",
+    "new": "/api/v1/auth/logout/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/member/profile/link-google",
+    "new": "/api/v1/member/profile/link-google/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/staff/:id/mfa/enroll",
+    "new": "/api/v1/admin/staff/{id}/mfa/enroll/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/costs",
+    "new": "/api/v1/admin/costs/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/costs",
+    "new": "/api/v1/admin/costs/"
+  },
+  {
+    "method": "PATCH",
+    "old": "/v1/admin/costs/:id",
+    "new": "/api/v1/admin/costs/{id}/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/costs/:id/archive",
+    "new": "/api/v1/admin/costs/{id}/archive/"
+  },
+  {
+    "method": "DELETE",
+    "old": "/v1/admin/costs/:id",
+    "new": "/api/v1/admin/costs/{id}/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/dashboard",
+    "new": "/api/v1/member/dashboard/"
+  },
+  {
+    "method": "GET",
+    "old": "/",
+    "new": "/"
+  },
+  {
+    "method": "GET",
+    "old": "/docs",
+    "new": "/docs/"
+  },
+  {
+    "method": "GET",
+    "old": "/docs/",
+    "new": "/docs/"
+  },
+  {
+    "method": "GET",
+    "old": "/terms",
+    "new": "/terms/"
+  },
+  {
+    "method": "GET",
+    "old": "/privacy",
+    "new": "/privacy/"
+  },
+  {
+    "method": "GET",
+    "old": "/openapi.yaml",
+    "new": "/openapi.yaml"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/gym-hours",
+    "new": "/api/v1/admin/gym-hours/"
+  },
+  {
+    "method": "PUT",
+    "old": "/v1/admin/gym-hours/week",
+    "new": "/api/v1/admin/gym-hours/week/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/gym-hours/holidays",
+    "new": "/api/v1/admin/gym-hours/holidays/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/gym-hours/holidays",
+    "new": "/api/v1/admin/gym-hours/holidays/"
+  },
+  {
+    "method": "PATCH",
+    "old": "/v1/admin/gym-hours/holidays/:id",
+    "new": "/api/v1/admin/gym-hours/holidays/{id}/"
+  },
+  {
+    "method": "DELETE",
+    "old": "/v1/admin/gym-hours/holidays/:id",
+    "new": "/api/v1/admin/gym-hours/holidays/{id}/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/gym-status",
+    "new": "/api/v1/member/gym-status/"
+  },
+  {
+    "method": "GET",
+    "old": "/health",
+    "new": "/health/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/profile",
+    "new": "/api/v1/member/profile/"
+  },
+  {
+    "method": "PUT",
+    "old": "/v1/member/profile",
+    "new": "/api/v1/member/profile/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/member/profile/complete",
+    "new": "/api/v1/member/profile/complete/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/member/profile/phone/change",
+    "new": "/api/v1/member/profile/phone/change/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/member/profile/phone/recover-email",
+    "new": "/api/v1/member/profile/phone/recover-email/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/member/profile/photo",
+    "new": "/api/v1/member/profile/photo/"
+  },
+  {
+    "method": "DELETE",
+    "old": "/v1/member/profile/photo",
+    "new": "/api/v1/member/profile/photo/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/member/payments/sessions",
+    "new": "/api/v1/member/payments/sessions/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/payments/sessions/:tranId",
+    "new": "/api/v1/member/payments/sessions/{tranId}/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/member/payments/sessions/:tranId/confirm",
+    "new": "/api/v1/member/payments/sessions/{tranId}/confirm/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/payments",
+    "new": "/api/v1/member/payments/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/payments/:id",
+    "new": "/api/v1/member/payments/{id}/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/payments/:id/receipt",
+    "new": "/api/v1/member/payments/{id}/receipt/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/payments/:id/receipt.html",
+    "new": "/api/v1/member/payments/{id}/receipt.html/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/webhooks/sslcommerz/ipn",
+    "new": "/api/v1/webhooks/sslcommerz/ipn/"
+  },
+  {
+    "method": "GET",
+    "old": "/payments/return/:outcome",
+    "new": "/payments/return/{outcome}/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/plans",
+    "new": "/api/v1/admin/plans/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/plans",
+    "new": "/api/v1/admin/plans/"
+  },
+  {
+    "method": "PATCH",
+    "old": "/v1/admin/plans/:id",
+    "new": "/api/v1/admin/plans/{id}/"
+  },
+  {
+    "method": "DELETE",
+    "old": "/v1/admin/plans/:id",
+    "new": "/api/v1/admin/plans/{id}/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/plans/:id/offers",
+    "new": "/api/v1/admin/plans/{id}/offers/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/plans/:id/offers",
+    "new": "/api/v1/admin/plans/{id}/offers/"
+  },
+  {
+    "method": "PATCH",
+    "old": "/v1/admin/plans/:id/offers/:offerId",
+    "new": "/api/v1/admin/plans/{id}/offers/{offerId}/"
+  },
+  {
+    "method": "DELETE",
+    "old": "/v1/admin/plans/:id/offers/:offerId",
+    "new": "/api/v1/admin/plans/{id}/offers/{offerId}/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/plans",
+    "new": "/api/v1/member/plans/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/member/plans/:planId",
+    "new": "/api/v1/member/plans/{planId}/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/revenue",
+    "new": "/api/v1/admin/revenue/"
+  },
+  {
+    "method": "GET",
+    "old": "/v1/admin/staff",
+    "new": "/api/v1/admin/staff/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/staff",
+    "new": "/api/v1/admin/staff/"
+  },
+  {
+    "method": "PATCH",
+    "old": "/v1/admin/staff/:id",
+    "new": "/api/v1/admin/staff/{id}/"
+  },
+  {
+    "method": "DELETE",
+    "old": "/v1/admin/staff/:id",
+    "new": "/api/v1/admin/staff/{id}/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/staff/:id/activate",
+    "new": "/api/v1/admin/staff/{id}/activate/"
+  },
+  {
+    "method": "POST",
+    "old": "/v1/admin/staff/:id/deactivate",
+    "new": "/api/v1/admin/staff/{id}/deactivate/"
+  },
+  {
+    "method": "GET",
+    "old": "/api/v1/welcome",
+    "new": "/api/v1/welcome/"
+  }
+]

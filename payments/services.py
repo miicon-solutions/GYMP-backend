@@ -1,0 +1,287 @@
+import secrets
+from datetime import UTC, date, timedelta
+from decimal import Decimal, InvalidOperation
+
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from rest_framework.exceptions import ValidationError
+
+from core.api import BadGateway, Conflict, require_admin
+from members.models import MemberProfile
+from members.services import owned_profile
+from operations.services import DHAKA, record
+from payments import gateway
+from payments.models import Payment, PaymentSession
+from plans.models import Plan
+from plans.services import pricing
+
+
+def go_add_months(day, months):
+    """Go time.AddDate normalizes overflow; Jan 31 + 1 month is Mar 3 (non-leap)."""
+    index = day.year * 12 + day.month - 1 + months
+    year, month = divmod(index, 12)
+    return date(year, month + 1, 1) + timedelta(days=day.day - 1)
+
+
+def new_expiry(member, months, kind, now=None, cash=False):
+    now = now or timezone.now()
+    today = now.astimezone(DHAKA if cash else UTC).date()
+    base = today
+    if member.expires_on and member.expires_on >= today:
+        if member.membership_status == "active" or (not cash and kind in {"renew", "change_plan"}):
+            base = member.expires_on
+    return go_add_months(base, months)
+
+
+def get_plan(plan_id):
+    return get_object_or_404(Plan, pk=plan_id, is_active=True)
+
+
+def snapshot(plan, kind):
+    amounts = pricing(plan)
+    first = kind in {"first_purchase", "first_payment"}
+    renewal = amounts["effective_renewal_taka"]
+    total = amounts["effective_first_payment_taka"] if first else renewal
+    admission = total - renewal if first else 0
+    lines = [{"label": "Admission fee", "amount_taka": admission}] if admission else []
+    lines.append(
+        {"label": plan.name + (" period" if first else " renewal"), "amount_taka": renewal}
+    )
+    return {
+        "amount_taka": total,
+        "line_items": lines,
+        "duration_months": plan.duration_months,
+        "catalog_id": plan.catalog_id,
+    }
+
+
+def check_kind(member, kind):
+    if kind == "first_purchase":
+        if (
+            member.membership_status == "active"
+            or member.payments.filter(status="paid", is_first_payment=True).exists()
+        ):
+            raise Conflict("First purchase is not available.")
+    elif kind in {"renew", "change_plan"}:
+        if member.membership_status not in {"active", "expired"}:
+            raise ValidationError({"kind": "Renewal or plan change is not available."})
+    else:
+        raise ValidationError({"kind": "Choose a valid payment type."})
+
+
+def create_session(user, data):
+    member = owned_profile(user)
+    with transaction.atomic():
+        member = MemberProfile.objects.select_for_update().get(pk=member.pk)
+        if not member.profile_complete:
+            raise ValidationError({"profile": "Complete your profile first."})
+        plan = get_object_or_404(
+            Plan.objects.select_for_update(), pk=data["plan_id"], is_active=True
+        )
+        check_kind(member, data["kind"])
+        price = snapshot(plan, data["kind"])
+        if price["amount_taka"] < 10:
+            raise ValidationError({"amount_taka": "Amount is too low for online payment."})
+        PaymentSession.objects.filter(member=member, kind=data["kind"], status="pending").update(
+            status="cancelled"
+        )
+        session = PaymentSession.objects.create(
+            member=member,
+            plan=plan,
+            kind=data["kind"],
+            tran_id="PG" + timezone.now().strftime("%y%m%d") + secrets.token_hex(8),
+            amount_taka=price["amount_taka"],
+            pricing_snapshot=price,
+        )
+    if data.get("checkout") == "sdk":
+        return session
+    try:
+        result = gateway.initiate(session)
+    except BadGateway:
+        mark_failed(session.pk)
+        raise
+    PaymentSession.objects.filter(pk=session.pk, status="pending").update(
+        gateway_url=result["GatewayPageURL"], session_key=result.get("sessionkey", "")
+    )
+    session.refresh_from_db()
+    return session
+
+
+def mark_failed(pk):
+    PaymentSession.objects.filter(pk=pk).exclude(status="paid").update(status="failed")
+
+
+def validate_result(session, result):
+    if str(result.get("status", "")).upper() not in {"VALID", "VALIDATED"}:
+        return False
+    try:
+        amount = Decimal(str(result.get("amount", "")))
+        valid_amount = amount.is_finite() and abs(amount - session.amount_taka) < Decimal("0.01")
+    except InvalidOperation:
+        valid_amount = False
+    if (
+        not valid_amount
+        or result.get("tran_id") != session.tran_id
+        or str(result.get("currency") or "").upper() != "BDT"
+        or str(result.get("risk_level", "")) == "1"
+        or not result.get("val_id")
+    ):
+        raise ValidationError({"payment": "Payment validation failed."})
+    return True
+
+
+@transaction.atomic
+def settle(session, result):
+    # Always lock member before session, shared with cash/create; serializes expiry extensions.
+    member = MemberProfile.objects.select_for_update().get(pk=session.member_id)
+    current = PaymentSession.objects.select_for_update().get(pk=session.pk)
+    if current.status == "paid":
+        return current
+    price = current.pricing_snapshot
+    expiry = new_expiry(member, price["duration_months"], current.kind)
+    now = timezone.now()
+    Payment.objects.create(
+        member=member,
+        plan=current.plan,
+        tran_id=current.tran_id,
+        catalog_id=price["catalog_id"],
+        channel="sslcommerz",
+        kind=current.kind,
+        is_first_payment=current.kind == "first_purchase",
+        amount_taka=current.amount_taka,
+        paid_at=now,
+        line_items=price["line_items"],
+    )
+    activate(member, current.plan, expiry)
+    current.status, current.paid_at = "paid", now
+    current.val_id, current.bank_tran_id = result["val_id"], result.get("bank_tran_id", "")
+    current.save()
+    return current
+
+
+def activate(member, plan, expires):
+    member.plan, member.expires_on, member.membership_status = plan, expires, "active"
+    if member.fingerprint_status == "not_required":
+        member.fingerprint_status = "pending"
+    member.save()
+
+
+def confirm_session(user, tran_id, poll=False):
+    member = owned_profile(user)
+    session = get_object_or_404(PaymentSession, member=member, tran_id=tran_id)
+    if session.status != "pending":
+        return session
+    try:
+        result = gateway.query(tran_id)
+        state = str(result.get("status", "")).upper()
+        if state in {"", "PENDING"}:
+            return session
+        if state in {"FAILED", "CANCELLED", "UNATTEMPTED", "EXPIRED"}:
+            if result.get("tran_id") != session.tran_id:
+                raise ValidationError({"payment": "Payment validation failed."})
+            mark_failed(session.pk)
+        elif validate_result(session, result):
+            return settle(session, result)
+    except BadGateway, ValidationError:
+        if not poll:
+            raise
+    session.refresh_from_db()
+    return session
+
+
+def handle_ipn(data):
+    session = get_object_or_404(PaymentSession, tran_id=data["tran_id"])
+    if session.status == "paid":
+        return {"received": True}
+    state = str(data.get("status", "")).upper()
+    if state in {"FAILED", "CANCELLED", "UNATTEMPTED", "EXPIRED"}:
+        verified = gateway.query(session.tran_id)
+        verified_state = str(verified.get("status", "")).upper()
+        if verified_state in {"FAILED", "CANCELLED", "UNATTEMPTED", "EXPIRED"}:
+            if verified.get("tran_id") != session.tran_id:
+                raise ValidationError({"payment": "Payment validation failed."})
+            mark_failed(session.pk)
+        elif validate_result(session, verified):
+            settle(session, verified)
+        return {"received": True}
+    if not data.get("val_id"):
+        raise ValidationError({"val_id": "Missing validation ID."})
+    result = gateway.validate(data["val_id"])
+    if validate_result(session, result):
+        settle(session, result)
+    return {"received": True}
+
+
+def cash_details(member, plan):
+    paid = member.payments.filter(status="paid").exists()
+    kind = (
+        "first_payment" if not paid else ("renewal" if member.plan_id == plan.pk else "plan_change")
+    )
+    price = snapshot(plan, kind)
+    preview = {
+        "kind": kind,
+        "amount_taka": price["amount_taka"],
+        "new_expires_on": new_expiry(member, plan.duration_months, kind, cash=True),
+        "plan_id": str(plan.pk),
+        "catalog_id": plan.catalog_id,
+    }
+    return preview, price
+
+
+def cash_preview(actor, member, plan_id):
+    require_admin(actor)
+    return cash_details(member, get_plan(plan_id))[0]
+
+
+def format_taka(amount):
+    raw = str(abs(amount))
+    if len(raw) <= 3:
+        return "৳" + raw
+    leading, last = raw[:-3], raw[-3:]
+    groups = []
+    while leading:
+        groups.insert(0, leading[-2:])
+        leading = leading[:-2]
+    return "৳" + ",".join(groups + [last])
+
+
+@transaction.atomic
+def receive_cash(actor, member, plan_id):
+    require_admin(actor)
+    member = MemberProfile.objects.select_for_update().get(pk=member.pk)
+    plan = get_object_or_404(Plan.objects.select_for_update(), pk=plan_id, is_active=True)
+    preview, price = cash_details(member, plan)
+    previous_plan = member.plan.name if member.plan_id else plan.name
+    payment = Payment.objects.create(
+        member=member,
+        plan=plan,
+        catalog_id=plan.catalog_id,
+        channel="cash",
+        kind=preview["kind"],
+        is_first_payment=preview["kind"] == "first_payment",
+        amount_taka=price["amount_taka"],
+        line_items=price["line_items"],
+        paid_at=timezone.now(),
+    )
+    activate(member, plan, preview["new_expires_on"])
+    params = {
+        "member_id": member.member_id,
+        "name": member.user.full_name,
+        "amount": format_taka(payment.amount_taka),
+        "plan": plan.name,
+    }
+    if preview["kind"] == "plan_change":
+        params.update(from_plan=previous_plan, to_plan=plan.name)
+    record(
+        actor,
+        "member",
+        "activate" if preview["kind"] == "first_payment" else "update",
+        {
+            "first_payment": "adminActivityMemberCashActivated",
+            "renewal": "adminActivityMemberCashRenewed",
+            "plan_change": "adminActivityMemberCashPlanChanged",
+        }[preview["kind"]],
+        params,
+    )
+    return member, payment

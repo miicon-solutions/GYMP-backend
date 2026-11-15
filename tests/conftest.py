@@ -1,0 +1,69 @@
+import secrets
+
+import pytest
+from rest_framework.test import APIClient
+
+from accounts.models import StaffProfile, User
+from accounts.services import new_member
+from plans.models import Plan
+
+
+@pytest.fixture(autouse=True)
+def test_settings(settings, tmp_path):
+    settings.OTP_DEV_BYPASS = True
+    settings.EMAIL_DEV_BYPASS = True
+    settings.TOTP_ENCRYPTION_KEY = "0" * 64
+    settings.MEDIA_ROOT = tmp_path
+    settings.STATIC_ROOT = tmp_path / "static"
+    settings.STATIC_ROOT.mkdir()
+    settings.ATTENDANCE_DEVICE_KEY = "test-device-key"
+    settings.PUBLIC_BASE_URL = "http://testserver"
+
+
+@pytest.fixture
+def client():
+    return APIClient()
+
+
+@pytest.fixture
+def member(db):
+    return new_member("+8801712345678")
+
+
+@pytest.fixture
+def other_member(db):
+    return new_member("+8801812345678")
+
+
+@pytest.fixture
+def staff(db):
+    u = User.objects.create_user("+8801912345678", role="admin", full_name="Staff")
+    StaffProfile.objects.create(user=u, short_id="S-TEST")
+    return u
+
+
+@pytest.fixture
+def super_admin(db):
+    u = User.objects.create_superuser(
+        "+8801612345678", password=secrets.token_urlsafe(24), full_name="Operator"
+    )
+    # create_superuser provisions its staff profile.
+    return u
+
+
+@pytest.fixture
+def plan(db):
+    return Plan.objects.create(
+        name="Monthly", duration_months=1, monthly_rate_taka=1500, admission_fee_taka=1000
+    )
+
+
+@pytest.fixture
+def profile_payload():
+    return {
+        "full_name": "Test Member",
+        "emergency_name": "Test Parent",
+        "emergency_relationship": "parent",
+        "emergency_phone_e164": "+8801512345678",
+        "blood_group": "O+",
+    }
