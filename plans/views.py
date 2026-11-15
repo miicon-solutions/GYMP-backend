@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from core.api import AdminOnly, MemberOnly
@@ -49,6 +50,13 @@ class MemberPlanList(generics.ListAPIView):
     def get_queryset(self):
         services.expire_offers()
         return Plan.objects.filter(is_active=True)
+
+
+class PublicPlanList(MemberPlanList):
+    """The published catalogue contains pricing only, never member data."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
 
 class MemberPlanDetail(generics.RetrieveAPIView):

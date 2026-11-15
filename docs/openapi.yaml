@@ -1645,6 +1645,34 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/public/plans/:
+    get:
+      operationId: api_v1_public_plans_list
+      description: The published catalogue contains pricing only, never member data.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - api
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPlanList'
+          description: ''
   /api/v1/webhooks/sslcommerz/ipn/:
     post:
       operationId: payments_sslcommerz_ipn

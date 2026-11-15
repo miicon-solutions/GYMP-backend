@@ -40,6 +40,14 @@ uv run python manage.py runserver 0.0.0.0:8080
 
 For local Python, replace `host.docker.internal` with `localhost` in `DATABASE_URL`, using the PostgreSQL container's published port. Compose passes your configured URL through unchanged. If your rootless Docker/network setup does not expose the database to host processes, run commands through `docker compose exec api` and use the container test workflow below.
 
+## Next.js web app
+
+The sibling `GYMP-web` repository provides the Pure Fitness public website, English/Bangla member portal, and staff workspace. Its Next.js server connects to this backend with `BACKEND_API_URL`; database and MinIO/S3 credentials stay in Django.
+
+`GET /api/v1/public/plans/` exposes only active catalogue plans with the same computed prices/offers and cursor pagination as the member catalogue. It needs no login and contains no member data.
+
+Set `WEB_APP_BASE_URL` to the web origin (for example `http://localhost:3000` locally or `https://fitness.example.com` in production) to forward browser payment returns there. It accepts only a configured HTTP(S) origin, requires HTTPS in production, and never trusts a client-provided redirect destination. GET and POST gateway returns redirect without settling a payment; authenticated confirmation/IPN still validates the gateway. Leaving this variable empty preserves the existing Django return page.
+
 ## Media storage: MinIO locally, S3 in production
 
 Uploads use Django's default storage backend. `.env.example` selects `MEDIA_STORAGE=s3`; the same backend supports MinIO and AWS S3. Create a private bucket and credentials separately. The application does not start MinIO, create buckets, or change bucket policies.

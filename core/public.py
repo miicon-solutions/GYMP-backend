@@ -1,10 +1,12 @@
 import re
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.db import connection, transaction
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
-from django.views.decorators.http import require_GET
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET, require_http_methods
 
 
 @require_GET
@@ -52,14 +54,23 @@ def photo(request, filename):
         raise Http404 from exc
 
 
-@require_GET
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
 def payment_return(request, outcome):
     if outcome not in {"success", "fail", "cancel"}:
         raise Http404
+    tran_id = (request.GET.get("tran_id") or request.POST.get("tran_id", ""))[:30]
+    if settings.WEB_APP_BASE_URL:
+        query = urlencode({"tran_id": tran_id})
+        response = HttpResponseRedirect(
+            f"{settings.WEB_APP_BASE_URL}/payments/return/{outcome}?{query}"
+        )
+        response["Cache-Control"] = "no-store"
+        return response
     return render(
         request,
         "payment_return.html",
-        {"outcome": outcome, "tran_id": request.GET.get("tran_id", "")[:30]},
+        {"outcome": outcome, "tran_id": tran_id},
     )
 
 

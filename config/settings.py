@@ -139,6 +139,20 @@ if MEDIA_STORAGE == "s3":
 elif MEDIA_STORAGE != "filesystem":
     raise ImproperlyConfigured("MEDIA_STORAGE must be s3 or filesystem.")
 PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="http://localhost:8080").rstrip("/")
+WEB_APP_BASE_URL = env("WEB_APP_BASE_URL", default="").rstrip("/")
+if WEB_APP_BASE_URL:
+    web_origin = urlparse(WEB_APP_BASE_URL)
+    if (
+        web_origin.scheme not in {"http", "https"}
+        or not web_origin.netloc
+        or web_origin.username
+        or web_origin.password
+        or web_origin.path
+        or web_origin.query
+        or web_origin.fragment
+        or (PRODUCTION and web_origin.scheme != "https")
+    ):
+        raise ImproperlyConfigured("WEB_APP_BASE_URL must be a web origin (HTTPS in production).")
 CORS_ALLOWED_ORIGINS = env.list("HTTP_ALLOWED_ORIGINS", default=[])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 SECURE_CONTENT_TYPE_NOSNIFF = True

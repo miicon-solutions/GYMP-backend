@@ -23,6 +23,7 @@ def test_settings(settings, tmp_path):
     settings.STATIC_ROOT.mkdir()
     settings.ATTENDANCE_DEVICE_KEY = "test-device-key"
     settings.PUBLIC_BASE_URL = "http://testserver"
+    settings.WEB_APP_BASE_URL = ""
 
 
 @pytest.fixture

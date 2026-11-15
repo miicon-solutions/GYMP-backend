@@ -191,6 +191,7 @@ def upload_photo(user, file):
         ValueError,
         KeyError,
         UnidentifiedImageError,
+        SyntaxError,
         Image.DecompressionBombError,
         Image.DecompressionBombWarning,
     ) as exc:

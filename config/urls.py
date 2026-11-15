@@ -62,6 +62,7 @@ from plans.views import (
     OfferList,
     PlanDetail,
     PlanList,
+    PublicPlanList,
 )
 from reporting.serializers import RevenueOutput, RevenueQuery
 from reporting.services import revenue
@@ -87,6 +88,7 @@ def mfa_enroll(request, data, pk):
 
 
 api = [
+    path("public/plans/", PublicPlanList.as_view()),
     path("auth/", include("accounts.urls")),
     path(
         "welcome/",
