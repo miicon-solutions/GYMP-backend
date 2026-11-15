@@ -7,7 +7,8 @@ dependencies = [
   "django>=5.2.8,<5.3", "djangorestframework>=3.16,<4", "psycopg[binary]>=3.2,<4",
   "django-environ>=0.12,<1", "django-cors-headers>=4.7,<5", "drf-spectacular[sidecar]>=0.28,<1",
   "pyjwt>=2.10,<3", "cryptography>=45", "pyotp>=2.9,<3", "firebase-admin>=6.9,<8",
-  "httpx>=0.28,<1", "pillow>=11.2", "gunicorn>=23,<24", "whitenoise>=6.9,<7"
+  "httpx>=0.28,<1", "pillow>=11.2", "gunicorn>=23,<24", "whitenoise>=6.9,<7",
+  "django-storages[s3]>=1.14.6,<2"
 ]
 [dependency-groups]
 dev = ["pytest>=8.3", "pytest-django>=4.11", "ruff>=0.11"]

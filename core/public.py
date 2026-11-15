@@ -36,7 +36,9 @@ def live(request):
 
 @require_GET
 def photo(request, filename):
-    if not re.fullmatch(r"[a-f0-9]{32}\.(jpg|png|webp)", filename):
+    if settings.MEDIA_STORAGE != "filesystem" or not re.fullmatch(
+        r"[a-f0-9]{32}\.(jpg|png|webp)", filename
+    ):
         raise Http404
     path = settings.MEDIA_ROOT / filename
     try:

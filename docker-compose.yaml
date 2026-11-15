@@ -8,47 +8,27 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-gyma}:${POSTGRES_PASSWORD:-gyma}@db:5432/${POSTGRES_DB:-gyma_django}
-      MEMBER_PHOTO_DIR: /app/data/member-photos
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to your external PostgreSQL database}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${HTTP_PORT:-8080}:8080"
-    volumes:
-      - member-photos:/app/data/member-photos
-    depends_on:
-      db:
-        condition: service_healthy
     command: ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8080 --workers 2 --threads 4 --timeout 60 --access-logfile /dev/null"]
     healthcheck:
       test: ["CMD", "python", "-c", "import os, urllib.request, urllib.parse; host=urllib.parse.urlsplit(os.getenv('PUBLIC_BASE_URL', 'http://localhost:8080')).netloc; urllib.request.urlopen(urllib.request.Request('http://localhost:8080/health/', headers={'Host': host}), timeout=4)"]
       interval: 10s
       timeout: 5s
       retries: 5
-  db:
-    image: postgres:18
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-gyma}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gyma}
-      POSTGRES_DB: ${POSTGRES_DB:-gyma_django}
-    ports:
-      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 2s
-      timeout: 3s
-      retries: 30
   test:
     profiles: [test]
     build:
       context: .
       target: test
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-gyma}:${POSTGRES_PASSWORD:-gyma}@db:5432/${POSTGRES_DB:-gyma_django}
-    depends_on:
-      db:
-        condition: service_healthy
-
-volumes:
-  pgdata:
-  member-photos:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to your external PostgreSQL database}
+      MEDIA_STORAGE: filesystem
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

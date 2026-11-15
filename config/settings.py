@@ -32,14 +32,6 @@ if PRODUCTION and (
     raise ImproperlyConfigured("Production requires a private secret and DEBUG=false.")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "testserver"])
 DATABASE_URL = env("DATABASE_URL", default="postgres://gyma:gyma@localhost:55432/gyma_django")
-if APP_ENV == "local" and urlparse(DATABASE_URL).hostname not in {
-    "localhost",
-    "127.0.0.1",
-    "::1",
-    "db",
-    "host.docker.internal",
-}:
-    raise ImproperlyConfigured("Local mode requires a local PostgreSQL host.")
 DATABASES = {"default": env.db_url_config(DATABASE_URL, engine="django.db.backends.postgresql")}
 DATABASES["default"]["CONN_MAX_AGE"] = 60
 INSTALLED_APPS = [
@@ -105,6 +97,47 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = Path(env("MEMBER_PHOTO_DIR", default=str(BASE_DIR / "data/member-photos")))
 MEDIA_URL = "/media/member-photos/"
+MEDIA_STORAGE = env("MEDIA_STORAGE", default="filesystem").lower()
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+if MEDIA_STORAGE == "s3":
+    bucket_name = env("AWS_STORAGE_BUCKET_NAME", default="").strip()
+    if not bucket_name:
+        raise ImproperlyConfigured("AWS_STORAGE_BUCKET_NAME is required when MEDIA_STORAGE=s3.")
+    endpoint_url = env("AWS_S3_ENDPOINT_URL", default="").rstrip("/") or None
+    if endpoint_url:
+        endpoint = urlparse(endpoint_url)
+        if endpoint.scheme not in {"http", "https"} or not endpoint.netloc:
+            raise ImproperlyConfigured("AWS_S3_ENDPOINT_URL must be an HTTP or HTTPS URL.")
+    addressing_style = env("AWS_S3_ADDRESSING_STYLE", default="virtual")
+    if addressing_style not in {"path", "virtual", "auto"}:
+        raise ImproperlyConfigured("AWS_S3_ADDRESSING_STYLE must be path, virtual, or auto.")
+    querystring_expire = env.int("AWS_QUERYSTRING_EXPIRE", default=3600)
+    if not 1 <= querystring_expire <= 604800:
+        raise ImproperlyConfigured("AWS_QUERYSTRING_EXPIRE must be between 1 and 604800 seconds.")
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": bucket_name,
+            "access_key": env("AWS_ACCESS_KEY_ID", default="") or None,
+            "secret_key": env("AWS_SECRET_ACCESS_KEY", default="") or None,
+            "security_token": env("AWS_SESSION_TOKEN", default="") or None,
+            "endpoint_url": endpoint_url,
+            "region_name": env("AWS_S3_REGION_NAME", default="us-east-1"),
+            "addressing_style": addressing_style,
+            "location": env("AWS_LOCATION", default="media").strip("/"),
+            "signature_version": "s3v4",
+            "default_acl": None,
+            "querystring_auth": True,
+            "querystring_expire": querystring_expire,
+            "custom_domain": None,
+            "file_overwrite": False,
+        },
+    }
+elif MEDIA_STORAGE != "filesystem":
+    raise ImproperlyConfigured("MEDIA_STORAGE must be s3 or filesystem.")
 PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="http://localhost:8080").rstrip("/")
 CORS_ALLOWED_ORIGINS = env.list("HTTP_ALLOWED_ORIGINS", default=[])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])

@@ -59,7 +59,7 @@ Staff MFA setup/confirm accept `phone_e164`, `setup_token`, and (confirm only) `
 
 ## Resource payloads
 
-- **Profile write:** `full_name`, `emergency_name`, `emergency_relationship`, `emergency_phone_e164`, `blood_group`. Completion is a one-time operation; later writes use PUT. Photos belong exclusively to multipart `photo` uploads. Client-supplied `photo_url` is ignored. Photos are JPEG/PNG/WebP up to 5 MB, validated from file contents; deletion returns 204.
+- **Profile write:** `full_name`, `emergency_name`, `emergency_relationship`, `emergency_phone_e164`, `blood_group`. Completion is a one-time operation; later writes use PUT. Photos belong exclusively to multipart `photo` uploads. Client-supplied `photo_url` is ignored. Photos are JPEG/PNG/WebP up to 5 MB, validated from file contents; deletion returns 204. With MinIO/S3 storage, `photo_url` is a private signed absolute URL, valid for `AWS_QUERYSTRING_EXPIRE` seconds (default 3600). Fetch the profile again to refresh an expired link; do not persist the URL or assume an API-host media path. Downloading the signed URL does not require the API Bearer token, so treat it as a temporary access credential.
 - **Plans:** write `name`, `monthly_rate_taka`, `admission_fee_taka`, `duration_months`, `discount_type`, `discount_value`, `is_active`. Durations are 1/3/6/9/12 months and globally unique. `catalog_id` and computed prices are read-only. The legacy `renewal_taka` write alias is retired; use `monthly_rate_taka`. Standing and offer percentage discounts each apply to full period coverage, use integer truncation, and together clamp the renewal price at zero.
 - **Offers:** `name`, `starts_on`, `ends_on`, `waive_admission`, `extra_discount_type`, `extra_discount_value`, `is_active`. Active ranges on one plan cannot overlap. End dates are inclusive. Expired offers stop affecting prices immediately and are lazily deactivated on catalog reads.
 - **Staff:** `name`, `phone_e164`, `is_active`. Only a super admin can mutate staff or reset enrollment. Super-admin phone, active status, and deletion are protected; API input cannot grant super/operator privileges.
@@ -89,7 +89,7 @@ Receipts remain private, requiring the member Bearer token even when opening the
 
 ## Complete route mapping
 
-Placeholders such as `{id}` are UUIDs except `{tranId}` (merchant transaction reference) and `{outcome}` (`success|fail|cancel`). Duplicate `/docs` registrations share the same canonical destination. Media URLs remain `/media/member-photos/<generated-filename>` and are not collection APIs.
+Placeholders such as `{id}` are UUIDs except `{tranId}` (merchant transaction reference) and `{outcome}` (`success|fail|cancel`). Duplicate `/docs` registrations share the same canonical destination. Media URLs are storage-generated URLs, not collection APIs. In MinIO/S3 mode the legacy `/media/member-photos/<generated-filename>` route returns 404; only optional filesystem mode serves that route publicly.
 
 | Method | Go path | Django path |
 |---|---|---|

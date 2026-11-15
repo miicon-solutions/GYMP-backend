@@ -9,6 +9,7 @@ Run these commands in `GYMA_b`:
 ```bash
 cp .env.example .env
 # Edit .env; generate private Django/JWT secrets and a TOTP encryption key.
+# Set DATABASE_URL and the AWS_* settings for your external PostgreSQL and MinIO.
 # A suitable TOTP_ENCRYPTION_KEY: python -c 'import secrets; print(secrets.token_hex(32))'
 docker compose up --build -d
 docker compose exec api python manage.py seed_dev
@@ -19,7 +20,9 @@ Replace the phone placeholder with your actual Bangladesh phone number. `bootstr
 
 The API listens at `http://localhost:8080`. Open `/docs/` for Swagger, `/openapi.yaml` for the schema, `/admin/` for the inspect-only operator console, `/health/` for database readiness, and `/health/live/` for liveness. Migrations run before Gunicorn starts. The initial migration installs default gym hours: Saturday–Thursday 06:00–22:00, Friday closed.
 
-Compose uses its own project name, PostgreSQL database (`gyma_django`), persistent volumes, and host database port (`55432`). It does not connect to, import, or alter the Go database. Set `HTTP_PORT` if port 8080 is already occupied. `docker compose down` preserves data; deleting volumes intentionally resets this backend.
+Compose runs the API; PostgreSQL and MinIO/S3 are managed separately. Create a dedicated empty PostgreSQL database for this backend and set `DATABASE_URL` to its connection URL. Do not point it at the Go database: startup runs Django migrations against the configured database. Set `HTTP_PORT` if port 8080 is already occupied. Stopping Compose leaves the external database and bucket untouched.
+
+For PostgreSQL running in another Docker container with host port 5432 published, use `postgres://USER:PASSWORD@host.docker.internal:5432/DATABASE` from Compose. The file includes the Linux host-gateway mapping. Use your actual published port and URL-encode special characters in credentials. PostgreSQL must accept connections from the API container; a port published only on host loopback may be inaccessible through the gateway. Containers on a shared Docker network can instead use the database container's network hostname (attach the API using a local Compose override). `localhost` inside the API container refers to the API itself.
 
 `seed_dev` adds the original monthly/quarterly/annual catalog math (rate 1500, admission 1500, standing discounts 0/500/3500). It is idempotent, creates no accounts, and is disabled in production. Plans can also be created through the staff API.
 
@@ -29,13 +32,39 @@ Install Python 3.14 and `uv`, then:
 
 ```bash
 uv sync --locked
-docker compose up -d db
+# Set DATABASE_URL to your separately running PostgreSQL and configure MinIO in .env.
 uv run python manage.py migrate
 uv run python manage.py seed_dev
 uv run python manage.py runserver 0.0.0.0:8080
 ```
 
-Use the host PostgreSQL URL from `.env.example` for local Python. Compose overrides it with the internal `db` hostname. If your rootless Docker/network setup does not expose the database to host processes, run commands through `docker compose exec api` and use the container test workflow below.
+For local Python, replace `host.docker.internal` with `localhost` in `DATABASE_URL`, using the PostgreSQL container's published port. Compose passes your configured URL through unchanged. If your rootless Docker/network setup does not expose the database to host processes, run commands through `docker compose exec api` and use the container test workflow below.
+
+## Media storage: MinIO locally, S3 in production
+
+Uploads use Django's default storage backend. `.env.example` selects `MEDIA_STORAGE=s3`; the same backend supports MinIO and AWS S3. Create a private bucket and credentials separately. The application does not start MinIO, create buckets, or change bucket policies.
+
+For MinIO, fill these values in `.env`:
+
+```dotenv
+MEDIA_STORAGE=s3
+AWS_STORAGE_BUCKET_NAME=gyma-media
+AWS_ACCESS_KEY_ID=YOUR_MINIO_ACCESS_KEY
+AWS_SECRET_ACCESS_KEY=YOUR_MINIO_SECRET_KEY
+AWS_S3_ENDPOINT_URL=http://YOUR_HOST_LAN_IP:9000
+AWS_S3_REGION_NAME=us-east-1
+AWS_S3_ADDRESSING_STYLE=path
+AWS_LOCATION=media
+AWS_QUERYSTRING_EXPIRE=3600
+```
+
+Use MinIO's S3 API port (usually 9000), not its console port. The endpoint hostname/IP must resolve and be reachable from **both the backend and photo-viewing clients**: it appears in signed download URLs. A host LAN IP or shared DNS name works when both can reach it. Container-only names such as `minio` or `host.docker.internal` usually cannot be used by phones or other client machines. Do not rewrite the hostname in a signed URL; doing so invalidates its signature. Use HTTPS outside local development.
+
+For AWS S3, leave `AWS_S3_ENDPOINT_URL` empty, set `AWS_S3_REGION_NAME` to the bucket's region, and use `AWS_S3_ADDRESSING_STYLE=virtual`. Set AWS access credentials and optionally `AWS_SESSION_TOKEN`, or leave them blank to use the deployment's IAM role/default AWS credential chain. Grant bucket listing and object read/write/delete access to the selected prefix. Keep public access blocked; no object ACL is sent.
+
+`AWS_LOCATION` defaults to `media` and prefixes object keys; keep it stable once files have been uploaded. `AWS_QUERYSTRING_EXPIRE` defaults to 3600 seconds and accepts 1–604800 seconds. The API returns a freshly signed `photo_url` when a profile is fetched. Treat it as temporary: fetch the profile again after expiry instead of persisting the URL. Upload/replacement/deletion endpoints and the 5 MB JPEG/PNG/WebP validation remain unchanged. In S3 mode, the legacy public `/media/member-photos/` route returns 404.
+
+`MEDIA_STORAGE=filesystem` is available for tests or standalone development and uses `MEMBER_PHOTO_DIR`. Without `MEDIA_STORAGE`, filesystem storage is used so image builds and isolated checks need no storage credentials. Filesystem mode retains the public local photo route. Compose does not provide a media volume; use S3 mode for durable container uploads. S3 failures never fall back to disk. Static assets remain local and are served by WhiteNoise. Existing local files are not automatically copied to a bucket.
 
 ## API and authentication
 
@@ -66,7 +95,7 @@ The local default `OTP_DEV_BYPASS=true` avoids sending SMS and accepts `000000`;
 - **SSLCommerz:** set store ID/password and `PUBLIC_BASE_URL`. Sandbox is enabled outside production by default. Register `{PUBLIC_BASE_URL}/api/v1/webhooks/sslcommerz/ipn/` with the provider. Both hosted checkout and Flutter SDK checkout (`checkout: "sdk"`) are supported. Credentials stay on the server.
 - **Attendance:** set a private `ATTENDANCE_DEVICE_KEY`; device requests send it in `X-Device-Key`.
 - **Encryption:** keep `TOTP_ENCRYPTION_KEY` private and stable. It accepts 32 raw bytes, 64 hex characters, or base64 encoding of 32 bytes. Losing/changing it prevents decrypting existing authenticator seeds.
-- **Deployment:** set `APP_ENV=prod`, private Django/JWT keys, `ALLOWED_HOSTS`, HTTPS `PUBLIC_BASE_URL`, explicit CORS origins, and `CSRF_TRUSTED_ORIGINS`. Production rejects the shipped example signing keys, requires provider/device settings, disables bypasses/sandbox, and enables secure cookies, HTTPS redirects, and HSTS. Preserve database and media volumes.
+- **Deployment:** set `APP_ENV=prod`, private Django/JWT keys, `ALLOWED_HOSTS`, HTTPS `PUBLIC_BASE_URL`, explicit CORS origins, and `CSRF_TRUSTED_ORIGINS`. Production rejects the shipped example signing keys, requires provider/device settings, disables bypasses/sandbox, and enables secure cookies, HTTPS redirects, and HSTS. Configure external `DATABASE_URL` and `MEDIA_STORAGE=s3` with the AWS bucket settings above; back up the database and bucket separately.
 - **Reverse proxy:** set `TRUSTED_PROXY_IPS` to the exact addresses of your proxies. Configure those proxies to overwrite `X-Forwarded-Proto` and append the real source address to `X-Forwarded-For`. Forwarded headers from other addresses are ignored. This enables correct HTTPS detection, absolute pagination links, and per-client throttling behind TLS termination. Without a trusted proxy, Gunicorn must receive HTTPS-aware requests directly or `SECURE_SSL_REDIRECT` must be configured for your deployment. Readiness/liveness are exempt from HTTPS redirects for internal probes.
 
 The operator console is deliberately inspect-only, including users and financial records. Staff mutations use the APIs and shared services, retaining business validation and activity recording. OTP/session tables and encrypted authenticator secrets are not exposed in the console.
@@ -75,7 +104,7 @@ The recovery-email provider, notifications feed, and physical fingerprint-device
 
 ## Verification
 
-Run the full PostgreSQL suite independently of host networking:
+Run the full suite against a dedicated development/test PostgreSQL database. Its user must be allowed to create the isolated Django test database. The Compose test service uses your `DATABASE_URL` and filesystem storage; it never contacts MinIO/S3:
 
 ```bash
 docker compose --profile test build test
@@ -91,7 +120,7 @@ make test
 make schema
 ```
 
-Tests use an isolated PostgreSQL test database, fake provider boundaries, and temporary media storage. They cover API workflows, authorization, schema/route inventory, constraints, rollback, parallel OTP/refresh/payment/check-in operations, date boundaries, upload limits, provider failures, and production configuration. They do not contact Firebase, SMS, or SSLCommerz.
+Tests use an isolated PostgreSQL test database, fake provider boundaries, and temporary media storage. They cover API workflows, authorization, schema/route inventory, constraints, rollback, parallel OTP/refresh/payment/check-in operations, date boundaries, upload limits, provider failures, and production/storage configuration. S3 signing uses dummy credentials without network requests; object lifecycle tests use a storage fake without filesystem paths. Tests do not contact Firebase, SMS, SSLCommerz, or live object storage.
 
 ## Organization
 

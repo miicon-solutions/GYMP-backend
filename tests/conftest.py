@@ -14,6 +14,11 @@ def test_settings(settings, tmp_path):
     settings.EMAIL_DEV_BYPASS = True
     settings.TOTP_ENCRYPTION_KEY = "0" * 64
     settings.MEDIA_ROOT = tmp_path
+    settings.MEDIA_STORAGE = "filesystem"
+    settings.STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
     settings.STATIC_ROOT = tmp_path / "static"
     settings.STATIC_ROOT.mkdir()
     settings.ATTENDANCE_DEVICE_KEY = "test-device-key"

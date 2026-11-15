@@ -2,6 +2,7 @@ import secrets
 import warnings
 from datetime import UTC, timedelta
 from io import BytesIO
+from urllib.parse import urljoin
 
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -47,7 +48,7 @@ def profile_data(user):
         "emergency_relationship": p.emergency_relationship,
         "emergency_phone_e164": p.emergency_phone_e164,
         "blood_group": p.blood_group,
-        "photo_url": settings.PUBLIC_BASE_URL + p.photo.url if p.photo else None,
+        "photo_url": urljoin(settings.PUBLIC_BASE_URL + "/", p.photo.url) if p.photo else None,
     }
 
 
