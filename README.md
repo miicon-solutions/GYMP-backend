@@ -1,6 +1,6 @@
 # GYMA Django backend
 
-Python 3.14, Django 5.2 LTS, Django REST Framework, and PostgreSQL. This is a complete, independently runnable port of the implemented Go backend. It uses a **new database** and a **breaking API contract**. The Go and Flutter projects are unchanged.
+Python 3.14, Django 5.2 LTS, Django REST Framework, and PostgreSQL. This is a complete, independently runnable port of the implemented Go backend. It uses a **new database** and a **breaking API contract**. The Go project is unchanged; the Flutter client in `GYMA_a` targets this Django API.
 
 ## Start with Docker
 
