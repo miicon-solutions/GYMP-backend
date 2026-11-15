@@ -26,6 +26,8 @@ For PostgreSQL running in another Docker container with host port 5432 published
 
 `seed_dev` adds the original monthly/quarterly/annual catalog math (rate 1500, admission 1500, standing discounts 0/500/3500). It is idempotent, creates no accounts, and is disabled in production. Plans can also be created through the staff API.
 
+The deployment entrypoint `/app/entrypoint.sh` runs migrations, collects static files, and starts Gunicorn on port `8000` for Traefik. `PORT` overrides the listen port. Explicit commands retain control of their startup steps, including the local Compose command on `8080`. Local configuration is loaded from `.env` by Django.
+
 ## Local Python development
 
 Install Python 3.14 and `uv`, then:

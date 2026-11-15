@@ -1,15 +1,20 @@
 FROM ghcr.io/astral-sh/uv:0.9.8 AS uv
+FROM infisical/cli:0.45.8 AS infisical
 FROM python:3.14-slim AS runtime
 COPY --from=uv /uv /uvx /bin/
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1 PATH="/app/.venv/bin:$PATH"
+COPY --from=infisical /bin/infisical /usr/local/bin/infisical
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8 UV_COMPILE_BYTECODE=1 PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY . .
-RUN python manage.py collectstatic --noinput && useradd --uid 10001 --create-home gyma && mkdir -p /app/data/member-photos && chown -R gyma:gyma /app/data
-USER gyma
-EXPOSE 8080
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "--timeout", "60", "--access-logfile", "/dev/null"]
+RUN infisical --version \
+    && useradd --uid 10001 --create-home gymu \
+    && mkdir -p /app/data/member-photos /app/staticfiles \
+    && chown -R gymu:gymu /app/data /app/staticfiles \
+    && chmod 755 /app/entrypoint.sh
+USER gymu
+EXPOSE 8000
 
 FROM python:3.14-slim AS test
 COPY --from=uv /uv /uvx /bin/

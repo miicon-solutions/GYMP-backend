@@ -21,7 +21,6 @@ jobs:
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          status: Custom
           title: "${{ github.workflow }} - started"
           color: 0x3498db
           description: |
