@@ -68,14 +68,14 @@ jobs:
           username: root
           key: ${{ secrets.SERVER_SSH_PRIVATE_KEY_PROD }}
           script: |
+            set -e
             cd ${{ env.SERVER_PATH }}
-            if [ -n "$(docker compose -p ${{ env.CONTAINER_NAME }} ps -q)" ]; then
-              docker compose -p ${{ env.CONTAINER_NAME }} down --rmi all
-            fi
             echo "${{ secrets.DOCKER_ACCESS_TOKEN }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             export INFISICAL_TOKEN="${{ secrets.INFISICAL_TOKEN_PROD }}"
             export TAG="${{ env.TAG }}"
-            docker compose -p ${{ env.CONTAINER_NAME }} up -d
+            docker compose -p ${{ env.CONTAINER_NAME }} pull
+            docker compose -p ${{ env.CONTAINER_NAME }} up -d --remove-orphans
+            docker image prune -af
 
   notify-finish:
     name: Notify Discord Finish
