@@ -117,6 +117,16 @@ if MEDIA_STORAGE == "s3":
     querystring_expire = env.int("AWS_QUERYSTRING_EXPIRE", default=3600)
     if not 1 <= querystring_expire <= 604800:
         raise ImproperlyConfigured("AWS_QUERYSTRING_EXPIRE must be between 1 and 604800 seconds.")
+    S3_SUB_FOLDER = env("S3_SUB_FOLDER", default="").strip().strip("/")
+    media_folder = env("AWS_LOCATION", default="media").strip().strip("/")
+    for name, prefix in (("S3_SUB_FOLDER", S3_SUB_FOLDER), ("AWS_LOCATION", media_folder)):
+        if (
+            "\\" in prefix
+            or any(ord(char) < 32 or ord(char) == 127 for char in prefix)
+            or (prefix and any(part in {"", ".", ".."} for part in prefix.split("/")))
+        ):
+            raise ImproperlyConfigured(f"{name} must be a relative S3 folder without dot segments.")
+    media_location = "/".join(part for part in (S3_SUB_FOLDER, media_folder) if part)
     STORAGES["default"] = {
         "BACKEND": "storages.backends.s3.S3Storage",
         "OPTIONS": {
@@ -127,7 +137,7 @@ if MEDIA_STORAGE == "s3":
             "endpoint_url": endpoint_url,
             "region_name": env("AWS_S3_REGION_NAME", default="us-east-1"),
             "addressing_style": addressing_style,
-            "location": env("AWS_LOCATION", default="media").strip("/"),
+            "location": media_location,
             "signature_version": "s3v4",
             "default_acl": None,
             "querystring_auth": True,

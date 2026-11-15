@@ -3,9 +3,11 @@ import os
 import subprocess
 import sys
 from io import BytesIO
+from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from django.core.files.base import ContentFile
 from django.core.files.storage import Storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
@@ -40,6 +42,7 @@ print(json.dumps({'storage': s.STORAGES['default'], 'database_host': s.DATABASES
             "AWS_S3_ENDPOINT_URL": "http://minio.example.test:9000",
             "AWS_S3_REGION_NAME": "us-east-1",
             "AWS_S3_ADDRESSING_STYLE": "path",
+            "S3_SUB_FOLDER": "",
             "AWS_LOCATION": "media",
             "AWS_QUERYSTRING_EXPIRE": "600",
             **overrides,
@@ -81,6 +84,75 @@ def test_configured_s3_generates_private_signed_urls_without_network(provider):
         assert url.path == "/media/photo.png"
         assert "/eu-west-1/s3/aws4_request" in query["X-Amz-Credential"][0]
         assert query["X-Amz-Security-Token"] == ["temporary-session-token"]
+
+
+@pytest.mark.parametrize("provider", ["minio", "aws"])
+def test_project_folder_is_in_private_signed_url(provider):
+    overrides = {"S3_SUB_FOLDER": "/projects/puregym/"}
+    if provider == "aws":
+        overrides.update(AWS_S3_ENDPOINT_URL="", AWS_S3_ADDRESSING_STYLE="virtual")
+    result = configured_settings(**overrides)
+    assert result.returncode == 0, result.stderr
+    storage = S3Storage(**json.loads(result.stdout)["storage"]["OPTIONS"])
+    url = urlsplit(storage.url("photo.png"))
+    bucket_path = "/gyma-test-media" if provider == "minio" else ""
+    assert url.path == bucket_path + "/projects/puregym/media/photo.png"
+    assert parse_qs(url.query)["X-Amz-Signature"]
+
+
+@pytest.mark.parametrize(
+    "project,media,expected",
+    [
+        ("", "media", "media"),
+        ("puregym", "media", "puregym/media"),
+        (" /projects/puregym/ ", " /media/photos/ ", "projects/puregym/media/photos"),
+        ("puregym", "", "puregym"),
+        ("", "", ""),
+    ],
+)
+def test_project_folder_composition_and_legacy_paths(project, media, expected):
+    result = configured_settings(S3_SUB_FOLDER=project, AWS_LOCATION=media)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["storage"]["OPTIONS"]["location"] == expected
+
+
+def test_upload_and_delete_use_project_folder_but_keep_relative_database_name():
+    result = configured_settings(S3_SUB_FOLDER="projects/puregym")
+    assert result.returncode == 0, result.stderr
+    storage = S3Storage(**json.loads(result.stdout)["storage"]["OPTIONS"])
+    bucket = Mock()
+    key = "projects/puregym/media/photo.png"
+    with (
+        patch.object(storage, "_bucket", bucket),
+        patch.object(storage, "exists", return_value=False),
+    ):
+        name = storage.save("photo.png", ContentFile(b"photo bytes"))
+        assert name == "photo.png"
+        bucket.Object.assert_called_once_with(key)
+        bucket.Object.return_value.upload_fileobj.assert_called_once()
+        bucket.Object.reset_mock()
+        storage.delete(name)
+        bucket.Object.assert_called_once_with(key)
+        bucket.Object.return_value.delete.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"S3_SUB_FOLDER": "../other-project"},
+        {"S3_SUB_FOLDER": "project/../other-project"},
+        {"S3_SUB_FOLDER": "./project"},
+        {"S3_SUB_FOLDER": "project//media"},
+        {"S3_SUB_FOLDER": "project\\media"},
+        {"S3_SUB_FOLDER": "project\nmedia"},
+        {"S3_SUB_FOLDER": "puregym", "AWS_LOCATION": "../other-project"},
+        {"S3_SUB_FOLDER": "puregym", "AWS_LOCATION": "media/../../other-project"},
+    ],
+)
+def test_unsafe_project_or_media_folder_rejected(overrides):
+    result = configured_settings(**overrides)
+    assert result.returncode != 0
+    assert "must be a relative S3 folder without dot segments" in result.stderr
 
 
 def test_s3_credentials_can_use_aws_default_chain():

@@ -62,6 +62,7 @@ AWS_SECRET_ACCESS_KEY=YOUR_MINIO_SECRET_KEY
 AWS_S3_ENDPOINT_URL=http://YOUR_HOST_LAN_IP:9000
 AWS_S3_REGION_NAME=us-east-1
 AWS_S3_ADDRESSING_STYLE=path
+S3_SUB_FOLDER=puregym
 AWS_LOCATION=media
 AWS_QUERYSTRING_EXPIRE=3600
 ```
@@ -70,7 +71,9 @@ Use MinIO's S3 API port (usually 9000), not its console port. The endpoint hostn
 
 For AWS S3, leave `AWS_S3_ENDPOINT_URL` empty, set `AWS_S3_REGION_NAME` to the bucket's region, and use `AWS_S3_ADDRESSING_STYLE=virtual`. Set AWS access credentials and optionally `AWS_SESSION_TOKEN`, or leave them blank to use the deployment's IAM role/default AWS credential chain. Grant bucket listing and object read/write/delete access to the selected prefix. Keep public access blocked; no object ACL is sent.
 
-`AWS_LOCATION` defaults to `media` and prefixes object keys; keep it stable once files have been uploaded. `AWS_QUERYSTRING_EXPIRE` defaults to 3600 seconds and accepts 1–604800 seconds. The API returns a freshly signed `photo_url` when a profile is fetched. Treat it as temporary: fetch the profile again after expiry instead of persisting the URL. Upload/replacement/deletion endpoints and the 5 MB JPEG/PNG/WebP validation remain unchanged. In S3 mode, the legacy public `/media/member-photos/` route returns 404.
+`S3_SUB_FOLDER` selects this project's directory in a shared bucket, following the project-prefix approach used in MAP. It is combined with `AWS_LOCATION` (default `media`), so the example stores objects at `puregym/media/<filename>`. Nested project folders such as `projects/puregym` are supported; surrounding whitespace and leading/trailing slashes are removed. Dot segments, backslashes, control characters, and empty internal path segments are rejected. The configured storage applies this prefix to uploads, signed downloads, lookups, and deletions; database photo names stay relative. Static assets continue to use WhiteNoise.
+
+Leaving `S3_SUB_FOLDER` unset or empty preserves the previous `AWS_LOCATION` paths. Keep both settings stable after uploading files: changing either does not move existing objects. If moving existing photos into a new project folder, copy/move those objects to the new prefix before switching configuration. `AWS_QUERYSTRING_EXPIRE` defaults to 3600 seconds and accepts 1–604800 seconds. The API returns a freshly signed `photo_url` when a profile is fetched. Treat it as temporary: fetch the profile again after expiry instead of persisting the URL. Upload/replacement/deletion endpoints and the 5 MB JPEG/PNG/WebP validation remain unchanged. In S3 mode, the legacy public `/media/member-photos/` route returns 404.
 
 `MEDIA_STORAGE=filesystem` is available for tests or standalone development and uses `MEMBER_PHOTO_DIR`. Without `MEDIA_STORAGE`, filesystem storage is used so image builds and isolated checks need no storage credentials. Filesystem mode retains the public local photo route. Compose does not provide a media volume; use S3 mode for durable container uploads. S3 failures never fall back to disk. Static assets remain local and are served by WhiteNoise. Existing local files are not automatically copied to a bucket.
 
