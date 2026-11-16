@@ -1,0 +1,32 @@
+{% extends "admin/base_site.html" %}
+{% load admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; <a href="{{ change_url }}">{{ original }}</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+  <p>Staff: <strong>{{ staff_user }}</strong> ({{ staff_user.phone_e164 }})</p>
+  {% if setup %}
+    <h2>One-time setup token</h2>
+    <p>Copy this private token now. It cannot be retrieved after leaving this page.</p>
+    <p><code id="setup-token">{{ setup.setup_token }}</code></p>
+    <p>Expires in {{ setup.expires_in_sec }} seconds.</p>
+    <p>On the web sign-in page, select <strong>Set up your authenticator</strong>, enter the mobile number above and this token, scan the QR code, and confirm with the authenticator's six-digit code.</p>
+    <p><a href="{{ change_url }}">Return to staff profile</a></p>
+  {% else %}
+    <p>Generate a new private setup token for this staff member. This resets their existing authenticator and invalidates any previous setup token.</p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="submit-row">
+        <input type="submit" value="Generate setup token" class="default">
+        <a href="{{ change_url }}" class="closelink">Cancel</a>
+      </div>
+    </form>
+  {% endif %}
+{% endblock %}
