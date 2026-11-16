@@ -92,5 +92,6 @@ class StaffAdmin(ReadOnlyAdmin):
                 ),
             },
         )
-        response["Referrer-Policy"] = "no-referrer"
+        # Native form POSTs need the real same-origin Origin/Referer for CSRF checks.
+        response["Referrer-Policy"] = "same-origin"
         return response

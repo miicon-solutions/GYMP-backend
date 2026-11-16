@@ -53,7 +53,7 @@ def test_admin_mfa_token_resets_and_completes_web_enrollment(
     assert token != old_token
     assert token.encode() in response.content
     assert "no-store" in response["Cache-Control"]
-    assert response["Referrer-Policy"] == "no-referrer"
+    assert response["Referrer-Policy"] == "same-origin"
     profile.refresh_from_db()
     assert profile.setup_token_hash == digest(token)
     assert not profile.totp_secret_encrypted
@@ -106,17 +106,45 @@ def test_admin_mfa_denies_regular_browser_operator(client, staff, super_admin, m
     assert not LogEntry.objects.exists()
 
 
-def test_admin_mfa_requires_csrf(super_admin, staff):
+@pytest.mark.parametrize("secure", [False, True])
+def test_admin_mfa_requires_csrf(super_admin, staff, secure):
     browser = Client(enforce_csrf_checks=True)
     browser.force_login(super_admin)
     url = enrollment_url(staff)
-    assert browser.post(url).status_code == 403
-    assert browser.get(url).status_code == 200
+    origin = "https://testserver" if secure else "http://testserver"
+    assert browser.post(url, secure=secure, HTTP_ORIGIN=origin).status_code == 403
+    confirmation = browser.get(url, secure=secure)
+    assert confirmation.status_code == 200
+    # no-referrer makes a browser's native form POST use Origin: null.
+    assert confirmation["Referrer-Policy"] == "same-origin"
     assert (
-        browser.post(url, {"csrfmiddlewaretoken": browser.cookies["csrftoken"].value}).status_code
+        browser.post(
+            url,
+            {"csrfmiddlewaretoken": browser.cookies["csrftoken"].value},
+            secure=secure,
+            HTTP_ORIGIN=origin,
+            HTTP_REFERER=origin + url,
+        ).status_code
         == 200
     )
     assert LogEntry.objects.count() == 1
+
+
+@pytest.mark.parametrize("origin", ["null", "https://untrusted.example"])
+def test_admin_mfa_rejects_untrusted_origins(super_admin, staff, origin):
+    browser = Client(enforce_csrf_checks=True)
+    browser.force_login(super_admin)
+    url = enrollment_url(staff)
+    browser.get(url)
+    response = browser.post(
+        url,
+        {"csrfmiddlewaretoken": browser.cookies["csrftoken"].value},
+        HTTP_ORIGIN=origin,
+    )
+    assert response.status_code == 403
+    assert not LogEntry.objects.exists()
+    staff.staff_profile.refresh_from_db()
+    assert not staff.staff_profile.setup_token_hash
 
 
 @pytest.mark.parametrize("method", ["get", "post"])
