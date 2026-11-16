@@ -2,7 +2,7 @@ from django.contrib import admin
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
-    """The operator console is inspect-only; API/services enforce all business transitions."""
+    """Business records are read-only; explicit actions delegate transitions to services."""
 
     def has_add_permission(self, request):
         return False
