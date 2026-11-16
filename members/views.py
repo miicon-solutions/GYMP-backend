@@ -4,7 +4,6 @@ from rest_framework import generics, serializers
 from rest_framework.response import Response
 
 from core.api import AdminOnly, MemberOnly
-from core.endpoints import query_parameters
 from members import services
 from members.models import MemberProfile
 from members.serializers import AdminMemberOutput, ProfileInput, ProfileOutput
@@ -32,13 +31,14 @@ class AdminMemberSerializer(AdminMemberOutput):
 
 class MemberSearch(serializers.Serializer):
     q = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    status = serializers.ChoiceField(choices=["unpaid", "active", "expired"], required=False)
 
 
 class AdminMemberList(generics.ListAPIView):
     permission_classes = [AdminOnly]
     serializer_class = AdminMemberSerializer
 
-    @extend_schema(parameters=query_parameters("q"))
+    @extend_schema(parameters=[MemberSearch])
     def get(self, *args, **kwargs):
         return super().get(*args, **kwargs)
 
@@ -46,11 +46,15 @@ class AdminMemberList(generics.ListAPIView):
         data = MemberSearch(data=self.request.query_params)
         data.is_valid(raise_exception=True)
         q = data.validated_data.get("q", "")
-        return MemberProfile.objects.select_related("user", "plan").filter(
+        rows = MemberProfile.objects.select_related("user", "plan").filter(
             Q(member_id__icontains=q)
             | Q(user__full_name__icontains=q)
             | Q(user__phone_e164__icontains=q)
         )
+        status = data.validated_data.get("status")
+        if status == "unpaid":
+            return rows.filter(membership_status__in=["none", "pending_payment"])
+        return rows.filter(membership_status=status) if status else rows
 
 
 class AdminMemberDetail(generics.GenericAPIView):

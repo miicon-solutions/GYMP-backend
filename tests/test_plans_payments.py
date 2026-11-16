@@ -133,6 +133,7 @@ def test_admin_plan_crud_offers_and_member_catalog(client, staff, member):
 
 
 def test_catalog_delete_deactivates_and_payment_plan_is_protected(client, staff, member, plan):
+    complete(member)
     plan.catalog_id = "monthly"
     plan.save()
     client.force_authenticate(staff)
@@ -268,6 +269,7 @@ def test_pricing_frozen_at_checkout(member, plan):
 
 
 def test_cash_first_renewal_plan_change(client, staff, member, plan):
+    complete(member)
     client.force_authenticate(staff)
     url = f"/api/v1/admin/members/{member.pk}/"
     preview = client.get(url + "cash-preview/", {"plan_id": str(plan.pk)})
@@ -312,6 +314,7 @@ def test_checkout_requires_complete_profile_and_eligible_kind(client, member, pl
 
 
 def test_payment_and_activation_rollback(staff, member, plan):
+    complete(member)
     with patch("payments.services.record", side_effect=RuntimeError("audit failure")):
         with pytest.raises(RuntimeError):
             receive_cash(staff, member.member_profile, plan.pk)

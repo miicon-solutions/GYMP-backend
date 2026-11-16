@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
 
 from attendance.models import CheckIn
 from members.models import MemberProfile
@@ -28,7 +29,11 @@ def month_attendance(user, year, month):
 
 @transaction.atomic
 def record_checkin(data):
-    member = get_object_or_404(MemberProfile, member_id=data["member_id"])
+    member = get_object_or_404(
+        MemberProfile.objects.select_for_update(), member_id=data["member_id"]
+    )
+    if member.membership_status in {"none", "pending_payment"}:
+        raise PermissionDenied("Membership payment is required before checking in.")
     at = data.get("checked_in_at") or timezone.now()
     row, created = CheckIn.objects.get_or_create(
         member=member,

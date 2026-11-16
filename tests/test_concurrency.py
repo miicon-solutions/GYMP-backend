@@ -77,6 +77,8 @@ def test_concurrent_ipn_activation_once(member, plan):
 
 
 def test_concurrent_cash_extends_from_latest_expiry(member, staff, plan):
+    member.member_profile.profile_complete = True
+    member.member_profile.save()
     parallel(lambda: receive_cash(staff, member.member_profile, plan.pk))
     assert Payment.objects.count() == 2
     payments = list(Payment.objects.order_by("created_at"))
@@ -86,6 +88,8 @@ def test_concurrent_cash_extends_from_latest_expiry(member, staff, plan):
 
 
 def test_concurrent_checkin_deduplicates(member):
+    member.member_profile.membership_status = "active"
+    member.member_profile.save()
     at = datetime(2026, 11, 15, 8, tzinfo=UTC)
     results = parallel(
         lambda: record_checkin({"member_id": member.member_profile.member_id, "checked_in_at": at})

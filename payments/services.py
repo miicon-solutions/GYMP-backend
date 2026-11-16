@@ -214,6 +214,8 @@ def handle_ipn(data):
 
 
 def cash_details(member, plan):
+    if not member.profile_complete:
+        raise ValidationError({"profile": "Complete your profile first."})
     paid = member.payments.filter(status="paid").exists()
     kind = (
         "first_payment" if not paid else ("renewal" if member.plan_id == plan.pk else "plan_change")
