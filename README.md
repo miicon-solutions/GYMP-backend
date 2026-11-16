@@ -26,6 +26,18 @@ For PostgreSQL running in another Docker container with host port 5432 published
 
 `seed_dev` adds the original monthly/quarterly/annual catalog math (rate 1500, admission 1500, standing discounts 0/500/3500). It is idempotent, creates no accounts, and is disabled in production. Plans can also be created through the staff API.
 
+For a populated demo, first bootstrap a super admin, then run:
+
+```bash
+docker compose exec api python manage.py seed_demo --admin-phone +88017XXXXXXXX
+# Local Python alternative:
+uv run python manage.py seed_demo --admin-phone +88017XXXXXXXX --members 30
+```
+
+`seed_demo` requires that existing active super admin and runs only outside production. By default it creates 30 completed member profiles (10 unpaid, 15 active, 5 expired), two staff, catalogue plans, offers on demo-created plans, synthetic cash/online payments, attendance, expenses, holidays, and activity over the preceding 90 days. It never contacts SMS, Firebase, payments, or media providers. Sample staff have no password/browser access or enrolled authenticator; generate their enrollment token through your super admin interface. Demo member phone numbers are printed for login using the configured OTP provider or local development bypass.
+
+The command reuses existing catalogue durations without changing their settings. Repeated runs preserve existing demo records; a larger `--members` count adds members (maximum 1000). Deterministic identifiers prevent duplicates, and conflicting phone numbers abort the whole transaction without changing data. It does not delete or reset records.
+
 The deployment entrypoint `/app/entrypoint.sh` runs migrations, collects static files, and starts Gunicorn on port `8000` for Traefik. `PORT` overrides the listen port. Explicit commands retain control of their startup steps, including the local Compose command on `8080`. Local configuration is loaded from `.env` by Django.
 
 ## Local Python development
@@ -84,6 +96,8 @@ Leaving `S3_SUB_FOLDER` unset or empty preserves the previous `AWS_LOCATION` pat
 See [API migration reference](docs/API_MIGRATION.md) for every old/new route, payload rules, examples, and integration differences. The committed [OpenAPI schema](docs/openapi.yaml) describes the new contract. It is also generated live at `/openapi.yaml`.
 
 Member login uses phone OTP or verified Google/Firebase identity. Staff login uses TOTP. API credentials are Bearer HS256 access JWTs and opaque, hashed refresh tokens with one-time rotation. No password-grant API was added. Browser operator access is granted explicitly and uses Django sessions, password validation, CSRF protection, and login throttling.
+
+Public signup saves a member account and the existing full profile form without purchasing a membership. Web and mobile restore completed unpaid accounts to **Account registered → Awaiting payment**, where the user can edit their information, pay online, or visit reception. Staff receive cash against that same registration using a server-calculated plan price. Successful cash collection or verified online settlement activates membership and starts its expiry. Both payment paths require a completed profile. Unpaid registrations cannot check in. Members require no authenticator; staff MFA remains required.
 
 Example local OTP login:
 

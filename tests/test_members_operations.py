@@ -205,6 +205,9 @@ def test_gym_hours_holidays_and_status(client, staff):
 
 def test_attendance_device_and_member_dashboard(client, member, staff, plan):
     seed_hours()
+    member.member_profile.profile_complete = True
+    member.member_profile.save()
+    receive_cash(staff, member.member_profile, plan.pk)
     url = "/api/v1/internal/attendance/check-in/"
     body = {"member_id": member.member_profile.member_id, "checked_in_at": "2026-11-14T20:30:00Z"}
     assert client.post(url, body, format="json").status_code == 401
@@ -216,7 +219,6 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
         client.post(url, body, format="json", HTTP_X_DEVICE_KEY="test-device-key").data["recorded"]
         is False
     )
-    receive_cash(staff, member.member_profile, plan.pk)
     client.force_authenticate(member)
     month = client.get("/api/v1/member/attendance/", {"year": 2026, "month": 11})
     assert month.status_code == 200 and month.data["visit_count"] == 1
