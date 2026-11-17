@@ -8,7 +8,10 @@ from core.api import BadGateway
 
 def call(path, *, data=None, query=None):
     if not settings.SSLCOMMERZ_STORE_ID or not settings.SSLCOMMERZ_STORE_PASSWD:
-        raise BadGateway("Payment gateway is unavailable. Try again.")
+        raise BadGateway(
+            "Payment gateway is not configured. Set SSLCOMMERZ_STORE_ID and "
+            "SSLCOMMERZ_STORE_PASSWD on the API."
+        )
     host = (
         "https://sandbox.sslcommerz.com"
         if settings.SSLCOMMERZ_SANDBOX
