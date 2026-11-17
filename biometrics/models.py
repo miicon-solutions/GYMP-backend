@@ -10,6 +10,7 @@ class FingerprintDevice(Entity):
     port = models.PositiveIntegerField(default=4370)
     serial = models.CharField(max_length=120, blank=True)
     comm_password_enc = models.TextField(blank=True)
+    bridge_device_id = models.CharField(max_length=64, blank=True, db_index=True)
     is_active = models.BooleanField(default=True)
     last_seen_at = models.DateTimeField(null=True, blank=True)
 

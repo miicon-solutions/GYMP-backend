@@ -27,3 +27,34 @@ class VaultSyncOutput(serializers.Serializer):
     pushed = serializers.BooleanField(required=False)
     template_count = serializers.IntegerField(required=False)
     fingerprint_status = serializers.CharField(required=False)
+
+
+class VaultMemberOutput(serializers.Serializer):
+    member_id = serializers.CharField()
+    name = serializers.CharField()
+    finger_indexes = serializers.ListField(child=serializers.IntegerField())
+    has_pin = serializers.BooleanField()
+    fingerprint_status = serializers.CharField()
+
+
+class VaultMembersOutput(serializers.Serializer):
+    count = serializers.IntegerField()
+    members = VaultMemberOutput(many=True)
+
+
+class VaultBulkPushInput(serializers.Serializer):
+    bridge_device_id = serializers.CharField()
+    member_ids = serializers.ListField(
+        child=serializers.CharField(), required=False, allow_null=True
+    )
+
+
+class VaultBulkFailure(serializers.Serializer):
+    member_id = serializers.CharField()
+    error = serializers.CharField()
+
+
+class VaultBulkPushOutput(serializers.Serializer):
+    pushed = serializers.IntegerField()
+    failed = serializers.IntegerField()
+    failures = VaultBulkFailure(many=True)

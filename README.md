@@ -22,13 +22,17 @@ cp .env.example .env
 # Local media: MEDIA_STORAGE=filesystem. Leave ZKTECO_BRIDGE_URL empty unless the
 # standalone zkteco-bridge is running on the gym LAN.
 docker compose up --build -d
-docker compose exec api python manage.py seed_dev
+# Local Compose already runs seed_dev after migrate (plans + Go-parity seed super).
+# Capture the printed MFA setup token from api logs on first boot.
+# Production/staging: bootstrap explicitly (no fixed seed phone):
 docker compose exec api python manage.py bootstrap_admin --phone +88017XXXXXXXX --name 'Gym Operator' --browser-access
 ```
 
 Agent notes: see [AGENTS.md](AGENTS.md). ZK control center lives in sibling `zkteco-bridge/` (own `docker compose up`).
 
-Replace the phone placeholder with your actual Bangladesh phone number. `bootstrap_admin` prompts for an operator password only with `--browser-access`. It prints a **one-time setup token** for authenticator enrollment. Keep that token private. There are no seeded credentials, and the command refuses to replace an existing super admin.
+**Local/dev seed super (Go parity):** `seed_dev` ensures phone `+8801700000000` (`01700000000`), short id `S-ADM-7400`, starts MFA-unenrolled, and prints a one-time setup token. `POST /api/v1/auth/resolve-phone/` returns `kind: staff` for that number; member onboarding OTP is rejected (409). If that phone was accidentally OTP-onboarded as a member (no payment/attendance history), `seed_dev` reclaims it as the seed super.
+
+**Production:** use `bootstrap_admin --phone …` with a real number. It prompts for an operator password only with `--browser-access`, prints a **one-time setup token**, and refuses to replace an existing super admin. Production does not use the fixed seed phone.
 
 The API listens at `http://localhost:8080`. Open `/docs/` for Swagger, `/openapi.yaml` for the schema, `/admin/` for the operator console, `/health/` for database readiness, and `/health/live/` for liveness. Migrations run before Gunicorn starts. The initial migration installs default gym hours: Saturday–Thursday 06:00–22:00, Friday closed.
 
@@ -36,14 +40,14 @@ Compose runs the API; PostgreSQL and MinIO/S3 are managed separately. Create a d
 
 For PostgreSQL running in another Docker container with host port 5432 published, use `postgres://USER:PASSWORD@host.docker.internal:5432/DATABASE` from Compose. The file includes the Linux host-gateway mapping. Use your actual published port and URL-encode special characters in credentials. PostgreSQL must accept connections from the API container; a port published only on host loopback may be inaccessible through the gateway. Containers on a shared Docker network can instead use the database container's network hostname (attach the API using a local Compose override). `localhost` inside the API container refers to the API itself.
 
-`seed_dev` adds the original monthly/quarterly/annual catalog math (rate 1500, admission 1500, standing discounts 0/500/3500). It is idempotent, creates no accounts, and is disabled in production. Plans can also be created through the staff API.
+`seed_dev` adds the original monthly/quarterly/annual catalog math (rate 1500, admission 1500, standing discounts 0/500/3500) and the Go-parity seed super admin above. It is idempotent and disabled in production. Plans can also be created through the staff API. Local Compose runs `seed_dev` automatically after migrate; host Python still calls it manually after migrate.
 
-For a populated demo, first bootstrap a super admin, then run:
+For a populated demo, use the seed super (or a bootstrapped super), then run:
 
 ```bash
-docker compose exec api python manage.py seed_demo --admin-phone +88017XXXXXXXX
-# Local Python alternative:
-uv run python manage.py seed_demo --admin-phone +88017XXXXXXXX --members 30
+docker compose exec api python manage.py seed_demo --admin-phone +8801700000000
+# Local Python alternative (after seed_dev or bootstrap_admin):
+uv run python manage.py seed_demo --admin-phone +8801700000000 --members 30
 ```
 
 `seed_demo` requires that existing active super admin and runs only outside production. By default it creates 30 completed member profiles (10 unpaid, 15 active, 5 expired), two staff, catalogue plans, offers on demo-created plans, synthetic cash/online payments, attendance, expenses, holidays, and activity over the preceding 90 days. It never contacts SMS, Firebase, payments, or media providers. Sample staff have no password/browser access or enrolled authenticator; generate their enrollment token through your super admin interface. Demo member phone numbers are printed for login using the configured OTP provider or local development bypass.

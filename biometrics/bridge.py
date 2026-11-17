@@ -48,7 +48,13 @@ def require_configured() -> None:
         raise BridgeUnavailable("Fingerprint device is not configured.")
 
 
-def device_status() -> DeviceStatus:
+def _device_params(device_id: str | None = None) -> dict[str, str]:
+    if device_id:
+        return {"device_id": str(device_id)}
+    return {}
+
+
+def device_status(*, device_id: str | None = None) -> DeviceStatus:
     if not configured():
         return DeviceStatus(
             online=False,
@@ -57,7 +63,7 @@ def device_status() -> DeviceStatus:
         )
     try:
         with _client() as client:
-            resp = client.get("/internal/device/")
+            resp = client.get("/internal/device/", params=_device_params(device_id))
             if resp.status_code >= 400:
                 return DeviceStatus(
                     online=False,
@@ -85,14 +91,21 @@ def device_status() -> DeviceStatus:
         )
 
 
-def ensure_user(*, user_id: str, name: str, pin: str = "", uid: int = 0) -> dict:
+def ensure_user(
+    *,
+    user_id: str,
+    name: str,
+    pin: str = "",
+    uid: int = 0,
+    device_id: str | None = None,
+) -> dict:
     require_configured()
     try:
         with _client() as client:
-            resp = client.post(
-                "/internal/users/ensure/",
-                json={"user_id": user_id, "name": name, "pin": pin, "uid": uid},
-            )
+            payload = {"user_id": user_id, "name": name, "pin": pin, "uid": uid}
+            if device_id:
+                payload["device_id"] = str(device_id)
+            resp = client.post("/internal/users/ensure/", json=payload)
             if resp.status_code >= 400:
                 raise BridgeUnavailable(resp.text or "Bridge ensure failed.")
             return resp.json()
@@ -100,11 +113,14 @@ def ensure_user(*, user_id: str, name: str, pin: str = "", uid: int = 0) -> dict
         raise BridgeUnavailable(str(exc)) from exc
 
 
-def get_templates(user_id: str) -> dict:
+def get_templates(user_id: str, *, device_id: str | None = None) -> dict:
     require_configured()
     try:
         with _client() as client:
-            resp = client.get(f"/internal/users/{user_id}/templates/")
+            resp = client.get(
+                f"/internal/users/{user_id}/templates/",
+                params=_device_params(device_id),
+            )
             if resp.status_code >= 400:
                 raise BridgeUnavailable(resp.text or "Bridge templates failed.")
             return resp.json()
@@ -119,20 +135,21 @@ def push_user(
     pin: str = "",
     uid: int = 0,
     templates: dict[str, str] | None = None,
+    device_id: str | None = None,
 ) -> dict:
     require_configured()
     try:
         with _client() as client:
-            resp = client.post(
-                "/internal/users/push/",
-                json={
-                    "user_id": user_id,
-                    "name": name,
-                    "pin": pin,
-                    "uid": uid,
-                    "templates": templates or {},
-                },
-            )
+            payload = {
+                "user_id": user_id,
+                "name": name,
+                "pin": pin,
+                "uid": uid,
+                "templates": templates or {},
+            }
+            if device_id:
+                payload["device_id"] = str(device_id)
+            resp = client.post("/internal/users/push/", json=payload)
             if resp.status_code >= 400:
                 raise BridgeUnavailable(resp.text or "Bridge push failed.")
             return resp.json()

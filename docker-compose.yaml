@@ -13,7 +13,7 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "${HTTP_PORT:-8080}:8080"
-    command: ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8080 --workers 2 --threads 4 --timeout 60 --access-logfile /dev/null"]
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py seed_dev && exec gunicorn config.wsgi:application --bind 0.0.0.0:8080 --workers 2 --threads 4 --timeout 60 --access-logfile /dev/null"]
     healthcheck:
       test: ["CMD", "python", "-c", "import os, urllib.request, urllib.parse; host=urllib.parse.urlsplit(os.getenv('PUBLIC_BASE_URL', 'http://localhost:8080')).netloc; urllib.request.urlopen(urllib.request.Request('http://localhost:8080/health/', headers={'Host': host}), timeout=4)"]
       interval: 10s

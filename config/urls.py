@@ -19,6 +19,9 @@ from biometrics.serializers import (
     DeviceStatusOutput,
     EnrollPrepareInput,
     EnrollPrepareOutput,
+    VaultBulkPushInput,
+    VaultBulkPushOutput,
+    VaultMembersOutput,
     VaultSyncOutput,
 )
 from core import public
@@ -268,6 +271,33 @@ api = [
             response=CheckInOutput,
             handler=lambda r, d: record_checkin(d),
             request=CheckInInput,
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+        ),
+    ),
+    path(
+        "internal/biometrics/vault-members/",
+        endpoint(
+            "internal_vault_members",
+            response=VaultMembersOutput,
+            handler=lambda r, d: bio.list_vault_members(),
+            method="get",
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+        ),
+    ),
+    path(
+        "internal/biometrics/vault-push/",
+        endpoint(
+            "internal_vault_push",
+            response=VaultBulkPushOutput,
+            handler=lambda r, d: bio.push_vault_bulk(
+                bridge_device_id=d["bridge_device_id"],
+                member_ids=d.get("member_ids"),
+            ),
+            request=VaultBulkPushInput,
             permission=AllowAny,
             authentication=[DeviceAuthentication],
             throttle_public=False,

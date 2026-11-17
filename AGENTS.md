@@ -69,6 +69,12 @@ core/             # shared API helpers, middleware, permissions
 - Members: phone OTP (sms.net.bd) or Firebase Google; Bearer HS256 access JWT +
   opaque refresh rotation.
 - Staff: TOTP MFA; browser operator console uses Django sessions when provisioned.
+- **Local/dev seed super (Go parity):** `seed_dev` ensures
+  `+8801700000000` / `S-ADM-7400` (`role=admin`, `is_superuser`, MFA unenrolled +
+  one-time setup token printed). `resolve-phone` → `kind: staff`; member OTP → 409.
+  Reclaims that phone if it was OTP-onboarded as a bare member. Local Compose runs
+  `seed_dev` after migrate. **Production:** no fixed seed — use
+  `bootstrap_admin --phone …` only.
 - Device check-in: `X-Device-Key` == `ATTENDANCE_DEVICE_KEY` on
   `POST /api/v1/internal/attendance/check-in/`.
 - SSLCommerz: session → gateway → IPN/confirm; return pages never activate alone;

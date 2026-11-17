@@ -225,15 +225,16 @@ def test_schema_and_route_manifest():
             assert (route["method"], normalize(route["new"])) in actual, route
 
 
-def test_dev_seed_no_credentials_and_idempotent():
-    call_command("seed_dev")
-    call_command("seed_dev")
+def test_dev_seed_idempotent_with_seed_super():
+    from accounts.seed_super import SEED_SUPER_PHONE
     from operations.models import WeekdayHours
     from plans.models import Plan
 
+    call_command("seed_dev")
+    call_command("seed_dev")
     assert Plan.objects.count() == 3
     assert WeekdayHours.objects.count() == 7
-    assert User.objects.count() == 0
+    assert User.objects.filter(phone_e164=SEED_SUPER_PHONE, role="admin").count() == 1
 
 
 def test_bootstrap_admin_creates_hashed_one_time_setup_and_no_fixed_password():
