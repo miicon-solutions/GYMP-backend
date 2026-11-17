@@ -14,6 +14,13 @@ from accounts import services as auth
 from attendance.authentication import DeviceAuthentication
 from attendance.serializers import CheckInInput, CheckInOutput, MonthInput, MonthOutput
 from attendance.services import month_attendance, record_checkin
+from biometrics import services as bio
+from biometrics.serializers import (
+    DeviceStatusOutput,
+    EnrollPrepareInput,
+    EnrollPrepareOutput,
+    VaultSyncOutput,
+)
 from core import public
 from core.api import AdminOnly, MemberOnly, SuperOnly
 from core.endpoints import endpoint, query_parameters
@@ -287,6 +294,46 @@ api = [
                 r.user, member.get_member(pk), d["status"]
             ),
             request=FingerprintInput,
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/device/status/",
+        endpoint(
+            "admin_device_status",
+            response=DeviceStatusOutput,
+            handler=lambda r, d: bio.status_payload(),
+            method="get",
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/members/<uuid:pk>/fingerprint/enroll/",
+        endpoint(
+            "admin_member_fingerprint_enroll",
+            response=EnrollPrepareOutput,
+            handler=lambda r, d, pk: bio.enroll_prepare(
+                r.user, member.get_member(pk), d.get("pin", "")
+            ),
+            request=EnrollPrepareInput,
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/members/<uuid:pk>/fingerprint/pull/",
+        endpoint(
+            "admin_member_fingerprint_pull",
+            response=VaultSyncOutput,
+            handler=lambda r, d, pk: bio.pull_templates(r.user, member.get_member(pk)),
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/members/<uuid:pk>/fingerprint/push/",
+        endpoint(
+            "admin_member_fingerprint_push",
+            response=VaultSyncOutput,
+            handler=lambda r, d, pk: bio.push_vault_to_device(r.user, member.get_member(pk)),
             permission=AdminOnly,
         ),
     ),

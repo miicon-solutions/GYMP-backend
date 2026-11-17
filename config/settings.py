@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "operations",
     "attendance",
     "reporting",
+    "biometrics",
 ]
 MIDDLEWARE = [
     "core.middleware.RequestLogMiddleware",
@@ -213,6 +214,9 @@ SSLCOMMERZ_STORE_ID = env("SSLCOMMERZ_STORE_ID", default="")
 SSLCOMMERZ_STORE_PASSWD = env("SSLCOMMERZ_STORE_PASSWD", default="")
 SSLCOMMERZ_SANDBOX = not PRODUCTION and env.bool("SSLCOMMERZ_SANDBOX", default=True)
 ATTENDANCE_DEVICE_KEY = env("ATTENDANCE_DEVICE_KEY", default="")
+ZKTECO_BRIDGE_URL = env("ZKTECO_BRIDGE_URL", default="").rstrip("/")
+ZKTECO_BRIDGE_KEY = env("ZKTECO_BRIDGE_KEY", default="")
+BIOMETRIC_ENCRYPTION_KEY = env("BIOMETRIC_ENCRYPTION_KEY", default="") or TOTP_ENCRYPTION_KEY
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

@@ -2,19 +2,31 @@
 
 Python 3.14, Django 5.2 LTS, Django REST Framework, and PostgreSQL. This is a complete, independently runnable port of the implemented Go backend. It uses a **new database** and a **breaking API contract**. The Go project is unchanged; the Flutter client in `GYMA_a` targets this Django API.
 
-## Start with Docker
+## Start with Docker (standalone API)
 
-Run these commands in `GYMA_b`:
+Compose starts **only the API**. Postgres and the ZKTeco bridge are separate.
+
+1. Ensure Postgres is already running in Docker and create a dedicated empty DB:
+
+```bash
+psql "$DATABASE_URL_ADMIN" -c 'CREATE DATABASE gyma_django;'
+```
+
+2. Run the API:
 
 ```bash
 cp .env.example .env
-# Edit .env; generate private Django/JWT secrets and a TOTP encryption key.
-# Set DATABASE_URL and the AWS_* settings for your external PostgreSQL and MinIO.
-# A suitable TOTP_ENCRYPTION_KEY: python -c 'import secrets; print(secrets.token_hex(32))'
+# Edit .env: DATABASE_URL → your existing Postgres (host.docker.internal from compose,
+# localhost from host Python). Use DB name gyma_django — never the legacy Go database.
+# Generate TOTP_ENCRYPTION_KEY: python -c 'import secrets; print(secrets.token_hex(32))'
+# Local media: MEDIA_STORAGE=filesystem. Leave ZKTECO_BRIDGE_URL empty unless the
+# standalone zkteco-bridge is running on the gym LAN.
 docker compose up --build -d
 docker compose exec api python manage.py seed_dev
 docker compose exec api python manage.py bootstrap_admin --phone +88017XXXXXXXX --name 'Gym Operator' --browser-access
 ```
+
+Agent notes: see [AGENTS.md](AGENTS.md). ZK control center lives in sibling `zkteco-bridge/` (own `docker compose up`).
 
 Replace the phone placeholder with your actual Bangladesh phone number. `bootstrap_admin` prompts for an operator password only with `--browser-access`. It prints a **one-time setup token** for authenticator enrollment. Keep that token private. There are no seeded credentials, and the command refuses to replace an existing super admin.
 

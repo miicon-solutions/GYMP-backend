@@ -27,6 +27,8 @@ class MemberProfile(Entity):
         default="not_required",
         choices=[(x, x) for x in ("not_required", "pending", "ready", "failed")],
     )
+    device_pin_enc = models.TextField(blank=True)
+    device_pin_updated_at = models.DateTimeField(null=True, blank=True)
     recovery_sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta(Entity.Meta):

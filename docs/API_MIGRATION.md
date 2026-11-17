@@ -104,6 +104,10 @@ Placeholders such as `{id}` are UUIDs except `{tranId}` (merchant transaction re
 | POST | `/v1/admin/members/:id/cash-payments` | `/api/v1/admin/members/{id}/cash-payments/` |
 | POST | `/v1/admin/members/:id/phone` | `/api/v1/admin/members/{id}/phone/` |
 | POST | `/v1/admin/members/:id/fingerprint` | `/api/v1/admin/members/{id}/fingerprint/` |
+| GET | `/v1/admin/device/status` | `/api/v1/admin/device/status/` |
+| POST | `/v1/admin/members/:id/fingerprint/enroll` | `/api/v1/admin/members/{id}/fingerprint/enroll/` |
+| POST | (new) pull templates to vault | `/api/v1/admin/members/{id}/fingerprint/pull/` |
+| POST | (new) push vault to device | `/api/v1/admin/members/{id}/fingerprint/push/` |
 | GET | `/v1/member/attendance` | `/api/v1/member/attendance/` |
 | POST | `/v1/internal/attendance/check-in` | `/api/v1/internal/attendance/check-in/` |
 | POST | `/v1/auth/resolve-phone` | `/api/v1/auth/resolve-phone/` |
