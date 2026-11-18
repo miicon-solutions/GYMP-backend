@@ -13,6 +13,18 @@ EXPERIENCE_LEVELS = [
 ]
 UNIT_SYSTEMS = [("metric", "Metric (kg/cm)"), ("imperial", "Imperial (lbs/in)")]
 WEIGHT_UNITS = [("kg", "Kilograms"), ("lbs", "Pounds")]
+SEX_CHOICES = [("", "Unspecified"), ("male", "Male"), ("female", "Female"), ("other", "Other")]
+NUTRITION_GOALS = [
+    ("lose_weight", "Lose Weight"),
+    ("maintain_weight", "Maintain Weight"),
+    ("gain_weight", "Gain Weight"),
+]
+MOTIVATION_FREQUENCIES = [
+    ("off", "Off"),
+    ("minimal", "Low (Milestones only)"),
+    ("daily", "Daily Summary"),
+    ("frequent", "High (All Coaching Tips)"),
+]
 
 
 class FitnessProfile(Entity):
@@ -25,6 +37,18 @@ class FitnessProfile(Entity):
         max_length=12, choices=EXPERIENCE_LEVELS, default="beginner"
     )
     preferred_units = models.CharField(max_length=8, choices=UNIT_SYSTEMS, default="metric")
+    height_cm = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    age = models.PositiveSmallIntegerField(null=True, blank=True)
+    sex = models.CharField(max_length=12, choices=SEX_CHOICES, blank=True, default="")
+    nutrition_goal = models.CharField(
+        max_length=20, choices=NUTRITION_GOALS, default="maintain_weight"
+    )
+    has_custom_targets = models.BooleanField(default=False)
+    motivation_notifications_enabled = models.BooleanField(default=True)
+    motivation_frequency = models.CharField(
+        max_length=16, choices=MOTIVATION_FREQUENCIES, default="daily"
+    )
     daily_water_target_ml = models.PositiveIntegerField(
         default=3500, validators=[MinValueValidator(500), MaxValueValidator(10000)]
     )
@@ -39,7 +63,7 @@ class FitnessProfile(Entity):
 
     @property
     def weight_unit(self):
-        return "lbs" if self.preferred_units == "imperial" else "kg"
+        return "kg"
 
     def __str__(self):
         return f"Fitness profile for {self.user_id}"
@@ -54,6 +78,7 @@ class AnthropometryLog(Entity):
     weight_unit = models.CharField(max_length=3, choices=WEIGHT_UNITS, default="kg")
     body_fat_percentage = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     waist_inches = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    waist_cm = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     # Private body photos live under checkins/ and are only served to their owner.
     check_in_photo = models.ImageField(blank=True, null=True)
 

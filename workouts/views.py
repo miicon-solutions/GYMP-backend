@@ -231,3 +231,30 @@ class ExerciseAnalyticsView(generics.GenericAPIView):
             target_user, exercise_id, query.validated_data["timeframe"]
         )
         return Response(AnalyticsOutput(result).data)
+
+
+class OverallAnalyticsView(generics.GenericAPIView):
+    """Aggregate progression across all workouts (Suggestion 3)."""
+
+    permission_classes = [StaffOrMember]
+    serializer_class = AnalyticsOutput
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "timeframe", str, enum=["1m", "2m", "3m", "6m", "year", "lifetime"], default="3m"
+            ),
+            OpenApiParameter("user_id", str, required=False),
+        ],
+        responses=AnalyticsOutput,
+    )
+    def get(self, request):
+        query = AnalyticsQuery(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        target_user = request.user
+        if request.user.role == "admin" and request.query_params.get("user_id"):
+            from accounts.models import User
+
+            target_user = get_object_or_404(User, pk=request.query_params["user_id"])
+        result = services.overall_analytics(target_user, query.validated_data["timeframe"])
+        return Response(AnalyticsOutput(result).data)

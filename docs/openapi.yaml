@@ -1839,6 +1839,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/CheckInOutput'
           description: ''
+  /api/internal/attendance/check-out/:
+    post:
+      operationId: attendance_check_out
+      tags:
+      - attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CheckInInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CheckInInput'
+        required: true
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckInOutput'
+          description: ''
   /api/internal/biometrics/vault-members/:
     get:
       operationId: internal_vault_members
@@ -2135,6 +2162,32 @@ paths:
           type: string
       tags:
       - member
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonthOutput'
+          description: ''
+  /api/member/attendance/session/:
+    post:
+      operationId: member_attendance_session_adjust
+      tags:
+      - member
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberSessionAdjustInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MemberSessionAdjustInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MemberSessionAdjustInput'
       security:
       - bearerAuth: []
       - jwtAuth: []
@@ -2583,6 +2636,58 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/music/blocks/:
+    post:
+      operationId: api_music_blocks_create
+      description: Staff action to block a member from adding songs to the gym music
+        queue.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicBlockUserInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicBlockUserInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicBlockUserInput'
+        required: true
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/music/blocks/{user_id}/:
+    delete:
+      operationId: api_music_blocks_destroy
+      description: Staff action to unblock a member so they can add songs again.
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
   /api/music/queue/:
     get:
       operationId: api_music_queue_retrieve
@@ -2651,11 +2756,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/MusicQueueStateOutput'
           description: ''
+  /api/music/queue/{id}/approve/:
+    post:
+      operationId: api_music_queue_approve_create
+      description: Staff action to approve a pending member song so it enters the
+        playback queue.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/music/queue/{id}/report/:
+    post:
+      operationId: api_music_queue_report_create
+      description: Member or staff action to flag a bad song, hiding it until admin
+        reviews it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicReportInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicReportInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicReportInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/music/queue/{id}/restore/:
+    post:
+      operationId: api_music_queue_restore_create
+      description: Staff action to dismiss a report on a song and restore it to the
+        active queue.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
   /api/music/queue/complete/:
     post:
       operationId: api_music_queue_complete_create
-      description: Advance the gym player to the next song in queue when the current
-        song finishes playing.
+      description: Advance the gym player on /admin/music to the next song in queue
+        when the current song finishes playing.
       tags:
       - music
       requestBody:
@@ -2720,7 +2908,8 @@ paths:
   /api/music/settings/:
     post:
       operationId: api_music_settings_create
-      description: Staff action to enable or turn off the gym music queue system.
+      description: Staff action to configure the gym music queue (enable/disable,
+        require approval, max songs per user).
       tags:
       - music
       requestBody:
@@ -2734,7 +2923,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/MusicSettingsInput'
-        required: true
       security:
       - bearerAuth: []
       - jwtAuth: []
@@ -2747,7 +2935,8 @@ paths:
           description: ''
     patch:
       operationId: api_music_settings_partial_update
-      description: Staff action to enable or turn off the gym music queue system.
+      description: Staff action to configure the gym music queue (enable/disable,
+        require approval, max songs per user).
       tags:
       - music
       requestBody:
@@ -5430,6 +5619,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/CheckInOutput'
           description: ''
+  /api/v1/internal/attendance/check-out/:
+    post:
+      operationId: attendance_check_out_2
+      tags:
+      - attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CheckInInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CheckInInput'
+        required: true
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckInOutput'
+          description: ''
   /api/v1/internal/biometrics/vault-members/:
     get:
       operationId: internal_vault_members_2
@@ -5726,6 +5942,32 @@ paths:
           type: string
       tags:
       - member
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonthOutput'
+          description: ''
+  /api/v1/member/attendance/session/:
+    post:
+      operationId: member_attendance_session_adjust_2
+      tags:
+      - member
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberSessionAdjustInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MemberSessionAdjustInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MemberSessionAdjustInput'
       security:
       - bearerAuth: []
       - jwtAuth: []
@@ -6174,6 +6416,58 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/music/blocks/:
+    post:
+      operationId: api_v1_music_blocks_create
+      description: Staff action to block a member from adding songs to the gym music
+        queue.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicBlockUserInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicBlockUserInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicBlockUserInput'
+        required: true
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/blocks/{user_id}/:
+    delete:
+      operationId: api_v1_music_blocks_destroy
+      description: Staff action to unblock a member so they can add songs again.
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
   /api/v1/music/queue/:
     get:
       operationId: api_v1_music_queue_retrieve
@@ -6242,11 +6536,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/MusicQueueStateOutput'
           description: ''
+  /api/v1/music/queue/{id}/approve/:
+    post:
+      operationId: api_v1_music_queue_approve_create
+      description: Staff action to approve a pending member song so it enters the
+        playback queue.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/{id}/report/:
+    post:
+      operationId: api_v1_music_queue_report_create
+      description: Member or staff action to flag a bad song, hiding it until admin
+        reviews it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicReportInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicReportInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicReportInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/{id}/restore/:
+    post:
+      operationId: api_v1_music_queue_restore_create
+      description: Staff action to dismiss a report on a song and restore it to the
+        active queue.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
   /api/v1/music/queue/complete/:
     post:
       operationId: api_v1_music_queue_complete_create
-      description: Advance the gym player to the next song in queue when the current
-        song finishes playing.
+      description: Advance the gym player on /admin/music to the next song in queue
+        when the current song finishes playing.
       tags:
       - music
       requestBody:
@@ -6311,7 +6688,8 @@ paths:
   /api/v1/music/settings/:
     post:
       operationId: api_v1_music_settings_create
-      description: Staff action to enable or turn off the gym music queue system.
+      description: Staff action to configure the gym music queue (enable/disable,
+        require approval, max songs per user).
       tags:
       - music
       requestBody:
@@ -6325,7 +6703,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/MusicSettingsInput'
-        required: true
       security:
       - bearerAuth: []
       - jwtAuth: []
@@ -6338,7 +6715,8 @@ paths:
           description: ''
     patch:
       operationId: api_v1_music_settings_partial_update
-      description: Staff action to enable or turn off the gym music queue system.
+      description: Staff action to configure the gym music queue (enable/disable,
+        require approval, max songs per user).
       tags:
       - music
       requestBody:
@@ -7265,6 +7643,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/AnalyticsOutput'
           description: ''
+  /api/v1/workouts/analytics/overall/:
+    get:
+      operationId: api_v1_workouts_analytics_overall_retrieve
+      description: Aggregate progression across all workouts (Suggestion 3).
+      parameters:
+      - in: query
+        name: timeframe
+        schema:
+          type: string
+          enum:
+          - 1m
+          - 2m
+          - 3m
+          - 6m
+          - lifetime
+          - year
+          default: 3m
+      - in: query
+        name: user_id
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOutput'
+          description: ''
   /api/v1/workouts/exercises/:
     get:
       operationId: api_v1_workouts_exercises_list
@@ -8056,6 +8467,39 @@ paths:
           type: string
           format: uuid
         required: true
+      - in: query
+        name: timeframe
+        schema:
+          type: string
+          enum:
+          - 1m
+          - 2m
+          - 3m
+          - 6m
+          - lifetime
+          - year
+          default: 3m
+      - in: query
+        name: user_id
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOutput'
+          description: ''
+  /api/workouts/analytics/overall/:
+    get:
+      operationId: api_workouts_analytics_overall_retrieve
+      description: Aggregate progression across all workouts (Suggestion 3).
+      parameters:
       - in: query
         name: timeframe
         schema:
@@ -8895,6 +9339,21 @@ components:
           type: string
         blood_group:
           type: string
+        height_cm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,1})?$
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+        sex:
+          type: string
         photo_url:
           type: string
           nullable: true
@@ -8960,6 +9419,21 @@ components:
           type: string
         blood_group:
           type: string
+        height_cm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,1})?$
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+        sex:
+          type: string
         photo_url:
           type: string
           nullable: true
@@ -9016,6 +9490,10 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        total_volume_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
         session_count:
           type: integer
         frequency_per_week:
@@ -9056,6 +9534,11 @@ components:
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
           nullable: true
+        waist_cm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
         logged_at:
           type: string
           format: date-time
@@ -9081,12 +9564,22 @@ components:
           pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
         weight_unit:
           $ref: '#/components/schemas/WeightUnitBfcEnum'
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
         body_fat_percentage:
           type: string
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
           nullable: true
         waist_inches:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        waist_cm:
           type: string
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
@@ -9104,6 +9597,7 @@ components:
       - id
       - photo_url
       - weight
+      - weight_kg
     Article:
       type: object
       properties:
@@ -9200,6 +9694,35 @@ components:
       - id
       - title
       - url
+    AttendanceSessionItem:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        checked_in_at:
+          type: string
+          format: date-time
+        checked_out_at:
+          type: string
+          format: date-time
+          nullable: true
+        duration_minutes:
+          type: integer
+        auto_closed:
+          type: boolean
+        check_out_source:
+          type: string
+        is_active_session:
+          type: boolean
+      required:
+      - auto_closed
+      - check_out_source
+      - checked_in_at
+      - checked_out_at
+      - date
+      - duration_minutes
+      - is_active_session
     AuthTokenOutput:
       type: object
       properties:
@@ -9234,6 +9757,9 @@ components:
         prefer_custom:
           type: boolean
           default: true
+    BlankEnum:
+      enum:
+      - ''
     BloodGroupEnum:
       enum:
       - A+
@@ -9338,13 +9864,31 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+        estimated_1rm_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
         actual_weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+        actual_weight_kg:
           type: string
           format: decimal
           pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
         reps:
           type: integer
+        duration_seconds:
+          type: integer
+        distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
         volume_load:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        volume_load_kg:
           type: string
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
@@ -9363,12 +9907,27 @@ components:
         checked_in_at:
           type: string
           format: date-time
+        checked_out_at:
+          type: string
+          format: date-time
+        action:
+          allOf:
+          - $ref: '#/components/schemas/CheckInInputActionEnum'
+          default: check_in
         source:
           allOf:
           - $ref: '#/components/schemas/SourceEnum'
           default: device
       required:
       - member_id
+    CheckInInputActionEnum:
+      enum:
+      - check_in
+      - check_out
+      type: string
+      description: |-
+        * `check_in` - check_in
+        * `check_out` - check_out
     CheckInOutput:
       type: object
       properties:
@@ -9385,6 +9944,15 @@ components:
         checked_in_at:
           type: string
           format: date-time
+        checked_out_at:
+          type: string
+          format: date-time
+          nullable: true
+        duration_minutes:
+          type: integer
+          nullable: true
+        exit_only_record:
+          type: boolean
       required:
       - checked_in_at
       - day
@@ -9571,6 +10139,42 @@ components:
             $ref: '#/components/schemas/CreateCycleDayInput'
       required:
       - name
+    CustomDayExerciseInput:
+      type: object
+      properties:
+        exercise_id:
+          type: string
+          format: uuid
+        target_sets:
+          type: integer
+          maximum: 20
+          minimum: 1
+          default: 3
+        target_reps_range:
+          type: string
+          default: 8-12
+          maxLength: 32
+        target_duration_seconds:
+          type: integer
+          maximum: 86400
+          minimum: 0
+          nullable: true
+        target_distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        rest_protocol_seconds:
+          type: integer
+          maximum: 900
+          minimum: 0
+          default: 90
+        notes:
+          type: string
+          default: ''
+          maxLength: 300
+      required:
+      - exercise_id
     CustomSynthesizerInput:
       type: object
       properties:
@@ -9633,8 +10237,18 @@ components:
         date:
           type: string
           format: date
+        nutrition_goal:
+          type: string
+        has_custom_targets:
+          type: boolean
         targets:
           $ref: '#/components/schemas/MacroStats'
+        suggested_targets:
+          $ref: '#/components/schemas/SuggestedTargets'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/TargetWarning'
         consumed:
           $ref: '#/components/schemas/MacroStats'
         remaining:
@@ -9645,6 +10259,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MealLog'
+        bangladeshi_foods:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
       required:
       - consumed
       - date
@@ -9861,6 +10480,8 @@ components:
         muscle_distribution: {}
         category:
           $ref: '#/components/schemas/Category21bEnum'
+        tracking_type:
+          $ref: '#/components/schemas/TrackingTypeEnum'
         youtube_links:
           description: 'List of YouTube tutorial video links e.g. [{''title'': ''Form
             Guide'', ''url'': ''https://youtube.com/watch?v=...''}]'
@@ -9897,6 +10518,9 @@ components:
           $ref: '#/components/schemas/MuscleGroupEnum'
         category:
           $ref: '#/components/schemas/Category21bEnum'
+        tracking_type:
+          type: string
+          readOnly: true
         youtube_links:
           description: 'List of YouTube tutorial video links e.g. [{''title'': ''Form
             Guide'', ''url'': ''https://youtube.com/watch?v=...''}]'
@@ -9906,6 +10530,7 @@ components:
       - muscle_group
       - name
       - slug
+      - tracking_type
     ExperienceLevelEnum:
       enum:
       - beginner
@@ -9942,6 +10567,33 @@ components:
           $ref: '#/components/schemas/ExperienceLevelEnum'
         preferred_units:
           $ref: '#/components/schemas/PreferredUnitsEnum'
+        height_cm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,1})?$
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        age:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        sex:
+          oneOf:
+          - $ref: '#/components/schemas/FitnessProfileSexEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        nutrition_goal:
+          $ref: '#/components/schemas/NutritionGoalEnum'
+        has_custom_targets:
+          type: boolean
+        motivation_notifications_enabled:
+          type: boolean
+        motivation_frequency:
+          $ref: '#/components/schemas/MotivationFrequencyEnum'
         daily_water_target_ml:
           type: integer
           maximum: 10000
@@ -9962,12 +10614,38 @@ components:
           type: integer
           maximum: 500
           minimum: 0
+        reset_to_suggested:
+          type: boolean
+          writeOnly: true
+          default: false
+        suggested_targets:
+          allOf:
+          - $ref: '#/components/schemas/SuggestedTargets'
+          readOnly: true
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/TargetWarning'
+          readOnly: true
         updated_at:
           type: string
           format: date-time
           readOnly: true
       required:
+      - suggested_targets
       - updated_at
+      - warnings
+    FitnessProfileSexEnum:
+      enum:
+      - male
+      - female
+      - other
+      type: string
+      description: |-
+        * `` - Unspecified
+        * `male` - Male
+        * `female` - Female
+        * `other` - Other
     FocusTagEnum:
       enum:
       - hypertrophy
@@ -10382,12 +11060,29 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          default: '0.00'
         weight_unit:
           $ref: '#/components/schemas/LogSetInputWeightUnitEnum'
         reps:
           type: integer
-          maximum: 100
+          maximum: 1000
           minimum: 1
+          default: 1
+        duration_seconds:
+          type: integer
+          maximum: 86400
+          minimum: 0
+          nullable: true
+        duration_minutes:
+          type: integer
+          maximum: 1440
+          minimum: 0
+          nullable: true
+        distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
         rpe:
           type: string
           format: decimal
@@ -10395,8 +11090,6 @@ components:
           nullable: true
       required:
       - exercise_id
-      - reps
-      - weight
     LogSetInputWeightUnitEnum:
       enum:
       - kg
@@ -10704,6 +11397,31 @@ components:
       - phone_e164
       - profile_complete
       - signed_in_with_google
+    MemberSessionAdjustInput:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        action:
+          allOf:
+          - $ref: '#/components/schemas/MemberSessionAdjustInputActionEnum'
+          default: adjust_duration
+        duration_minutes:
+          type: integer
+          maximum: 360
+          minimum: 5
+        checked_out_at:
+          type: string
+          format: date-time
+    MemberSessionAdjustInputActionEnum:
+      enum:
+      - check_out
+      - adjust_duration
+      type: string
+      description: |-
+        * `check_out` - check_out
+        * `adjust_duration` - adjust_duration
     MonthOutput:
       type: object
       properties:
@@ -10720,12 +11438,122 @@ components:
           type: integer
         closed_weekday:
           type: integer
+        today_minutes:
+          type: integer
+        week_minutes:
+          type: integer
+        week_hours:
+          type: number
+          format: double
+        auto_cap_minutes:
+          type: integer
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceSessionItem'
+        motivation:
+          $ref: '#/components/schemas/MotivationStatus'
       required:
       - attended_days
       - closed_weekday
       - month
       - visit_count
       - year
+    MotivationFrequencyEnum:
+      enum:
+      - 'off'
+      - minimal
+      - daily
+      - frequent
+      type: string
+      description: |-
+        * `off` - Off
+        * `minimal` - Low (Milestones only)
+        * `daily` - Daily Summary
+        * `frequent` - High (All Coaching Tips)
+    MotivationInsight:
+      type: object
+      properties:
+        category:
+          type: string
+        title:
+          type: string
+        title_bn:
+          type: string
+        body:
+          type: string
+        body_bn:
+          type: string
+        tone:
+          type: string
+      required:
+      - body
+      - body_bn
+      - category
+      - title
+      - title_bn
+      - tone
+    MotivationStatus:
+      type: object
+      properties:
+        current_streak:
+          type: integer
+        longest_streak:
+          type: integer
+        protected_rest_days:
+          type: integer
+        days_since_last_activity:
+          type: integer
+          nullable: true
+        today_is_protected:
+          type: boolean
+        today_protection_reason:
+          type: string
+        today_protection_reason_bn:
+          type: string
+        avatar_mood:
+          type: string
+        avatar_name:
+          type: string
+        headline:
+          type: string
+        headline_bn:
+          type: string
+        subheadline:
+          type: string
+        subheadline_bn:
+          type: string
+        notifications_enabled:
+          type: boolean
+        notification_frequency:
+          type: string
+        workouts_this_week:
+          type: integer
+        prs_this_month:
+          type: integer
+        insights:
+          type: array
+          items:
+            $ref: '#/components/schemas/MotivationInsight'
+      required:
+      - avatar_mood
+      - avatar_name
+      - current_streak
+      - days_since_last_activity
+      - headline
+      - headline_bn
+      - insights
+      - longest_streak
+      - notification_frequency
+      - notifications_enabled
+      - protected_rest_days
+      - prs_this_month
+      - subheadline
+      - subheadline_bn
+      - today_is_protected
+      - today_protection_reason
+      - today_protection_reason_bn
+      - workouts_this_week
     MuscleGroupEnum:
       enum:
       - chest
@@ -10763,10 +11591,47 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        volume_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
       required:
       - muscle
       - percentage
       - volume_lbs
+    MusicBlockUserInput:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          default: ''
+          maxLength: 240
+      required:
+      - user_id
+    MusicBlockedUserOutput:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        full_name:
+          type: string
+        member_code:
+          type: string
+        reason:
+          type: string
+        blocked_at:
+          type: string
+          format: date-time
+      required:
+      - blocked_at
+      - full_name
+      - member_code
+      - reason
+      - user_id
     MusicQueueAddInput:
       type: object
       properties:
@@ -10783,8 +11648,12 @@ components:
           type: string
           maxLength: 200
         thumbnail_url:
-          type: string
-          maxLength: 1000
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 1000
+          - type: string
+            maxLength: 0
         duration_text:
           type: string
           maxLength: 32
@@ -10838,6 +11707,10 @@ components:
           type: string
         status:
           $ref: '#/components/schemas/MusicQueueStatusEnum'
+        is_reported:
+          type: boolean
+        report_reason:
+          type: string
         position:
           type: integer
           nullable: true
@@ -10851,6 +11724,8 @@ components:
         is_own_song:
           type: boolean
         can_remove:
+          type: boolean
+        can_report:
           type: boolean
         created_at:
           type: string
@@ -10887,12 +11762,16 @@ components:
       properties:
         is_enabled:
           type: boolean
+        require_approval:
+          type: boolean
         max_songs_per_user:
           type: integer
         user_active_count:
           type: integer
         remaining_slots:
           type: integer
+        is_user_blocked:
+          type: boolean
         now_playing:
           allOf:
           - $ref: '#/components/schemas/MusicQueueItemOutput'
@@ -10901,6 +11780,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MusicQueueItemOutput'
+        pending_approval:
+          type: array
+          items:
+            $ref: '#/components/schemas/MusicQueueItemOutput'
+        reported_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MusicQueueItemOutput'
+        blocked_users:
+          type: array
+          items:
+            $ref: '#/components/schemas/MusicBlockedUserOutput'
         history:
           type: array
           items:
@@ -10915,6 +11806,7 @@ components:
       - user_active_count
     MusicQueueStatusEnum:
       enum:
+      - pending_approval
       - queued
       - playing
       - played
@@ -10922,18 +11814,40 @@ components:
       - removed
       type: string
       description: |-
+        * `pending_approval` - Pending Approval
         * `queued` - Queued
         * `playing` - Playing
         * `played` - Played
         * `skipped` - Skipped
         * `removed` - Removed
+    MusicReportInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: ''
+          maxLength: 200
     MusicSettingsInput:
       type: object
       properties:
         is_enabled:
           type: boolean
-      required:
-      - is_enabled
+        require_approval:
+          type: boolean
+        max_songs_per_user:
+          type: integer
+          maximum: 10
+          minimum: 1
+    NutritionGoalEnum:
+      enum:
+      - lose_weight
+      - maintain_weight
+      - gain_weight
+      type: string
+      description: |-
+        * `lose_weight` - Lose Weight
+        * `maintain_weight` - Maintain Weight
+        * `gain_weight` - Gain Weight
     OTPInput:
       type: object
       properties:
@@ -11020,12 +11934,28 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+        value_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
         weight:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+        weight_kg:
           type: string
           format: decimal
           pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
         reps:
           type: integer
+        duration_seconds:
+          type: integer
+          nullable: true
+        distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
         date:
           type: string
           format: date
@@ -11476,6 +12406,8 @@ components:
         muscle_distribution: {}
         category:
           $ref: '#/components/schemas/Category21bEnum'
+        tracking_type:
+          $ref: '#/components/schemas/TrackingTypeEnum'
         youtube_links:
           description: 'List of YouTube tutorial video links e.g. [{''title'': ''Form
             Guide'', ''url'': ''https://youtube.com/watch?v=...''}]'
@@ -11493,6 +12425,33 @@ components:
           $ref: '#/components/schemas/ExperienceLevelEnum'
         preferred_units:
           $ref: '#/components/schemas/PreferredUnitsEnum'
+        height_cm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,1})?$
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        age:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        sex:
+          oneOf:
+          - $ref: '#/components/schemas/FitnessProfileSexEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        nutrition_goal:
+          $ref: '#/components/schemas/NutritionGoalEnum'
+        has_custom_targets:
+          type: boolean
+        motivation_notifications_enabled:
+          type: boolean
+        motivation_frequency:
+          $ref: '#/components/schemas/MotivationFrequencyEnum'
         daily_water_target_ml:
           type: integer
           maximum: 10000
@@ -11513,6 +12472,19 @@ components:
           type: integer
           maximum: 500
           minimum: 0
+        reset_to_suggested:
+          type: boolean
+          writeOnly: true
+          default: false
+        suggested_targets:
+          allOf:
+          - $ref: '#/components/schemas/SuggestedTargets'
+          readOnly: true
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/TargetWarning'
+          readOnly: true
         updated_at:
           type: string
           format: date-time
@@ -11609,6 +12581,12 @@ components:
       properties:
         is_enabled:
           type: boolean
+        require_approval:
+          type: boolean
+        max_songs_per_user:
+          type: integer
+          maximum: 10
+          minimum: 1
     PatchedOffer:
       type: object
       properties:
@@ -12010,12 +12988,38 @@ components:
           type: string
         blood_group:
           $ref: '#/components/schemas/BloodGroupEnum'
+        height_cm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,1})?$
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        age:
+          type: integer
+          maximum: 120
+          minimum: 10
+          nullable: true
+        sex:
+          oneOf:
+          - $ref: '#/components/schemas/ProfileInputSexEnum'
+          - $ref: '#/components/schemas/BlankEnum'
       required:
       - blood_group
       - emergency_name
       - emergency_phone_e164
       - emergency_relationship
       - full_name
+    ProfileInputSexEnum:
+      enum:
+      - male
+      - female
+      - other
+      type: string
+      description: "* `` - \n* `male` - male\n* `female` - female\n* `other` - other"
     ProfileOutput:
       type: object
       properties:
@@ -12045,6 +13049,21 @@ components:
         emergency_phone_e164:
           type: string
         blood_group:
+          type: string
+        height_cm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,1})?$
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+        sex:
           type: string
         photo_url:
           type: string
@@ -12438,7 +13457,17 @@ components:
           minimum: 1
         target_reps_range:
           type: string
-          maxLength: 20
+          maxLength: 32
+        target_duration_seconds:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        target_distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
         rest_protocol_seconds:
           type: integer
           maximum: 900
@@ -12501,7 +13530,7 @@ components:
           maxLength: 80
         assigned_routine:
           allOf:
-          - $ref: '#/components/schemas/RoutineBrief'
+          - $ref: '#/components/schemas/ScheduledRoutineDetail'
           readOnly: true
         assigned_routine_id:
           type: string
@@ -12511,10 +13540,36 @@ components:
         is_rest_day:
           type: boolean
         target_focus_tags: {}
+        custom_exercises: {}
+        weekday:
+          type: integer
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+        is_gym_closed:
+          type: boolean
+          readOnly: true
+        closed_reason:
+          type: string
+          readOnly: true
+        closed_note:
+          type: string
+          readOnly: true
+        closed_note_bn:
+          type: string
+          readOnly: true
       required:
       - assigned_routine
+      - closed_note
+      - closed_note_bn
+      - closed_reason
+      - date
       - day_index
       - id
+      - is_gym_closed
+      - weekday
     ScheduledDayUpdate:
       type: object
       properties:
@@ -12532,10 +13587,51 @@ components:
           items:
             type: string
             maxLength: 40
+        custom_exercises:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomDayExerciseInput'
+        split_category:
+          allOf:
+          - $ref: '#/components/schemas/SplitCategoryEnum'
+          default: other
+        focus_tag:
+          allOf:
+          - $ref: '#/components/schemas/FocusTagEnum'
+          default: hypertrophy
         swap_with_day_index:
           type: integer
           maximum: 27
           minimum: 0
+    ScheduledRoutineDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 120
+        focus_tag:
+          $ref: '#/components/schemas/FocusTagEnum'
+        split_category:
+          $ref: '#/components/schemas/SplitCategoryEnum'
+        estimated_duration_minutes:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_predefined:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutineExercise'
+          readOnly: true
+      required:
+      - id
+      - items
+      - title
     Session:
       type: object
       properties:
@@ -12607,6 +13703,13 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        total_volume_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        estimated_calories_burned:
+          type: integer
         rpe_average:
           type: string
           format: decimal
@@ -12615,6 +13718,7 @@ components:
       required:
       - id
       - rpe_average
+      - total_volume_kg
       - total_volume_lbs
     SetTypeEnum:
       enum:
@@ -12705,6 +13809,23 @@ components:
           items:
             $ref: '#/components/schemas/ScheduledDay'
           readOnly: true
+        closed_weekdays:
+          type: array
+          items:
+            type: integer
+          readOnly: true
+        gym_week:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+        upcoming_holidays:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -12714,11 +13835,14 @@ components:
           format: date-time
           readOnly: true
       required:
+      - closed_weekdays
       - created_at
       - days
+      - gym_week
       - id
       - is_active
       - name
+      - upcoming_holidays
       - updated_at
     Staff:
       type: object
@@ -12818,6 +13942,74 @@ components:
         * `in_progress` - In progress
         * `completed` - Completed
         * `cancelled` - Cancelled
+    SuggestedTargets:
+      type: object
+      properties:
+        goal:
+          type: string
+        calories:
+          type: integer
+        protein_g:
+          type: integer
+        carbs_g:
+          type: integer
+        fat_g:
+          type: integer
+        daily_water_target_ml:
+          type: integer
+        safe_minimum_calories:
+          type: integer
+        has_body_data:
+          type: boolean
+        weight_kg:
+          type: number
+          format: double
+        height_cm:
+          type: number
+          format: double
+        age:
+          type: integer
+        sex:
+          type: string
+      required:
+      - age
+      - calories
+      - carbs_g
+      - daily_water_target_ml
+      - fat_g
+      - goal
+      - has_body_data
+      - height_cm
+      - protein_g
+      - safe_minimum_calories
+      - sex
+      - weight_kg
+    TargetWarning:
+      type: object
+      properties:
+        field:
+          type: string
+        label:
+          type: string
+        level:
+          type: string
+        actual:
+          type: integer
+        suggested:
+          type: integer
+        deviation_pct:
+          type: number
+          format: double
+        message:
+          type: string
+      required:
+      - actual
+      - deviation_pct
+      - field
+      - label
+      - level
+      - message
+      - suggested
     TemplateEnum:
       enum:
       - ppl
@@ -12850,6 +14042,16 @@ components:
       - expires_in_sec
       - refresh_token
       - token_type
+    TrackingTypeEnum:
+      enum:
+      - reps
+      - time
+      - cardio
+      type: string
+      description: |-
+        * `reps` - Sets & Reps
+        * `time` - Time (Minutes & Seconds)
+        * `cardio` - Cardio (Time & Distance km)
     UnlockInput:
       type: object
       properties:
@@ -13040,6 +14242,14 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           readOnly: true
+        total_volume_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        estimated_calories_burned:
+          type: integer
+          readOnly: true
         rpe_average:
           type: string
           format: decimal
@@ -13054,9 +14264,15 @@ components:
           items:
             $ref: '#/components/schemas/WorkoutSet'
           readOnly: true
+        summary:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
       required:
       - duration_minutes
       - end_time
+      - estimated_calories_burned
       - id
       - notes
       - routine
@@ -13064,7 +14280,9 @@ components:
       - sets
       - start_time
       - status
+      - summary
       - title
+      - total_volume_kg
       - total_volume_lbs
     WorkoutSessionList:
       type: object
@@ -13102,6 +14320,14 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           readOnly: true
+        total_volume_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        estimated_calories_burned:
+          type: integer
+          readOnly: true
         rpe_average:
           type: string
           format: decimal
@@ -13120,6 +14346,7 @@ components:
       required:
       - duration_minutes
       - end_time
+      - estimated_calories_burned
       - id
       - notes
       - pr_count
@@ -13129,6 +14356,7 @@ components:
       - start_time
       - status
       - title
+      - total_volume_kg
       - total_volume_lbs
     WorkoutSessionUpdate:
       type: object
@@ -13181,9 +14409,24 @@ components:
           format: decimal
           pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
           readOnly: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          readOnly: true
         reps:
           type: integer
           readOnly: true
+        duration_seconds:
+          type: integer
+          readOnly: true
+          nullable: true
+        distance_km:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
         rpe:
           type: string
           format: decimal
@@ -13199,12 +14442,20 @@ components:
           pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
           readOnly: true
           description: Pounds
+        calculated_1rm_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          readOnly: true
         performed_at:
           type: string
           format: date-time
           readOnly: true
       required:
       - calculated_1rm
+      - calculated_1rm_kg
+      - distance_km
+      - duration_seconds
       - exercise
       - id
       - is_pr
@@ -13214,6 +14465,7 @@ components:
       - set_number
       - set_type
       - weight
+      - weight_kg
       - weight_lbs
       - weight_unit
     YouTubeSearchOutput:

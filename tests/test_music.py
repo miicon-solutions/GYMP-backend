@@ -214,3 +214,95 @@ def test_youtube_search_and_link_resolution(member, monkeypatch):
     assert first["video_id"] == "eVTXPUF4Oz4"
     assert first["title"] == "Linkin Park - In The End"
     assert first["duration_seconds"] == 217
+
+
+@pytest.mark.django_db
+def test_admin_music_approval_reporting_user_blocking_and_age_restriction(
+    member, other_member, staff
+):
+    m1 = client_for(member)
+    m2 = client_for(other_member)
+    staff_client = client_for(staff)
+
+    # 1. Admin turns on require_approval and sets max_songs_per_user to 2 (Suggestion 11)
+    s_res = staff_client.post(
+        "/api/v1/music/settings/",
+        {"is_enabled": True, "require_approval": True, "max_songs_per_user": 2},
+        format="json",
+    )
+    assert s_res.status_code == 200
+    assert s_res.data["require_approval"] is True
+    assert s_res.data["max_songs_per_user"] == 2
+
+    # 2. Age-restricted video is automatically blocked
+    age_res = m1.post(
+        "/api/v1/music/queue/",
+        {
+            "youtube_url": "https://www.youtube.com/watch?v=eVTXPUF4Oz4",
+            "title": "Explicit 18+ NSFW Music Video",
+        },
+        format="json",
+    )
+    assert age_res.status_code == 400
+    assert "age-restricted" in str(age_res.data).lower()
+
+    # 3. Member 1 adds a valid song -> waits in pending_approval (not playing yet!)
+    add_res = m1.post(
+        "/api/v1/music/queue/",
+        {
+            "youtube_url": "https://www.youtube.com/watch?v=eVTXPUF4Oz4",
+            "title": "In The End",
+        },
+        format="json",
+    )
+    assert add_res.status_code == 201
+    item_id = add_res.data["item"]["id"]
+    assert add_res.data["item"]["status"] == "pending_approval"
+    assert add_res.data["queue_state"]["now_playing"] is None
+    assert len(add_res.data["queue_state"]["pending_approval"]) == 1
+
+    # 4. Admin approves the song -> enters active queue and starts playing!
+    app_res = staff_client.post(f"/api/v1/music/queue/{item_id}/approve/")
+    assert app_res.status_code == 200
+    assert str(app_res.data["now_playing"]["id"]) == str(item_id)
+    assert app_res.data["now_playing"]["status"] == "playing"
+
+    # 5. Member 2 reports the song -> hides it from queue until admin checks it
+    rep_res = m2.post(
+        f"/api/v1/music/queue/{item_id}/report/",
+        {"reason": "Too loud / wrong genre"},
+        format="json",
+    )
+    assert rep_res.status_code == 200
+    assert rep_res.data["now_playing"] is None
+    assert len(rep_res.data["queue"]) == 0
+
+    # Admin sees it in reported_items and restores it
+    admin_state = staff_client.get("/api/v1/music/queue/").data
+    assert len(admin_state["reported_items"]) == 1
+    rest_res = staff_client.post(f"/api/v1/music/queue/{item_id}/restore/")
+    assert rest_res.status_code == 200
+    assert str(rest_res.data["now_playing"]["id"]) == str(item_id)
+
+    # 6. Admin blocks Member 1 -> removes their active songs and prevents adding more
+    blk_res = staff_client.post(
+        "/api/v1/music/blocks/",
+        {"user_id": str(member.id), "reason": "Spamming queue"},
+        format="json",
+    )
+    assert blk_res.status_code == 200
+    assert blk_res.data["now_playing"] is None
+    assert len(blk_res.data["blocked_users"]) == 1
+
+    denied = m1.post(
+        "/api/v1/music/queue/",
+        {"youtube_url": "https://www.youtube.com/watch?v=kXYiU_JCYtU", "title": "Numb"},
+        format="json",
+    )
+    assert denied.status_code == 403
+
+    # Admin unblocks Member 1
+    unblk_res = staff_client.delete(f"/api/v1/music/blocks/{member.id}/")
+    assert unblk_res.status_code == 200
+    assert len(unblk_res.data["blocked_users"]) == 0
+

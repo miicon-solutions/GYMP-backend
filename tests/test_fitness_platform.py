@@ -695,3 +695,283 @@ def test_feed_articles_crud_and_saving(staff_client, auth_user, auth_client):
     del_resp = staff_client.delete(f"/api/v1/feed/articles/{article_id}/")
     assert del_resp.status_code == 204
 
+
+# =========================================================================
+# 7. TEST REPORT FIXES: TIMED/CARDIO EXERCISES, OVERALL ANALYTICS,
+#    POST-WORKOUT SUMMARY, BODY DATA SYNC, CUSTOM SCHEDULE DAYS,
+#    NUTRITION SUGGESTIONS & WARNINGS, ATTENDANCE TIME & MOTIVATION AVATAR
+# =========================================================================
+
+
+def test_timed_and_cardio_exercises_overall_analytics_and_workout_summary(auth_client, auth_user):
+    # Sync body data first (Suggestion 6)
+    prof_resp = auth_client.patch(
+        "/api/v1/users/profile/",
+        {"height_cm": "175.0", "weight_kg": "78.00", "age": 26, "sex": "male"},
+        format="json",
+    )
+    assert prof_resp.status_code == 200
+    assert Decimal(prof_resp.data["weight_kg"]) == Decimal("78.00")
+
+    plank = Exercise.objects.get(slug="plank-hold")
+    running = Exercise.objects.get(slug="treadmill-running")
+    bench = Exercise.objects.get(slug="barbell-bench-press")
+    assert plank.tracking_type == "time"
+    assert running.tracking_type == "cardio"
+    assert bench.tracking_type == "reps"
+
+    # Session 1 (Baseline)
+    s1 = auth_client.post(
+        "/api/v1/workouts/sessions/start/",
+        {"title": "Full Conditioning & Strength"},
+        format="json",
+    ).data["id"]
+    auth_client.post(
+        f"/api/v1/workouts/sessions/{s1}/log-set/",
+        {"exercise_id": str(bench.id), "weight": "80.00", "weight_unit": "kg", "reps": 8},
+        format="json",
+    )
+    auth_client.post(
+        f"/api/v1/workouts/sessions/{s1}/log-set/",
+        {"exercise_id": str(plank.id), "duration_minutes": 1, "duration_seconds": 30},
+        format="json",
+    )
+    auth_client.post(
+        f"/api/v1/workouts/sessions/{s1}/log-set/",
+        {
+            "exercise_id": str(running.id),
+            "duration_minutes": 20,
+            "duration_seconds": 0,
+            "distance_km": "3.50",
+        },
+        format="json",
+    )
+    c1 = auth_client.post(f"/api/v1/workouts/sessions/{s1}/complete/", {}, format="json")
+    assert c1.status_code == 200
+    assert c1.data["estimated_calories_burned"] > 0
+
+    # Session 2 (Improved weight, plank time, and running distance)
+    s2 = auth_client.post(
+        "/api/v1/workouts/sessions/start/",
+        {"title": "Full Conditioning & Strength"},
+        format="json",
+    ).data["id"]
+    set_bench = auth_client.post(
+        f"/api/v1/workouts/sessions/{s2}/log-set/",
+        {"exercise_id": str(bench.id), "weight": "85.00", "weight_unit": "kg", "reps": 10},
+        format="json",
+    )
+    assert set_bench.status_code == 201
+    assert Decimal(set_bench.data["set"]["weight_kg"]) == Decimal("85.00")
+
+    set_plank = auth_client.post(
+        f"/api/v1/workouts/sessions/{s2}/log-set/",
+        {"exercise_id": str(plank.id), "duration_minutes": 2, "duration_seconds": 0},
+        format="json",
+    )
+    assert set_plank.status_code == 201
+    assert set_plank.data["set"]["duration_seconds"] == 120
+
+    set_run = auth_client.post(
+        f"/api/v1/workouts/sessions/{s2}/log-set/",
+        {
+            "exercise_id": str(running.id),
+            "duration_minutes": 25,
+            "duration_seconds": 30,
+            "distance_km": "5.00",
+        },
+        format="json",
+    )
+    assert set_run.status_code == 201
+    assert set_run.data["set"]["duration_seconds"] == 1530
+    assert Decimal(set_run.data["set"]["distance_km"]) == Decimal("5.00")
+
+    c2 = auth_client.post(f"/api/v1/workouts/sessions/{s2}/complete/", {}, format="json")
+    assert c2.status_code == 200
+    summary = c2.data["summary"]
+    assert summary["is_calorie_estimate"] is True
+    assert summary["estimated_calories_burned"] > 50
+    assert summary["default_comparison_mode"] == "last_session"
+
+    last_cmp = summary["comparisons"]["last_session"]
+    assert last_cmp["has_baseline"] is True
+    assert last_cmp["volume_kg"]["status"] == "improved"
+    ex_statuses = {e["exercise_name"]: e["overall_status"] for e in last_cmp["exercises"]}
+    assert ex_statuses["Barbell Bench Press"] == "improved"
+    assert ex_statuses["Plank Hold"] == "improved"
+    assert ex_statuses["Treadmill Running"] == "improved"
+
+    # Overall analytics ("All workouts" option - Suggestion 3)
+    overall = auth_client.get("/api/v1/workouts/analytics/overall/?timeframe=year")
+    assert overall.status_code == 200
+    assert overall.data["exercise"]["slug"] == "all-workouts"
+    assert overall.data["unit"] == "kg"
+    assert Decimal(overall.data["total_volume_kg"]) > 0
+    assert overall.data["session_count"] >= 2
+
+
+def test_custom_schedule_day_and_closed_day_note(auth_client, auth_user):
+    from operations.services import seed_hours
+
+    seed_hours()
+    bench = Exercise.objects.get(slug="barbell-bench-press")
+    plank = Exercise.objects.get(slug="plank-hold")
+
+    # Fetch active cycle (auto-initializes if needed) and check Friday closed note (Suggestion 8)
+    cycle_resp = auth_client.get("/api/v1/schedules/active-cycle/")
+    assert cycle_resp.status_code == 200
+    friday_days = [d for d in cycle_resp.data["days"] if d["weekday"] == 5]
+    assert len(friday_days) == 1
+    assert friday_days[0]["is_gym_closed"] is True
+    assert "Gym is closed today" in friday_days[0]["closed_note"]
+
+    # Configure a Custom Day with lifting rep range + timed exercise (Suggestion 7)
+    put_resp = auth_client.put(
+        "/api/v1/schedules/active-cycle/days/4/",
+        {
+            "label": "Friday Home & Core Custom",
+            "is_rest_day": False,
+            "split_category": "push",
+            "focus_tag": "hypertrophy",
+            "custom_exercises": [
+                {
+                    "exercise_id": str(bench.id),
+                    "target_sets": 3,
+                    "target_reps_range": "8-12",
+                    "rest_protocol_seconds": 90,
+                },
+                {
+                    "exercise_id": str(plank.id),
+                    "target_sets": 3,
+                    "target_reps_range": "1m 30s",
+                    "target_duration_seconds": 90,
+                    "rest_protocol_seconds": 60,
+                },
+            ],
+        },
+        format="json",
+    )
+    assert put_resp.status_code == 200
+    day4 = put_resp.data["days"][4]
+    assert day4["label"] == "Friday Home & Core Custom"
+    assert day4["is_rest_day"] is False
+    assert len(day4["custom_exercises"]) == 2
+    assert len(day4["assigned_routine"]["items"]) == 2
+    assert day4["assigned_routine"]["items"][1]["target_duration_seconds"] == 90
+
+
+def test_nutrition_suggested_targets_warnings_and_profile_weight_sync(client, member, profile_payload):
+    client.force_authenticate(member)
+    # 1. Complete registration with body data (Suggestion 6)
+    reg = client.post(
+        "/api/v1/member/profile/complete/",
+        {
+            **profile_payload,
+            "height_cm": "172.0",
+            "weight_kg": "75.00",
+            "age": 25,
+            "sex": "male",
+        },
+        format="json",
+    )
+    assert reg.status_code == 200
+    assert Decimal(reg.data["weight_kg"]) == Decimal("75.00")
+
+    # 2. Nutrition summary automatically uses synced profile data without re-entering (Suggestion 9)
+    nutr = client.get("/api/v1/nutrition/logs/today/")
+    assert nutr.status_code == 200
+    sug_initial = nutr.data["suggested_targets"]
+    assert sug_initial["has_body_data"] is True
+    assert sug_initial["weight_kg"] == 75.0
+    assert len(nutr.data["bangladeshi_foods"]) >= 10
+
+    # 3. Switch goal to lose_weight and test safe minimum & >20% warning
+    client.patch(
+        "/api/v1/users/profile/",
+        {"nutrition_goal": "lose_weight", "reset_to_suggested": True},
+        format="json",
+    )
+    lose_prof = client.get("/api/v1/users/profile/").data
+    assert lose_prof["daily_calorie_target"] >= lose_prof["suggested_targets"]["safe_minimum_calories"]
+
+    # Set an unsafe low calorie target (>20% below suggestion) -> non-blocking warning
+    warn_resp = client.patch(
+        "/api/v1/users/profile/",
+        {"daily_calorie_target": 1100},
+        format="json",
+    )
+    assert warn_resp.status_code == 200
+    assert any(w["field"] == "calories" and w["level"] == "low" for w in warn_resp.data["warnings"])
+
+    # 4. Update weight in member profile -> suggested targets update automatically
+    client.put(
+        "/api/v1/member/profile/",
+        {
+            **profile_payload,
+            "height_cm": "172.0",
+            "weight_kg": "85.00",
+            "age": 25,
+            "sex": "male",
+        },
+        format="json",
+    )
+    nutr_after = client.get("/api/v1/nutrition/logs/today/").data
+    assert nutr_after["suggested_targets"]["weight_kg"] == 85.0
+    assert nutr_after["suggested_targets"]["calories"] > sug_initial["calories"] - 600
+
+
+def test_attendance_time_spent_exit_scan_auto_cap_and_motivation_streak(
+    client, member, staff, plan, profile_payload
+):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from operations.services import seed_hours
+    from payments.services import receive_cash
+
+    seed_hours()
+    member.member_profile.profile_complete = True
+    member.member_profile.save()
+    receive_cash(staff, member.member_profile, plan.pk)
+
+    # Check in and then scan on exit 75 minutes later (Suggestion 2)
+    in_time = (timezone.now() - timedelta(minutes=75)).isoformat()
+    out_time = timezone.now().isoformat()
+    r_in = client.post(
+        "/api/v1/internal/attendance/check-in/",
+        {"member_id": member.member_profile.member_id, "checked_in_at": in_time},
+        format="json",
+        HTTP_X_DEVICE_KEY="test-device-key",
+    )
+    assert r_in.status_code == 200
+
+    r_out = client.post(
+        "/api/v1/internal/attendance/check-out/",
+        {"member_id": member.member_profile.member_id, "checked_out_at": out_time},
+        format="json",
+        HTTP_X_DEVICE_KEY="test-device-key",
+    )
+    assert r_out.status_code == 200
+    assert r_out.data["exit_only_record"] is True
+    assert 70 <= r_out.data["duration_minutes"] <= 80
+
+    # Member views attendance time spent today, weekly hours, and motivation avatar (Suggestions 1 & 2)
+    client.force_authenticate(member)
+    att = client.get("/api/v1/member/attendance/")
+    assert att.status_code == 200
+    assert att.data["today_minutes"] >= 70
+    assert att.data["week_minutes"] >= 70
+    assert att.data["motivation"]["current_streak"] >= 1
+    assert att.data["motivation"]["avatar_mood"] in ("on_fire", "proud")
+
+    # Member manually corrects session time to 95 minutes
+    adj = client.post(
+        "/api/v1/member/attendance/session/",
+        {"action": "adjust_duration", "duration_minutes": 95},
+        format="json",
+    )
+    assert adj.status_code == 200
+    assert adj.data["today_minutes"] == 95
+
+

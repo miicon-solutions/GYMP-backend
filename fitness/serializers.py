@@ -2,32 +2,91 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from fitness.models import (
+    MOTIVATION_FREQUENCIES,
+    NUTRITION_GOALS,
+    SEX_CHOICES,
     WEIGHT_UNITS,
     AnthropometryLog,
     Article,
     FitnessProfile,
     SavedArticle,
 )
+from fitness.services import calculate_suggested_nutrition_targets, evaluate_target_warnings
+
+
+class SuggestedTargetsSerializer(serializers.Serializer):
+    goal = serializers.CharField()
+    calories = serializers.IntegerField()
+    protein_g = serializers.IntegerField()
+    carbs_g = serializers.IntegerField()
+    fat_g = serializers.IntegerField()
+    daily_water_target_ml = serializers.IntegerField()
+    safe_minimum_calories = serializers.IntegerField()
+    has_body_data = serializers.BooleanField()
+    weight_kg = serializers.FloatField()
+    height_cm = serializers.FloatField()
+    age = serializers.IntegerField()
+    sex = serializers.CharField()
+
+
+class TargetWarningSerializer(serializers.Serializer):
+    field = serializers.CharField()
+    label = serializers.CharField()
+    level = serializers.CharField()
+    actual = serializers.IntegerField()
+    suggested = serializers.IntegerField()
+    deviation_pct = serializers.FloatField()
+    message = serializers.CharField()
 
 
 class FitnessProfileSerializer(serializers.ModelSerializer):
+    reset_to_suggested = serializers.BooleanField(write_only=True, required=False, default=False)
+    suggested_targets = serializers.SerializerMethodField()
+    warnings = serializers.SerializerMethodField()
+
     class Meta:
         model = FitnessProfile
         fields = [
             "experience_level",
             "preferred_units",
+            "height_cm",
+            "weight_kg",
+            "age",
+            "sex",
+            "nutrition_goal",
+            "has_custom_targets",
+            "motivation_notifications_enabled",
+            "motivation_frequency",
             "daily_water_target_ml",
             "daily_calorie_target",
             "protein_target_g",
             "carbs_target_g",
             "fat_target_g",
+            "reset_to_suggested",
+            "suggested_targets",
+            "warnings",
             "updated_at",
         ]
-        read_only_fields = ["updated_at"]
+        read_only_fields = ["suggested_targets", "warnings", "updated_at"]
+        extra_kwargs = {
+            "sex": {"choices": SEX_CHOICES, "required": False, "allow_blank": True},
+            "nutrition_goal": {"choices": NUTRITION_GOALS, "required": False},
+            "motivation_frequency": {"choices": MOTIVATION_FREQUENCIES, "required": False},
+        }
+
+    @extend_schema_field(SuggestedTargetsSerializer)
+    def get_suggested_targets(self, obj):
+        return calculate_suggested_nutrition_targets(obj.user, obj)
+
+    @extend_schema_field(TargetWarningSerializer(many=True))
+    def get_warnings(self, obj):
+        suggested = calculate_suggested_nutrition_targets(obj.user, obj)
+        return evaluate_target_warnings(obj, suggested)
 
 
 class AnthropometryLogSerializer(serializers.ModelSerializer):
     photo_url = serializers.SerializerMethodField()
+    weight_kg = serializers.SerializerMethodField()
 
     class Meta:
         model = AnthropometryLog
@@ -36,12 +95,24 @@ class AnthropometryLogSerializer(serializers.ModelSerializer):
             "logged_at",
             "weight",
             "weight_unit",
+            "weight_kg",
             "body_fat_percentage",
             "waist_inches",
+            "waist_cm",
             "photo_url",
             "created_at",
         ]
-        read_only_fields = ["id", "photo_url", "created_at"]
+        read_only_fields = ["id", "weight_kg", "photo_url", "created_at"]
+
+    @extend_schema_field(serializers.DecimalField(max_digits=6, decimal_places=2))
+    def get_weight_kg(self, obj):
+        from decimal import Decimal
+
+        from workouts.calculators import LBS_PER_KG, quantize
+
+        if obj.weight_unit == "kg":
+            return quantize(obj.weight)
+        return quantize(Decimal(obj.weight) / LBS_PER_KG)
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_photo_url(self, obj):
@@ -61,6 +132,9 @@ class AnthropometryInputSerializer(serializers.Serializer):
     )
     waist_inches = serializers.DecimalField(
         max_digits=5, decimal_places=2, min_value=10, max_value=120, required=False, allow_null=True
+    )
+    waist_cm = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=25, max_value=300, required=False, allow_null=True
     )
     logged_at = serializers.DateTimeField(required=False)
     check_in_photo = serializers.ImageField(required=False, allow_null=True)

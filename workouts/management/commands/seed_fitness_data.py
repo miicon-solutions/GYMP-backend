@@ -6,6 +6,7 @@ from django.utils.text import slugify
 
 from nutrition.models import CookingVariation, Recipe
 from workouts.models import Exercise, Routine, RoutineExercise
+from workouts.services import infer_tracking_type
 
 
 class Command(BaseCommand):
@@ -730,11 +731,56 @@ class Command(BaseCommand):
                     {"title": "Sled Prowler Push Full Body Conditioning", "url": "https://www.youtube.com/watch?v=jW8m3T2o71k"}
                 ],
             },
+            {
+                "name": "Wall Sit",
+                "muscle_group": "quads",
+                "category": "bodyweight",
+                "tracking_type": "time",
+                "target_vector": "Isometric Quadriceps Endurance",
+                "muscle_distribution": {"Quadriceps": 75, "Gluteus": 15, "Calves": 10},
+                "youtube_links": [
+                    {"title": "Proper Wall Sit Form & Knee Alignment", "url": "https://www.youtube.com/watch?v=y-wV4Venusw"}
+                ],
+            },
+            {
+                "name": "Dead Hang",
+                "muscle_group": "back",
+                "category": "bodyweight",
+                "tracking_type": "time",
+                "target_vector": "Grip Strength & Shoulder Decompression",
+                "muscle_distribution": {"Forearms & Grip": 60, "Latissimus Dorsi": 25, "Shoulders": 15},
+                "youtube_links": [
+                    {"title": "Dead Hang Form & Grip Endurance", "url": "https://www.youtube.com/watch?v=d_KZxkY_0cM"}
+                ],
+            },
+            {
+                "name": "Treadmill Running",
+                "muscle_group": "full_body",
+                "category": "cardio",
+                "tracking_type": "cardio",
+                "target_vector": "Aerobic Running Endurance & Distance",
+                "muscle_distribution": {"Cardiovascular": 55, "Quadriceps & Hamstrings": 30, "Calves": 15},
+                "youtube_links": [
+                    {"title": "Treadmill Running Cadence & Pacing", "url": "https://www.youtube.com/watch?v=zQ82RYIFLN8"}
+                ],
+            },
+            {
+                "name": "Stationary Cycling",
+                "muscle_group": "quads",
+                "category": "cardio",
+                "tracking_type": "cardio",
+                "target_vector": "Low-Impact Aerobic Cycling Endurance",
+                "muscle_distribution": {"Cardiovascular": 50, "Quadriceps": 35, "Hamstrings & Calves": 15},
+                "youtube_links": [
+                    {"title": "Stationary Bike Setup & Cadence", "url": "https://www.youtube.com/watch?v=YfWJ2a-t71o"}
+                ],
+            },
         ]
 
         exercises = {}
         for ed in exercises_data:
             slug = slugify(ed["name"])
+            track = infer_tracking_type(ed["name"], ed["category"], ed.get("tracking_type"))
             obj, _ = Exercise.objects.update_or_create(
                 slug=slug,
                 created_by=None,
@@ -742,6 +788,7 @@ class Command(BaseCommand):
                     "name": ed["name"],
                     "muscle_group": ed["muscle_group"],
                     "category": ed["category"],
+                    "tracking_type": track,
                     "target_vector": ed["target_vector"],
                     "muscle_distribution": ed["muscle_distribution"],
                     "youtube_links": ed.get("youtube_links", []),
@@ -985,6 +1032,75 @@ class Command(BaseCommand):
                 "instructions": [
                     "Whisk whey protein into Greek yogurt until smooth.",
                     "Layer in a bowl with fresh blueberries and a drizzle of honey.",
+                ],
+                "variations": [],
+            },
+            {
+                "title": "Deshi Bhaat, Grilled Murgi & Masoor Dal Bowl",
+                "base_prep_time_minutes": 10,
+                "base_cook_time_minutes": 20,
+                "base_calories": Decimal("685.00"),
+                "base_protein_g": Decimal("68.00"),
+                "base_carbs_g": Decimal("76.00"),
+                "base_fat_g": Decimal("9.50"),
+                "tags": ["Bangladeshi", "Meal Preset", "High Protein", "Lunch"],
+                "ingredients": [
+                    {"name": "Steamed White Rice (Bhaat)", "amount": "200g", "calories": 260, "protein": 5, "carbs": 56, "fat": 1},
+                    {"name": "Chicken Breast / Deshi Murgi", "amount": "200g", "calories": 330, "protein": 62, "carbs": 0, "fat": 7},
+                    {"name": "Masoor Dal (Cooked)", "amount": "80g", "calories": 95, "protein": 7, "carbs": 16, "fat": 1},
+                ],
+                "instructions": [
+                    "Season chicken breast with turmeric, cumin, garlic-ginger paste, and lime juice.",
+                    "Serve hot with 200g steamed rice (bhaat) and a bowl of thick masoor dal.",
+                ],
+                "variations": [
+                    {
+                        "variation_name": "Tawa / Low-Oil Grill",
+                        "temperature_details": "Medium heat",
+                        "cook_time_minutes": 15,
+                        "calorie_offset": 20,
+                        "macro_adjustment": {"fat_g": 2, "carbs_g": 0, "protein_g": 0},
+                        "method_notes": "Grill on a non-stick tawa with 1/2 tsp mustard oil.",
+                    }
+                ],
+            },
+            {
+                "title": "Ata Ruti, Siddho Dim & Mixed Sabzi",
+                "base_prep_time_minutes": 10,
+                "base_cook_time_minutes": 15,
+                "base_calories": Decimal("495.00"),
+                "base_protein_g": Decimal("26.00"),
+                "base_carbs_g": Decimal("64.00"),
+                "base_fat_g": Decimal("14.00"),
+                "tags": ["Bangladeshi", "Meal Preset", "Breakfast", "Dinner"],
+                "ingredients": [
+                    {"name": "Whole Wheat Ata Ruti (2 pcs)", "amount": "100g", "calories": 264, "protein": 9, "carbs": 51, "fat": 3},
+                    {"name": "Boiled Eggs (Siddho Dim - 2 pcs)", "amount": "100g", "calories": 155, "protein": 13, "carbs": 1, "fat": 11},
+                    {"name": "Mixed Vegetable Sabzi", "amount": "100g", "calories": 76, "protein": 4, "carbs": 12, "fat": 2},
+                ],
+                "instructions": [
+                    "Prepare two fresh whole wheat ata rutis on a dry tawa.",
+                    "Serve with two boiled eggs and warm home-style mixed vegetable sabzi.",
+                ],
+                "variations": [],
+            },
+            {
+                "title": "Rui Maach Jhol with Steamed Bhaat & Lal Shak",
+                "base_prep_time_minutes": 15,
+                "base_cook_time_minutes": 20,
+                "base_calories": Decimal("540.00"),
+                "base_protein_g": Decimal("38.00"),
+                "base_carbs_g": Decimal("66.00"),
+                "base_fat_g": Decimal("11.00"),
+                "tags": ["Bangladeshi", "Meal Preset", "High Protein", "Fish"],
+                "ingredients": [
+                    {"name": "Steamed White Rice (Bhaat)", "amount": "200g", "calories": 260, "protein": 5, "carbs": 56, "fat": 1},
+                    {"name": "Rohu Fish (Rui Maach)", "amount": "150g", "calories": 180, "protein": 29, "carbs": 0, "fat": 7},
+                    {"name": "Lal Shak / Leafy Greens", "amount": "150g", "calories": 100, "protein": 4, "carbs": 10, "fat": 3},
+                ],
+                "instructions": [
+                    "Simmer rui maach pieces in a light turmeric, cumin, and green chili jhol.",
+                    "Serve with 200g steamed rice and stir-fried lal shak.",
                 ],
                 "variations": [],
             },

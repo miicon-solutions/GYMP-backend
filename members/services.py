@@ -40,12 +40,17 @@ def get_member(member_id):
 
 def profile_data(user):
     p = owned_profile(user)
+    fp = getattr(user, "fitness_profile", None)
     return {
         **member_data(user),
         "emergency_name": p.emergency_name,
         "emergency_relationship": p.emergency_relationship,
         "emergency_phone_e164": p.emergency_phone_e164,
         "blood_group": p.blood_group,
+        "height_cm": p.height_cm if p.height_cm is not None else (fp.height_cm if fp else None),
+        "weight_kg": p.weight_kg if p.weight_kg is not None else (fp.weight_kg if fp else None),
+        "age": p.age if p.age is not None else (fp.age if fp else None),
+        "sex": p.sex or (fp.sex if fp else ""),
         "photo_url": urljoin(settings.PUBLIC_BASE_URL + "/", p.photo.url) if p.photo else None,
     }
 
@@ -88,11 +93,35 @@ def save_profile(user, data, complete=False):
         )
     user.full_name = data["full_name"]
     user.save(update_fields=["full_name"])
+    old_weight = p.weight_kg
     for key, value in data.items():
         if key != "full_name":
             setattr(p, key, value)
     p.profile_complete = True
     p.save()
+
+    # Sync body data with FitnessProfile and auto-recalculate suggested targets (Suggestions 6 & 9)
+    from fitness.models import AnthropometryLog, FitnessProfile
+    from fitness.services import apply_suggested_targets_to_profile
+
+    fp, _ = FitnessProfile.objects.get_or_create(user=user)
+    body_changed = False
+    for attr in ("height_cm", "weight_kg", "age", "sex"):
+        val = getattr(p, attr, None)
+        if val is not None and val != "" and getattr(fp, attr, None) != val:
+            setattr(fp, attr, val)
+            body_changed = True
+    if body_changed:
+        if not fp.has_custom_targets or (p.weight_kg is not None and p.weight_kg != old_weight):
+            apply_suggested_targets_to_profile(user, fp, save=False)
+        fp.save()
+    if p.weight_kg is not None and p.weight_kg != old_weight:
+        AnthropometryLog.objects.create(
+            user=user,
+            weight=p.weight_kg,
+            weight_unit="kg",
+            logged_at=timezone.now(),
+        )
     return profile_data(user)
 
 

@@ -52,6 +52,11 @@ SET_TYPES = [
     ("drop", "Drop"),
     ("failure", "Failure"),
 ]
+TRACKING_TYPES = [
+    ("reps", "Sets & Reps"),
+    ("time", "Time (Minutes & Seconds)"),
+    ("cardio", "Cardio (Time & Distance km)"),
+]
 
 
 class Exercise(Entity):
@@ -62,6 +67,7 @@ class Exercise(Entity):
     # Share of the stimulus per muscle in percent, e.g. {"Pectoralis Major": 52, ...}.
     muscle_distribution = models.JSONField(default=dict, blank=True)
     category = models.CharField(max_length=12, choices=EXERCISE_CATEGORIES)
+    tracking_type = models.CharField(max_length=12, choices=TRACKING_TYPES, default="reps")
     youtube_links = models.JSONField(
         default=list,
         blank=True,
@@ -134,7 +140,9 @@ class RoutineExercise(Entity):
     exercise = models.ForeignKey(Exercise, on_delete=models.PROTECT, related_name="+")
     order = models.PositiveSmallIntegerField()
     target_sets = models.PositiveSmallIntegerField(default=3)
-    target_reps_range = models.CharField(max_length=20, default="8-12")
+    target_reps_range = models.CharField(max_length=32, default="8-12")
+    target_duration_seconds = models.PositiveIntegerField(null=True, blank=True)
+    target_distance_km = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     rest_protocol_seconds = models.PositiveSmallIntegerField(default=90)
     notes = models.CharField(max_length=300, blank=True)
 
@@ -160,6 +168,7 @@ class WorkoutSession(Entity):
     end_time = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=12, choices=SESSION_STATUSES, default="in_progress")
     total_volume_lbs = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    estimated_calories_burned = models.PositiveIntegerField(default=0)
     rpe_average = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
     notes = models.TextField(blank=True)
 
@@ -196,10 +205,12 @@ class WorkoutSet(Entity):
     exercise = models.ForeignKey(Exercise, on_delete=models.PROTECT, related_name="sets")
     set_number = models.PositiveSmallIntegerField()
     set_type = models.CharField(max_length=8, choices=SET_TYPES, default="working")
-    weight = models.DecimalField(max_digits=7, decimal_places=2)
+    weight = models.DecimalField(max_digits=7, decimal_places=2, default=0)
     weight_unit = models.CharField(max_length=3, choices=WEIGHT_UNITS, default="kg")
-    weight_lbs = models.DecimalField(max_digits=8, decimal_places=2)
-    reps = models.PositiveSmallIntegerField()
+    weight_lbs = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    reps = models.PositiveSmallIntegerField(default=1)
+    duration_seconds = models.PositiveIntegerField(null=True, blank=True)
+    distance_km = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     rpe = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
     is_pr = models.BooleanField(default=False)
     calculated_1rm = models.DecimalField(max_digits=8, decimal_places=2, help_text="Pounds")

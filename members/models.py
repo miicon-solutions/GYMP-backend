@@ -13,6 +13,15 @@ class MemberProfile(Entity):
     emergency_relationship = models.CharField(max_length=12, blank=True)
     emergency_phone_e164 = models.CharField(max_length=14, blank=True)
     blood_group = models.CharField(max_length=8, default="Unknown")
+    height_cm = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    age = models.PositiveSmallIntegerField(null=True, blank=True)
+    sex = models.CharField(
+        max_length=12,
+        blank=True,
+        default="",
+        choices=[(x, x) for x in ("", "male", "female", "other")],
+    )
     photo = models.FileField(blank=True)
     profile_complete = models.BooleanField(default=False)
     membership_status = models.CharField(

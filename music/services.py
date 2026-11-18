@@ -7,10 +7,13 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from accounts.models import User
 from core.api import require_admin
 from music.models import (
     ACTIVE_QUEUE_STATUSES,
     MAX_SONGS_PER_USER_DEFAULT,
+    PLAYABLE_QUEUE_STATUSES,
+    MusicBlockedUser,
     MusicQueueItem,
     MusicSettings,
 )
@@ -26,6 +29,10 @@ YOUTUBE_HOSTS = {
     "youtube-nocookie.com",
     "www.youtube-nocookie.com",
 }
+AGE_RESTRICTED_PATTERNS = re.compile(
+    r"(\b18\+\b|\bnsfw\b|\bage[\s-]*restricted\b|\badult\s+only\b|\bexplicit\s+18\+\b|\buncensored\s+18\+\b)",
+    re.IGNORECASE,
+)
 
 FALLBACK_GYM_TRACKS = [
     {
@@ -158,6 +165,18 @@ def parse_duration_seconds(duration_text: str) -> int | None:
     return total
 
 
+def is_age_restricted_content(title: str = "", metadata: dict | None = None) -> bool:
+    if title and AGE_RESTRICTED_PATTERNS.search(title):
+        return True
+    if metadata:
+        if metadata.get("age_restricted") or metadata.get("is_age_restricted"):
+            return True
+        m_title = str(metadata.get("title") or "")
+        if m_title and AGE_RESTRICTED_PATTERNS.search(m_title):
+            return True
+    return False
+
+
 def resolve_youtube_metadata(video_id: str) -> dict:
     """Fetch video title, channel name, and thumbnail via YouTube public oEmbed."""
     watch_url = canonical_youtube_url(video_id)
@@ -169,6 +188,7 @@ def resolve_youtube_metadata(video_id: str) -> dict:
         "thumbnail_url": default_thumbnail_url(video_id),
         "duration_text": "",
         "duration_seconds": None,
+        "age_restricted": False,
     }
     for preset in FALLBACK_GYM_TRACKS:
         if preset["video_id"] == video_id:
@@ -186,6 +206,9 @@ def resolve_youtube_metadata(video_id: str) -> dict:
             title = (payload.get("title") or "").strip()
             author = (payload.get("author_name") or "").strip()
             thumb = (payload.get("thumbnail_url") or "").strip()
+            age_restricted = bool(
+                payload.get("age_restricted") or is_age_restricted_content(title)
+            )
             return {
                 "video_id": video_id,
                 "youtube_url": watch_url,
@@ -194,6 +217,7 @@ def resolve_youtube_metadata(video_id: str) -> dict:
                 "thumbnail_url": thumb or fallback["thumbnail_url"],
                 "duration_text": fallback["duration_text"],
                 "duration_seconds": fallback["duration_seconds"],
+                "age_restricted": age_restricted,
             }
     except Exception:
         pass
@@ -213,6 +237,10 @@ def _extract_video_renderers(node, collected: list, limit: int):
                     "".join(r.get("text", "") for r in title_runs)
                     or renderer.get("title", {}).get("simpleText", "")
                 ).strip()
+                # Skip age-restricted search results automatically
+                badges = str(renderer.get("badges") or "")
+                if is_age_restricted_content(title) or "age-restricted" in badges.lower():
+                    return
                 owner_runs = (
                     renderer.get("ownerText", {}).get("runs")
                     or renderer.get("longBylineText", {}).get("runs")
@@ -258,7 +286,9 @@ def search_youtube(query: str, limit: int = 10) -> list[dict]:
     results: list[dict] = []
     direct_id = extract_youtube_video_id(cleaned, allow_bare_id=False)
     if direct_id:
-        results.append(resolve_youtube_metadata(direct_id))
+        meta = resolve_youtube_metadata(direct_id)
+        if not is_age_restricted_content(meta.get("title", ""), meta):
+            results.append(meta)
         if len(results) >= limit:
             return results[:limit]
 
@@ -316,7 +346,11 @@ def get_settings(*, for_update: bool = False) -> MusicSettings:
     if obj is None:
         obj, _ = MusicSettings.objects.get_or_create(
             singleton_id=1,
-            defaults={"is_enabled": True, "max_songs_per_user": MAX_SONGS_PER_USER_DEFAULT},
+            defaults={
+                "is_enabled": True,
+                "require_approval": False,
+                "max_songs_per_user": MAX_SONGS_PER_USER_DEFAULT,
+            },
         )
         if for_update:
             obj = MusicSettings.objects.select_for_update().get(singleton_id=1)
@@ -324,14 +358,19 @@ def get_settings(*, for_update: bool = False) -> MusicSettings:
 
 
 def _sync_playing_track(settings_obj: MusicSettings) -> MusicQueueItem | None:
-    """Ensure queue playback state matches settings_obj.is_enabled and FIFO ordering."""
+    """Ensure queue playback state matches settings_obj.is_enabled and FIFO ordering, skipping reported/pending tracks."""
     if not settings_obj.is_enabled:
         MusicQueueItem.objects.filter(status="playing").update(status="queued", started_at=None)
         return None
 
+    # Reported tracks should not stay in 'playing'
+    MusicQueueItem.objects.filter(status="playing", is_reported=True).update(
+        status="queued", started_at=None
+    )
+
     playing_items = list(
         MusicQueueItem.objects.select_for_update()
-        .filter(status="playing")
+        .filter(status="playing", is_reported=False)
         .order_by("created_at", "id")
     )
     if len(playing_items) > 1:
@@ -343,7 +382,7 @@ def _sync_playing_track(settings_obj: MusicSettings) -> MusicQueueItem | None:
 
     next_item = (
         MusicQueueItem.objects.select_for_update()
-        .filter(status="queued")
+        .filter(status="queued", is_reported=False)
         .order_by("created_at", "id")
         .first()
     )
@@ -375,6 +414,11 @@ def serialize_queue_item(
     )
     is_admin = bool(current_user and current_user.is_authenticated and current_user.role == "admin")
     can_remove = item.status in ACTIVE_QUEUE_STATUSES and (is_admin or is_owner)
+    can_report = (
+        item.status in PLAYABLE_QUEUE_STATUSES
+        and not item.is_reported
+        and not is_owner
+    )
     return {
         "id": item.id,
         "video_id": item.video_id,
@@ -385,12 +429,15 @@ def serialize_queue_item(
         "duration_seconds": item.duration_seconds,
         "duration_text": item.duration_text,
         "status": item.status,
+        "is_reported": item.is_reported,
+        "report_reason": item.report_reason,
         "position": position,
         "requested_by_id": item.user_id,
         "requested_by_name": requester_name,
         "requested_by_code": requester_code,
         "is_own_song": is_owner,
         "can_remove": can_remove,
+        "can_report": can_report,
         "created_at": item.created_at,
         "started_at": item.started_at,
         "ended_at": item.ended_at,
@@ -402,14 +449,21 @@ def get_queue_state(user) -> dict:
     settings_obj = get_settings(for_update=True)
     _sync_playing_track(settings_obj)
 
-    active_items = list(
-        MusicQueueItem.objects.filter(status__in=ACTIVE_QUEUE_STATUSES)
+    is_admin = bool(user and user.is_authenticated and user.role == "admin")
+    is_user_blocked = bool(
+        user
+        and user.is_authenticated
+        and MusicBlockedUser.objects.filter(user=user).exists()
+    )
+
+    # Playable queue excludes reported items and pending_approval items
+    playable_items = list(
+        MusicQueueItem.objects.filter(status__in=PLAYABLE_QUEUE_STATUSES, is_reported=False)
         .select_related("user", "user__member_profile", "user__staff_profile")
         .order_by("created_at", "id")
     )
-    # Put 'playing' item at position 1, followed by 'queued' items in FIFO order
-    playing_list = [i for i in active_items if i.status == "playing"]
-    queued_list = [i for i in active_items if i.status == "queued"]
+    playing_list = [i for i in playable_items if i.status == "playing"]
+    queued_list = [i for i in playable_items if i.status == "queued"]
     ordered_active = playing_list + queued_list
 
     serialized_queue = [
@@ -417,6 +471,45 @@ def get_queue_state(user) -> dict:
         for idx, item in enumerate(ordered_active)
     ]
     now_playing = serialized_queue[0] if playing_list else None
+
+    # Pending approval items (admins see all; members see their own pending items)
+    pending_qs = (
+        MusicQueueItem.objects.filter(status="pending_approval", is_reported=False)
+        .select_related("user", "user__member_profile", "user__staff_profile")
+        .order_by("created_at", "id")
+    )
+    if not is_admin and user and user.is_authenticated:
+        pending_qs = pending_qs.filter(user=user)
+    serialized_pending = [
+        serialize_queue_item(item, current_user=user, position=None) for item in pending_qs
+    ]
+
+    # Reported items (hidden from members, visible to admin for review)
+    serialized_reported = []
+    serialized_blocked = []
+    if is_admin:
+        reported_qs = (
+            MusicQueueItem.objects.filter(status__in=ACTIVE_QUEUE_STATUSES, is_reported=True)
+            .select_related("user", "user__member_profile", "user__staff_profile")
+            .order_by("-reported_at", "created_at")
+        )
+        serialized_reported = [
+            serialize_queue_item(item, current_user=user, position=None) for item in reported_qs
+        ]
+        blocks_qs = MusicBlockedUser.objects.select_related(
+            "user", "user__member_profile", "user__staff_profile"
+        ).all()
+        for b in blocks_qs:
+            b_name, b_code = _requester_display(b.user)
+            serialized_blocked.append(
+                {
+                    "user_id": b.user_id,
+                    "full_name": b_name,
+                    "member_code": b_code,
+                    "reason": b.reason,
+                    "blocked_at": b.created_at,
+                }
+            )
 
     recent_history = list(
         MusicQueueItem.objects.filter(status__in=("played", "skipped"))
@@ -428,18 +521,23 @@ def get_queue_state(user) -> dict:
     ]
 
     user_active_count = (
-        sum(1 for item in ordered_active if item.user_id == user.id)
+        MusicQueueItem.objects.filter(user=user, status__in=ACTIVE_QUEUE_STATUSES).count()
         if user and user.is_authenticated
         else 0
     )
     max_per_user = settings_obj.max_songs_per_user
     return {
         "is_enabled": settings_obj.is_enabled,
+        "require_approval": settings_obj.require_approval,
         "max_songs_per_user": max_per_user,
         "user_active_count": user_active_count,
         "remaining_slots": max(0, max_per_user - user_active_count),
+        "is_user_blocked": is_user_blocked,
         "now_playing": now_playing,
         "queue": serialized_queue,
+        "pending_approval": serialized_pending,
+        "reported_items": serialized_reported,
+        "blocked_users": serialized_blocked,
         "history": serialized_history,
     }
 
@@ -449,6 +547,9 @@ def add_song_to_queue(user, data: dict) -> dict:
     settings_obj = get_settings(for_update=True)
     if not settings_obj.is_enabled:
         raise ValidationError({"detail": "The gym music queue is currently turned off by staff."})
+
+    if MusicBlockedUser.objects.filter(user=user).exists():
+        raise PermissionDenied("You have been blocked by an admin from adding songs to the gym music queue.")
 
     raw_source = (data.get("youtube_url") or data.get("video_id") or "").strip()
     video_id = extract_youtube_video_id(raw_source, allow_bare_id=True)
@@ -480,6 +581,7 @@ def add_song_to_queue(user, data: dict) -> dict:
     provided_duration_text = (data.get("duration_text") or "").strip()
     provided_duration_seconds = data.get("duration_seconds")
 
+    meta = None
     if not provided_title:
         meta = resolve_youtube_metadata(video_id)
         title = meta["title"]
@@ -502,6 +604,17 @@ def add_song_to_queue(user, data: dict) -> dict:
             else parse_duration_seconds(duration_text)
         )
 
+    if is_age_restricted_content(title, meta):
+        raise ValidationError(
+            {"youtube_url": "Age-restricted videos are blocked and cannot be added to the gym queue."}
+        )
+
+    initial_status = (
+        "pending_approval"
+        if (settings_obj.require_approval and user.role != "admin")
+        else "queued"
+    )
+
     item = MusicQueueItem.objects.create(
         user=user,
         video_id=video_id,
@@ -511,7 +624,7 @@ def add_song_to_queue(user, data: dict) -> dict:
         thumbnail_url=thumbnail_url,
         duration_seconds=duration_seconds,
         duration_text=duration_text,
-        status="queued",
+        status=initial_status,
     )
 
     _sync_playing_track(settings_obj)
@@ -520,7 +633,7 @@ def add_song_to_queue(user, data: dict) -> dict:
     state = get_queue_state(user)
     position = next(
         (entry["position"] for entry in state["queue"] if str(entry["id"]) == str(item.id)),
-        len(state["queue"]),
+        None if item.status == "pending_approval" else len(state["queue"]),
     )
     return {
         "item": serialize_queue_item(item, current_user=user, position=position),
@@ -549,19 +662,110 @@ def remove_song_from_queue(actor, item_id) -> dict:
 
 
 @transaction.atomic
+def approve_song_in_queue(actor, item_id) -> dict:
+    """Admin approves a member song that was waiting for approval (Suggestion 11)."""
+    require_admin(actor)
+    settings_obj = get_settings(for_update=True)
+    item = get_object_or_404(MusicQueueItem.objects.select_for_update(), pk=item_id)
+    if item.status != "pending_approval":
+        raise ValidationError({"detail": "This song is not waiting for approval."})
+    item.status = "queued"
+    item.is_reported = False
+    item.approved_by = actor
+    item.save(update_fields=["status", "is_reported", "approved_by", "updated_at"])
+    _sync_playing_track(settings_obj)
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def report_song_in_queue(actor, item_id, reason: str = "") -> dict:
+    """Member or staff flags a bad song, hiding it from the queue until admin checks it (Suggestion 11)."""
+    settings_obj = get_settings(for_update=True)
+    item = get_object_or_404(MusicQueueItem.objects.select_for_update(), pk=item_id)
+    if item.status not in ACTIVE_QUEUE_STATUSES:
+        raise ValidationError({"detail": "This song is no longer in the active queue."})
+
+    item.is_reported = True
+    item.reported_by = actor
+    item.report_reason = (reason or "Reported by member").strip()[:200]
+    item.reported_at = timezone.now()
+    if item.status == "playing":
+        item.status = "queued"
+        item.started_at = None
+    item.save(
+        update_fields=[
+            "status",
+            "started_at",
+            "is_reported",
+            "reported_by",
+            "report_reason",
+            "reported_at",
+            "updated_at",
+        ]
+    )
+    _sync_playing_track(settings_obj)
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def restore_reported_song(actor, item_id) -> dict:
+    """Admin dismisses a flag/report on a song and restores it to the active queue (Suggestion 11)."""
+    require_admin(actor)
+    settings_obj = get_settings(for_update=True)
+    item = get_object_or_404(MusicQueueItem.objects.select_for_update(), pk=item_id)
+    item.is_reported = False
+    item.report_reason = ""
+    if item.status == "pending_approval":
+        item.status = "queued"
+    item.save(update_fields=["is_reported", "report_reason", "status", "updated_at"])
+    _sync_playing_track(settings_obj)
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def block_music_user(actor, target_user_id, reason: str = "") -> dict:
+    """Admin blocks a user who keeps adding bad songs and removes their active songs (Suggestion 11)."""
+    require_admin(actor)
+    settings_obj = get_settings(for_update=True)
+    target_user = get_object_or_404(User, pk=target_user_id)
+    if target_user.role == "admin":
+        raise ValidationError({"user_id": "Staff accounts cannot be blocked from the music queue."})
+    MusicBlockedUser.objects.update_or_create(
+        user=target_user,
+        defaults={
+            "blocked_by": actor,
+            "reason": (reason or "Repeated inappropriate song submissions").strip()[:240],
+        },
+    )
+    now = timezone.now()
+    MusicQueueItem.objects.filter(
+        user=target_user, status__in=ACTIVE_QUEUE_STATUSES
+    ).update(status="removed", ended_at=now, removed_by=actor, updated_at=now)
+    _sync_playing_track(settings_obj)
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def unblock_music_user(actor, target_user_id) -> dict:
+    """Admin unblocks a previously blocked user (Suggestion 11)."""
+    require_admin(actor)
+    MusicBlockedUser.objects.filter(user_id=target_user_id).delete()
+    return get_queue_state(actor)
+
+
+@transaction.atomic
 def skip_current_song(actor) -> dict:
     require_admin(actor)
     settings_obj = get_settings(for_update=True)
     current = (
         MusicQueueItem.objects.select_for_update()
-        .filter(status__in=ACTIVE_QUEUE_STATUSES)
+        .filter(status__in=PLAYABLE_QUEUE_STATUSES, is_reported=False)
         .order_by("-status", "created_at", "id")
         .first()
     )
-    # Specifically prefer the 'playing' item if one exists, otherwise earliest 'queued'
     playing = (
         MusicQueueItem.objects.select_for_update()
-        .filter(status="playing")
+        .filter(status="playing", is_reported=False)
         .order_by("created_at", "id")
         .first()
     )
@@ -595,12 +799,26 @@ def complete_current_song(actor, item_id=None) -> dict:
 
 
 @transaction.atomic
-def set_queue_enabled(actor, is_enabled: bool) -> dict:
+def update_music_settings(actor, data: dict) -> dict:
     require_admin(actor)
     settings_obj = get_settings(for_update=True)
-    settings_obj.is_enabled = bool(is_enabled)
+    updated_fields = ["updated_by", "updated_at"]
+    if "is_enabled" in data:
+        settings_obj.is_enabled = bool(data["is_enabled"])
+        updated_fields.append("is_enabled")
+    if "require_approval" in data:
+        settings_obj.require_approval = bool(data["require_approval"])
+        updated_fields.append("require_approval")
+    if "max_songs_per_user" in data and data["max_songs_per_user"] is not None:
+        settings_obj.max_songs_per_user = int(data["max_songs_per_user"])
+        updated_fields.append("max_songs_per_user")
     settings_obj.updated_by = actor
-    settings_obj.save(update_fields=["is_enabled", "updated_by", "updated_at"])
+    settings_obj.save(update_fields=updated_fields)
 
     _sync_playing_track(settings_obj)
     return get_queue_state(actor)
+
+
+@transaction.atomic
+def set_queue_enabled(actor, is_enabled: bool) -> dict:
+    return update_music_settings(actor, {"is_enabled": is_enabled})

@@ -3,6 +3,7 @@ import uuid
 from django.utils.text import slugify
 from rest_framework import serializers
 
+from fitness.serializers import SuggestedTargetsSerializer, TargetWarningSerializer
 from nutrition.models import CookingVariation, HydrationLog, MealLog, Recipe
 from nutrition.services import accessible_recipes
 from workouts.serializers import UserScopedRelatedField
@@ -168,11 +169,18 @@ class MacroPercentageSerializer(serializers.Serializer):
 
 class DailyNutritionSummarySerializer(serializers.Serializer):
     date = serializers.DateField()
+    nutrition_goal = serializers.CharField(required=False)
+    has_custom_targets = serializers.BooleanField(required=False)
     targets = MacroStatsSerializer()
+    suggested_targets = SuggestedTargetsSerializer(required=False)
+    warnings = TargetWarningSerializer(many=True, required=False)
     consumed = MacroStatsSerializer()
     remaining = MacroStatsSerializer()
     percentage = MacroPercentageSerializer()
     meals = MealLogSerializer(many=True)
+    bangladeshi_foods = serializers.ListField(
+        child=serializers.DictField(), required=False
+    )
 
 
 class HydrationLogSerializer(serializers.ModelSerializer):

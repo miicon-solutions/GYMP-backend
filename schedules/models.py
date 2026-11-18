@@ -62,6 +62,7 @@ class ScheduledDay(Entity):
     )
     is_rest_day = models.BooleanField(default=True)
     target_focus_tags = models.JSONField(default=list, blank=True)
+    custom_exercises = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["day_index"]

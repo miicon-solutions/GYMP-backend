@@ -12,8 +12,19 @@ from rest_framework.permissions import AllowAny
 from accounts import serializers as auth_s
 from accounts import services as auth
 from attendance.authentication import DeviceAuthentication
-from attendance.serializers import CheckInInput, CheckInOutput, MonthInput, MonthOutput
-from attendance.services import month_attendance, record_checkin
+from attendance.serializers import (
+    CheckInInput,
+    CheckInOutput,
+    MemberSessionAdjustInput,
+    MonthInput,
+    MonthOutput,
+)
+from attendance.services import (
+    member_adjust_session,
+    month_attendance,
+    record_checkin,
+    record_checkout,
+)
 from biometrics import services as bio
 from biometrics.serializers import (
     DeviceStatusOutput,
@@ -203,6 +214,17 @@ api = [
         ),
     ),
     path(
+        "member/attendance/session/",
+        endpoint(
+            "member_attendance_session_adjust",
+            response=MonthOutput,
+            handler=lambda r, d: member_adjust_session(r.user, d),
+            method="post",
+            request=MemberSessionAdjustInput,
+            permission=MemberOnly,
+        ),
+    ),
+    path(
         "member/payments/sessions/",
         endpoint(
             "payments_create_session",
@@ -277,6 +299,18 @@ api = [
             "attendance_check_in",
             response=CheckInOutput,
             handler=lambda r, d: record_checkin(d),
+            request=CheckInInput,
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+        ),
+    ),
+    path(
+        "internal/attendance/check-out/",
+        endpoint(
+            "attendance_check_out",
+            response=CheckInOutput,
+            handler=lambda r, d: record_checkout(d),
             request=CheckInInput,
             permission=AllowAny,
             authentication=[DeviceAuthentication],

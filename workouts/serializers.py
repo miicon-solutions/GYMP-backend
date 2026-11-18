@@ -1,17 +1,26 @@
+from decimal import Decimal
+
 from django.utils.text import slugify
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from workouts.calculators import TIMEFRAMES
+from workouts.calculators import TIMEFRAMES, from_lbs
 from workouts.models import (
     SET_TYPES,
+    TRACKING_TYPES,
     Exercise,
     Routine,
     RoutineExercise,
     WorkoutSession,
     WorkoutSet,
 )
-from workouts.services import accessible_exercises, accessible_routines
+from workouts.services import (
+    accessible_exercises,
+    accessible_routines,
+    build_session_summary,
+    effective_exercise_tracking_type,
+    infer_tracking_type,
+)
 
 
 class UserScopedRelatedField(serializers.PrimaryKeyRelatedField):
@@ -29,12 +38,22 @@ class UserScopedRelatedField(serializers.PrimaryKeyRelatedField):
 
 
 class ExerciseBriefSerializer(serializers.ModelSerializer):
+    tracking_type = serializers.SerializerMethodField()
+
     class Meta:
         model = Exercise
-        fields = ["id", "name", "slug", "muscle_group", "category", "youtube_links"]
+        fields = ["id", "name", "slug", "muscle_group", "category", "tracking_type", "youtube_links"]
+
+    @extend_schema_field(serializers.CharField())
+    def get_tracking_type(self, obj):
+        if isinstance(obj, dict):
+            return obj.get("tracking_type", "reps")
+        return effective_exercise_tracking_type(obj)
 
 
 class ExerciseSerializer(serializers.ModelSerializer):
+    tracking_type = serializers.ChoiceField(choices=TRACKING_TYPES, required=False)
+
     class Meta:
         model = Exercise
         fields = [
@@ -45,6 +64,7 @@ class ExerciseSerializer(serializers.ModelSerializer):
             "target_vector",
             "muscle_distribution",
             "category",
+            "tracking_type",
             "youtube_links",
             "is_custom",
             "created_at",
@@ -85,6 +105,11 @@ class ExerciseSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.setdefault("slug", slugify(validated_data["name"])[:140])
+        validated_data["tracking_type"] = infer_tracking_type(
+            validated_data.get("name", ""),
+            validated_data.get("category", ""),
+            validated_data.get("tracking_type"),
+        )
         return super().create(validated_data)
 
     def validate_muscle_distribution(self, value):
@@ -106,6 +131,10 @@ class ExerciseSerializer(serializers.ModelSerializer):
     def save(self, **kwargs):
         if "name" in self.validated_data:
             kwargs["slug"] = slugify(self.validated_data["name"])[:140]
+        if "tracking_type" not in self.validated_data and ("name" in self.validated_data or "category" in self.validated_data):
+            name = self.validated_data.get("name", getattr(self.instance, "name", ""))
+            cat = self.validated_data.get("category", getattr(self.instance, "category", ""))
+            kwargs["tracking_type"] = infer_tracking_type(name, cat)
         return super().save(**kwargs)
 
 
@@ -123,6 +152,8 @@ class RoutineExerciseSerializer(serializers.ModelSerializer):
             "order",
             "target_sets",
             "target_reps_range",
+            "target_duration_seconds",
+            "target_distance_km",
             "rest_protocol_seconds",
             "notes",
         ]
@@ -197,6 +228,8 @@ class RoutineBriefSerializer(serializers.ModelSerializer):
 
 class WorkoutSetSerializer(serializers.ModelSerializer):
     exercise = ExerciseBriefSerializer(read_only=True)
+    weight_kg = serializers.SerializerMethodField()
+    calculated_1rm_kg = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkoutSet
@@ -208,13 +241,25 @@ class WorkoutSetSerializer(serializers.ModelSerializer):
             "weight",
             "weight_unit",
             "weight_lbs",
+            "weight_kg",
             "reps",
+            "duration_seconds",
+            "distance_km",
             "rpe",
             "is_pr",
             "calculated_1rm",
+            "calculated_1rm_kg",
             "performed_at",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(serializers.DecimalField(max_digits=8, decimal_places=2))
+    def get_weight_kg(self, obj):
+        return from_lbs(obj.weight_lbs, "kg")
+
+    @extend_schema_field(serializers.DecimalField(max_digits=8, decimal_places=2))
+    def get_calculated_1rm_kg(self, obj):
+        return from_lbs(obj.calculated_1rm, "kg")
 
 
 class WorkoutSessionUpdateSerializer(serializers.ModelSerializer):
@@ -233,6 +278,8 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
     routine = RoutineBriefSerializer(read_only=True)
     sets = WorkoutSetSerializer(many=True, read_only=True)
     duration_minutes = serializers.SerializerMethodField()
+    total_volume_kg = serializers.SerializerMethodField()
+    summary = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkoutSession
@@ -245,9 +292,12 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
             "end_time",
             "duration_minutes",
             "total_volume_lbs",
+            "total_volume_kg",
+            "estimated_calories_burned",
             "rpe_average",
             "notes",
             "sets",
+            "summary",
         ]
         read_only_fields = fields
 
@@ -257,13 +307,26 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
             return None
         return int((obj.end_time - obj.start_time).total_seconds() // 60)
 
+    @extend_schema_field(serializers.DecimalField(max_digits=12, decimal_places=2))
+    def get_total_volume_kg(self, obj):
+        return from_lbs(obj.total_volume_lbs or 0, "kg")
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_summary(self, obj):
+        if getattr(self, "omit_summary", False):
+            return None
+        return build_session_summary(obj)
+
 
 class WorkoutSessionListSerializer(WorkoutSessionSerializer):
+    omit_summary = True
     set_count = serializers.IntegerField(read_only=True)
     pr_count = serializers.IntegerField(read_only=True)
 
     class Meta(WorkoutSessionSerializer.Meta):
-        fields = [f for f in WorkoutSessionSerializer.Meta.fields if f != "sets"] + [
+        fields = [
+            f for f in WorkoutSessionSerializer.Meta.fields if f not in ("sets", "summary")
+        ] + [
             "set_count",
             "pr_count",
         ]
@@ -282,18 +345,53 @@ class LogSetInput(serializers.Serializer):
     exercise_id = UserScopedRelatedField(accessible_exercises, source="exercise")
     set_number = serializers.IntegerField(min_value=1, max_value=100, required=False)
     set_type = serializers.ChoiceField(choices=SET_TYPES, default="working")
-    weight = serializers.DecimalField(max_digits=7, decimal_places=2, min_value=0, max_value=2000)
+    weight = serializers.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        min_value=0,
+        max_value=2000,
+        required=False,
+        default=Decimal("0.00"),
+    )
     weight_unit = serializers.ChoiceField(choices=["kg", "lbs"], required=False)
-    reps = serializers.IntegerField(min_value=1, max_value=100)
+    reps = serializers.IntegerField(min_value=1, max_value=1000, required=False, default=1)
+    duration_seconds = serializers.IntegerField(
+        min_value=0, max_value=86400, required=False, allow_null=True
+    )
+    duration_minutes = serializers.IntegerField(
+        min_value=0, max_value=1440, required=False, allow_null=True
+    )
+    distance_km = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        min_value=0,
+        max_value=500,
+        required=False,
+        allow_null=True,
+    )
     rpe = serializers.DecimalField(
         max_digits=3, decimal_places=1, min_value=1, max_value=10, required=False, allow_null=True
     )
+
+    def validate(self, attrs):
+        mins = attrs.pop("duration_minutes", None)
+        secs = attrs.get("duration_seconds")
+        if mins is not None:
+            attrs["duration_seconds"] = int(mins) * 60 + int(secs or 0)
+        return attrs
 
 
 class SessionTotals(serializers.Serializer):
     id = serializers.UUIDField()
     total_volume_lbs = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_volume_kg = serializers.SerializerMethodField()
+    estimated_calories_burned = serializers.IntegerField(required=False)
     rpe_average = serializers.DecimalField(max_digits=3, decimal_places=1, allow_null=True)
+
+    @extend_schema_field(serializers.DecimalField(max_digits=12, decimal_places=2))
+    def get_total_volume_kg(self, obj):
+        vol = obj.get("total_volume_lbs", 0) if isinstance(obj, dict) else getattr(obj, "total_volume_lbs", 0)
+        return from_lbs(vol or 0, "kg")
 
 
 class LogSetOutput(serializers.Serializer):
@@ -320,15 +418,26 @@ class DateRange(serializers.Serializer):
 class ChartPoint(serializers.Serializer):
     date = serializers.DateField()
     estimated_1rm = serializers.DecimalField(max_digits=8, decimal_places=2)
+    estimated_1rm_kg = serializers.DecimalField(max_digits=8, decimal_places=2, required=False)
     actual_weight = serializers.DecimalField(max_digits=8, decimal_places=2)
+    actual_weight_kg = serializers.DecimalField(max_digits=8, decimal_places=2, required=False)
     reps = serializers.IntegerField()
+    duration_seconds = serializers.IntegerField(required=False)
+    distance_km = serializers.DecimalField(max_digits=6, decimal_places=2, required=False)
     volume_load = serializers.DecimalField(max_digits=14, decimal_places=2)
+    volume_load_kg = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)
 
 
 class PRPoint(serializers.Serializer):
     value = serializers.DecimalField(max_digits=8, decimal_places=2)
+    value_kg = serializers.DecimalField(max_digits=8, decimal_places=2, required=False)
     weight = serializers.DecimalField(max_digits=8, decimal_places=2)
+    weight_kg = serializers.DecimalField(max_digits=8, decimal_places=2, required=False)
     reps = serializers.IntegerField()
+    duration_seconds = serializers.IntegerField(allow_null=True, required=False)
+    distance_km = serializers.DecimalField(
+        max_digits=6, decimal_places=2, allow_null=True, required=False
+    )
     date = serializers.DateField()
 
 
@@ -341,6 +450,7 @@ class MuscleShare(serializers.Serializer):
     muscle = serializers.CharField()
     percentage = serializers.DecimalField(max_digits=5, decimal_places=1)
     volume_lbs = serializers.DecimalField(max_digits=14, decimal_places=2)
+    volume_kg = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)
 
 
 class AnalyticsOutput(serializers.Serializer):
@@ -351,6 +461,7 @@ class AnalyticsOutput(serializers.Serializer):
     chart_data = ChartPoint(many=True)
     lifetime_pr = LifetimePR()
     total_volume_lbs = serializers.DecimalField(max_digits=14, decimal_places=2)
+    total_volume_kg = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)
     session_count = serializers.IntegerField()
     frequency_per_week = serializers.DecimalField(max_digits=6, decimal_places=2)
     volume_by_muscle_group = MuscleShare(many=True)

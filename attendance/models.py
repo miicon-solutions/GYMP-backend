@@ -8,10 +8,19 @@ class CheckIn(Entity):
         "members.MemberProfile", on_delete=models.PROTECT, related_name="check_ins"
     )
     checked_in_at = models.DateTimeField(db_index=True)
+    checked_out_at = models.DateTimeField(null=True, blank=True)
     check_in_date = models.DateField()
     source = models.CharField(
         max_length=10, choices=[(x, x) for x in ("device", "admin", "manual")], default="device"
     )
+    check_out_source = models.CharField(
+        max_length=12,
+        blank=True,
+        default="",
+        choices=[(x, x) for x in ("", "device", "admin", "manual", "auto_cap")],
+    )
+    duration_minutes = models.PositiveSmallIntegerField(null=True, blank=True)
+    auto_closed = models.BooleanField(default=False)
 
     class Meta(Entity.Meta):
         constraints = [
