@@ -27,9 +27,30 @@ class Pagination(CursorPagination):
     ordering = ("-created_at", "-id")
 
 
+def ordered_pagination(*ordering):
+    """Cursor pagination over a model-specific stable ordering."""
+    return type("OrderedPagination", (Pagination,), {"ordering": ordering})
+
+
+def normalize_tag(value):
+    """Canonical lowercase tag without the leading '#' (``#LegDay`` -> ``legday``)."""
+    from django.utils.text import slugify
+
+    return slugify(str(value).strip().lstrip("#"))[:40]
+
+
 class MemberOnly(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_active and request.user.role == "member")
+
+
+class StaffOrMember(BasePermission):
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_active
+            and request.user.role in ("member", "admin")
+        )
 
 
 class AdminOnly(BasePermission):

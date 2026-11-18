@@ -90,6 +90,12 @@ def mfa_enroll(request, data, pk):
 api = [
     path("public/plans/", PublicPlanList.as_view()),
     path("auth/", include("accounts.urls")),
+    path("users/", include("fitness.urls")),
+    path("workouts/", include("workouts.urls")),
+    path("schedules/", include("schedules.urls")),
+    path("nutrition/", include("nutrition.urls")),
+    path("journal/", include("journal.urls")),
+    path("feed/", include("fitness.feed_urls")),
     path(
         "welcome/",
         endpoint(
@@ -414,6 +420,7 @@ api = [
 ]
 urlpatterns = [
     path("api/v1/", include(api)),
+    path("api/", include(api)),
     path("admin/", admin.site.urls),
     path("", public.landing),
     path("terms/", public.legal, {"page": "terms"}),
