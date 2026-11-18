@@ -127,3 +127,21 @@ class MFAEnrollOutput(serializers.Serializer):
     staff_id = serializers.UUIDField()
     setup_token = serializers.CharField()
     expires_in_sec = serializers.IntegerField()
+
+
+class RegisterInput(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=6)
+    full_name = serializers.CharField(required=False, allow_blank=True, default="")
+    phone_e164 = serializers.CharField(required=False, allow_blank=True)
+
+
+class LoginInput(serializers.Serializer):
+    email = serializers.CharField(required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True)
+    phone_e164 = serializers.CharField(required=False, allow_blank=True)
+
+
+class AuthTokenOutput(TokenOutput):
+    access = serializers.CharField(required=False)
+    refresh = serializers.CharField(required=False)

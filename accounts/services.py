@@ -38,6 +38,8 @@ from members.models import MemberProfile
 
 def lock_key(key):
     # Serializes operations even when the phone/session row does not exist yet.
+    if connection.vendor != "postgresql":
+        return
     value = int(digest(key)[:15], 16)
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_advisory_xact_lock(%s)", [value])
@@ -409,3 +411,73 @@ def mfa_action(data, action):
             p.mfa_enrolled_at, p.setup_token_hash, p.setup_expires_at = now, "", None
         p.save()
         return issue_tokens(user)
+
+
+@transaction.atomic
+def register_user(data):
+    email = data.get("email", "").strip().lower()
+    password = data.get("password")
+    full_name = data.get("full_name", "").strip()
+    phone = data.get("phone_e164", "").strip()
+
+    if email and User.objects.filter(email__iexact=email).exists():
+        raise ValidationError({"email": "User with this email already exists."})
+
+    if phone:
+        phone = normalize_phone(phone)
+        if User.objects.filter(phone_e164=phone).exists():
+            raise ValidationError({"phone_e164": "User with this phone number already exists."})
+    else:
+        from accounts.models import DisplaySequence
+
+        seq_row, _ = DisplaySequence.objects.get_or_create(
+            name="auto_phone", defaults={"value": 10000000}
+        )
+        seq_row.value += 1
+        seq_row.save(update_fields=["value"])
+        phone = f"+88019{seq_row.value:08d}"
+
+    user = new_member(phone, email=email, full_name=full_name)
+    user.set_password(password)
+    user.save(update_fields=["password"])
+
+    try:
+        from fitness.services import get_profile
+
+        get_profile(user)
+    except Exception:
+        pass
+
+    tokens = issue_tokens(user)
+    tokens["access"] = tokens["access_token"]
+    tokens["refresh"] = tokens["refresh_token"]
+    return tokens
+
+
+def login_user(data):
+    identifier = (data.get("email") or data.get("phone_e164") or data.get("username", "")).strip()
+    password = data.get("password", "")
+    if not identifier or not password:
+        raise ValidationError({"detail": "Credentials required."})
+
+    user = None
+    if "@" in identifier:
+        user = User.objects.filter(email__iexact=identifier).first()
+    if not user:
+        try:
+            phone = normalize_phone(identifier)
+            user = User.objects.filter(phone_e164=phone).first()
+        except Exception:
+            pass
+    if not user:
+        user = User.objects.filter(phone_e164=identifier).first()
+
+    if not user or not user.check_password(password):
+        raise AuthenticationFailed("Invalid email/phone or password.")
+    if not user.is_active:
+        raise PermissionDenied("This account is inactive.")
+
+    tokens = issue_tokens(user)
+    tokens["access"] = tokens["access_token"]
+    tokens["refresh"] = tokens["refresh_token"]
+    return tokens

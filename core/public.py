@@ -23,7 +23,8 @@ def legal(request, page):
 def health(request):
     try:
         with transaction.atomic(), connection.cursor() as cursor:
-            cursor.execute("SET LOCAL statement_timeout = '2s'")
+            if connection.vendor == "postgresql":
+                cursor.execute("SET LOCAL statement_timeout = '2s'")
             cursor.execute("SELECT 1")
             cursor.fetchone()
         return JsonResponse({"status": "ok", "database": {"status": "ok"}})

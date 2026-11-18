@@ -1,7 +1,5 @@
 import secrets
-import warnings
 from datetime import UTC, timedelta
-from io import BytesIO
 from urllib.parse import urljoin
 
 from django.conf import settings
@@ -9,7 +7,6 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from PIL import Image, UnidentifiedImageError
 from rest_framework.exceptions import PermissionDenied, Throttled, ValidationError
 
 from accounts import providers
@@ -24,6 +21,7 @@ from accounts.services import (
     member_data,
 )
 from core.api import BadGateway, Conflict, require_admin
+from core.images import read_image
 from members.models import MemberProfile
 from operations.services import DHAKA, gym_status, record
 
@@ -176,26 +174,7 @@ def recover_email(user):
 
 def upload_photo(user, file):
     owned_profile(user)
-    if file.size > 5 * 1024 * 1024 or file.size == 0:
-        raise ValidationError({"photo": "Choose a photo under 5 MB."})
-    raw = file.read(5 * 1024 * 1024 + 1)
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(BytesIO(raw)) as img:
-                fmt = img.format
-                img.verify()
-        extension = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}[fmt]
-    except (
-        OSError,
-        ValueError,
-        KeyError,
-        UnidentifiedImageError,
-        SyntaxError,
-        Image.DecompressionBombError,
-        Image.DecompressionBombWarning,
-    ) as exc:
-        raise ValidationError({"photo": "Use a JPG, PNG, or WebP photo."}) from exc
+    raw, extension = read_image(file, "photo")
     p = MemberProfile.objects.get(user=user)
     new_name = p.photo.storage.save(secrets.token_hex(16) + "." + extension, ContentFile(raw))
     try:
