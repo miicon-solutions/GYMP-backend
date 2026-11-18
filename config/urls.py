@@ -106,6 +106,7 @@ api = [
     path("nutrition/", include("nutrition.urls")),
     path("journal/", include("journal.urls")),
     path("feed/", include("fitness.feed_urls")),
+    path("music/", include("music.urls")),
     path(
         "welcome/",
         endpoint(

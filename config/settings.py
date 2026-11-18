@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "schedules",
     "nutrition",
     "journal",
+    "music",
 ]
 MIDDLEWARE = [
     "core.middleware.RequestLogMiddleware",
@@ -226,7 +227,10 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "GYMA API",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
-    "ENUM_NAME_OVERRIDES": {"DiscountTypeEnum": "plans.models.DISCOUNTS"},
+    "ENUM_NAME_OVERRIDES": {
+        "DiscountTypeEnum": "plans.models.DISCOUNTS",
+        "MusicQueueStatusEnum": "music.models.QUEUE_STATUS_CHOICES",
+    },
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
 }

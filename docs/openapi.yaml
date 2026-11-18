@@ -213,6 +213,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/Cost'
           description: ''
+  /api/admin/device/status/:
+    get:
+      operationId: admin_device_status
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceStatusOutput'
+          description: ''
   /api/admin/gym-hours/:
     get:
       operationId: admin_gym_hours
@@ -544,6 +559,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminMemberOutput'
+          description: ''
+  /api/admin/members/{id}/fingerprint/enroll/:
+    post:
+      operationId: admin_member_fingerprint_enroll
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollPrepareInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EnrollPrepareInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EnrollPrepareInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollPrepareOutput'
+          description: ''
+  /api/admin/members/{id}/fingerprint/pull/:
+    post:
+      operationId: admin_member_fingerprint_pull
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultSyncOutput'
+          description: ''
+  /api/admin/members/{id}/fingerprint/push/:
+    post:
+      operationId: admin_member_fingerprint_push
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultSyncOutput'
           description: ''
   /api/admin/members/{id}/phone/:
     post:
@@ -1747,6 +1839,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/CheckInOutput'
           description: ''
+  /api/internal/biometrics/vault-members/:
+    get:
+      operationId: internal_vault_members
+      tags:
+      - internal
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultMembersOutput'
+          description: ''
+  /api/internal/biometrics/vault-push/:
+    post:
+      operationId: internal_vault_push
+      tags:
+      - internal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultBulkPushInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VaultBulkPushInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VaultBulkPushInput'
+        required: true
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultBulkPushOutput'
+          description: ''
   /api/journal/entries/:
     get:
       operationId: api_journal_entries_list
@@ -2449,6 +2583,194 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/music/queue/:
+    get:
+      operationId: api_music_queue_retrieve
+      description: Retrieve the gym music queue state or add a YouTube song to the
+        queue.
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+    post:
+      operationId: api_music_queue_create
+      description: Retrieve the gym music queue state or add a YouTube song to the
+        queue.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicQueueAddInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicQueueAddInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicQueueAddInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueAddOutput'
+          description: ''
+  /api/music/queue/{id}/:
+    delete:
+      operationId: api_music_queue_destroy
+      description: Remove a song from the gym music queue (staff can remove any song;
+        members can remove their own).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/music/queue/complete/:
+    post:
+      operationId: api_music_queue_complete_create
+      description: Advance the gym player to the next song in queue when the current
+        song finishes playing.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicQueueCompleteInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicQueueCompleteInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicQueueCompleteInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/music/queue/skip/:
+    post:
+      operationId: api_music_queue_skip_create
+      description: Staff action to skip the currently playing song and advance to
+        the next song in queue.
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/music/search/:
+    get:
+      operationId: api_music_search_retrieve
+      description: Search YouTube for songs or resolve a pasted YouTube link.
+      parameters:
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YouTubeSearchOutput'
+          description: ''
+  /api/music/settings/:
+    post:
+      operationId: api_music_settings_create
+      description: Staff action to enable or turn off the gym music queue system.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicSettingsInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicSettingsInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicSettingsInput'
+        required: true
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+    patch:
+      operationId: api_music_settings_partial_update
+      description: Staff action to enable or turn off the gym music queue system.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMusicSettingsInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMusicSettingsInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMusicSettingsInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
   /api/nutrition/custom-synthesizer/:
     post:
       operationId: api_nutrition_custom_synthesizer_create
@@ -3482,6 +3804,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/Cost'
           description: ''
+  /api/v1/admin/device/status/:
+    get:
+      operationId: admin_device_status_2
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceStatusOutput'
+          description: ''
   /api/v1/admin/gym-hours/:
     get:
       operationId: admin_gym_hours_2
@@ -3813,6 +4150,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminMemberOutput'
+          description: ''
+  /api/v1/admin/members/{id}/fingerprint/enroll/:
+    post:
+      operationId: admin_member_fingerprint_enroll_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollPrepareInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EnrollPrepareInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EnrollPrepareInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollPrepareOutput'
+          description: ''
+  /api/v1/admin/members/{id}/fingerprint/pull/:
+    post:
+      operationId: admin_member_fingerprint_pull_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultSyncOutput'
+          description: ''
+  /api/v1/admin/members/{id}/fingerprint/push/:
+    post:
+      operationId: admin_member_fingerprint_push_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultSyncOutput'
           description: ''
   /api/v1/admin/members/{id}/phone/:
     post:
@@ -5016,6 +5430,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/CheckInOutput'
           description: ''
+  /api/v1/internal/biometrics/vault-members/:
+    get:
+      operationId: internal_vault_members_2
+      tags:
+      - internal
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultMembersOutput'
+          description: ''
+  /api/v1/internal/biometrics/vault-push/:
+    post:
+      operationId: internal_vault_push_2
+      tags:
+      - internal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultBulkPushInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VaultBulkPushInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VaultBulkPushInput'
+        required: true
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultBulkPushOutput'
+          description: ''
   /api/v1/journal/entries/:
     get:
       operationId: api_v1_journal_entries_list
@@ -5718,6 +6174,194 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/music/queue/:
+    get:
+      operationId: api_v1_music_queue_retrieve
+      description: Retrieve the gym music queue state or add a YouTube song to the
+        queue.
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+    post:
+      operationId: api_v1_music_queue_create
+      description: Retrieve the gym music queue state or add a YouTube song to the
+        queue.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicQueueAddInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicQueueAddInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicQueueAddInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueAddOutput'
+          description: ''
+  /api/v1/music/queue/{id}/:
+    delete:
+      operationId: api_v1_music_queue_destroy
+      description: Remove a song from the gym music queue (staff can remove any song;
+        members can remove their own).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/complete/:
+    post:
+      operationId: api_v1_music_queue_complete_create
+      description: Advance the gym player to the next song in queue when the current
+        song finishes playing.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicQueueCompleteInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicQueueCompleteInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicQueueCompleteInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/skip/:
+    post:
+      operationId: api_v1_music_queue_skip_create
+      description: Staff action to skip the currently playing song and advance to
+        the next song in queue.
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/search/:
+    get:
+      operationId: api_v1_music_search_retrieve
+      description: Search YouTube for songs or resolve a pasted YouTube link.
+      parameters:
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YouTubeSearchOutput'
+          description: ''
+  /api/v1/music/settings/:
+    post:
+      operationId: api_v1_music_settings_create
+      description: Staff action to enable or turn off the gym music queue system.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicSettingsInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicSettingsInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicSettingsInput'
+        required: true
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+    patch:
+      operationId: api_v1_music_settings_partial_update
+      description: Staff action to enable or turn off the gym music queue system.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMusicSettingsInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMusicSettingsInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMusicSettingsInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
   /api/v1/nutrition/custom-synthesizer/:
     post:
       operationId: api_v1_nutrition_custom_synthesizer_create
@@ -9110,6 +9754,37 @@ components:
       required:
       - end_date
       - start_date
+    DeviceStatusOutput:
+      type: object
+      properties:
+        online:
+          type: boolean
+        bridge_ok:
+          type: boolean
+        name:
+          type: string
+        serial:
+          type: string
+        firmware:
+          type: string
+        user_count:
+          type: integer
+        ip:
+          type: string
+        port:
+          type: integer
+        message:
+          type: string
+      required:
+      - bridge_ok
+      - firmware
+      - ip
+      - message
+      - name
+      - online
+      - port
+      - serial
+      - user_count
     DiscountTypeEnum:
       enum:
       - none
@@ -9148,6 +9823,22 @@ components:
         * `sibling` - sibling
         * `friend` - friend
         * `other` - other
+    EnrollPrepareInput:
+      type: object
+      properties:
+        pin:
+          type: string
+          maxLength: 16
+    EnrollPrepareOutput:
+      type: object
+      properties:
+        prepared:
+          type: boolean
+        message:
+          type: string
+      required:
+      - message
+      - prepared
     Exercise:
       type: object
       properties:
@@ -10076,6 +10767,173 @@ components:
       - muscle
       - percentage
       - volume_lbs
+    MusicQueueAddInput:
+      type: object
+      properties:
+        youtube_url:
+          type: string
+          maxLength: 500
+        video_id:
+          type: string
+          maxLength: 64
+        title:
+          type: string
+          maxLength: 300
+        channel_title:
+          type: string
+          maxLength: 200
+        thumbnail_url:
+          type: string
+          maxLength: 1000
+        duration_text:
+          type: string
+          maxLength: 32
+        duration_seconds:
+          type: integer
+          maximum: 86400
+          minimum: 0
+          nullable: true
+    MusicQueueAddOutput:
+      type: object
+      properties:
+        item:
+          $ref: '#/components/schemas/MusicQueueItemOutput'
+        queue_state:
+          $ref: '#/components/schemas/MusicQueueStateOutput'
+      required:
+      - item
+      - queue_state
+    MusicQueueCompleteInput:
+      type: object
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          nullable: true
+    MusicQueueItemOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        video_id:
+          type: string
+        youtube_url:
+          type: string
+          format: uri
+        title:
+          type: string
+        channel_title:
+          type: string
+        thumbnail_url:
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
+        duration_seconds:
+          type: integer
+          nullable: true
+        duration_text:
+          type: string
+        status:
+          $ref: '#/components/schemas/MusicQueueStatusEnum'
+        position:
+          type: integer
+          nullable: true
+        requested_by_id:
+          type: string
+          format: uuid
+        requested_by_name:
+          type: string
+        requested_by_code:
+          type: string
+        is_own_song:
+          type: boolean
+        can_remove:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - can_remove
+      - channel_title
+      - created_at
+      - duration_seconds
+      - duration_text
+      - ended_at
+      - id
+      - is_own_song
+      - position
+      - requested_by_code
+      - requested_by_id
+      - requested_by_name
+      - started_at
+      - status
+      - thumbnail_url
+      - title
+      - video_id
+      - youtube_url
+    MusicQueueStateOutput:
+      type: object
+      properties:
+        is_enabled:
+          type: boolean
+        max_songs_per_user:
+          type: integer
+        user_active_count:
+          type: integer
+        remaining_slots:
+          type: integer
+        now_playing:
+          allOf:
+          - $ref: '#/components/schemas/MusicQueueItemOutput'
+          nullable: true
+        queue:
+          type: array
+          items:
+            $ref: '#/components/schemas/MusicQueueItemOutput'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/MusicQueueItemOutput'
+      required:
+      - history
+      - is_enabled
+      - max_songs_per_user
+      - now_playing
+      - queue
+      - remaining_slots
+      - user_active_count
+    MusicQueueStatusEnum:
+      enum:
+      - queued
+      - playing
+      - played
+      - skipped
+      - removed
+      type: string
+      description: |-
+        * `queued` - Queued
+        * `playing` - Playing
+        * `played` - Played
+        * `skipped` - Skipped
+        * `removed` - Removed
+    MusicSettingsInput:
+      type: object
+      properties:
+        is_enabled:
+          type: boolean
+      required:
+      - is_enabled
     OTPInput:
       type: object
       properties:
@@ -10746,6 +11604,11 @@ components:
         logged_at:
           type: string
           format: date-time
+    PatchedMusicSettingsInput:
+      type: object
+      properties:
+        is_enabled:
+          type: boolean
     PatchedOffer:
       type: object
       properties:
@@ -11998,6 +12861,87 @@ components:
       required:
       - phone_e164
       - totp_code
+    VaultBulkFailure:
+      type: object
+      properties:
+        member_id:
+          type: string
+        error:
+          type: string
+      required:
+      - error
+      - member_id
+    VaultBulkPushInput:
+      type: object
+      properties:
+        bridge_device_id:
+          type: string
+        member_ids:
+          type: array
+          items:
+            type: string
+          nullable: true
+      required:
+      - bridge_device_id
+    VaultBulkPushOutput:
+      type: object
+      properties:
+        pushed:
+          type: integer
+        failed:
+          type: integer
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaultBulkFailure'
+      required:
+      - failed
+      - failures
+      - pushed
+    VaultMemberOutput:
+      type: object
+      properties:
+        member_id:
+          type: string
+        name:
+          type: string
+        finger_indexes:
+          type: array
+          items:
+            type: integer
+        has_pin:
+          type: boolean
+        fingerprint_status:
+          type: string
+      required:
+      - finger_indexes
+      - fingerprint_status
+      - has_pin
+      - member_id
+      - name
+    VaultMembersOutput:
+      type: object
+      properties:
+        count:
+          type: integer
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaultMemberOutput'
+      required:
+      - count
+      - members
+    VaultSyncOutput:
+      type: object
+      properties:
+        stored:
+          type: integer
+        pushed:
+          type: boolean
+        template_count:
+          type: integer
+        fingerprint_status:
+          type: string
     VerifyInput:
       type: object
       properties:
@@ -12272,6 +13216,46 @@ components:
       - weight
       - weight_lbs
       - weight_unit
+    YouTubeSearchOutput:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/YouTubeSearchResult'
+      required:
+      - results
+    YouTubeSearchResult:
+      type: object
+      properties:
+        video_id:
+          type: string
+        youtube_url:
+          type: string
+          format: uri
+        title:
+          type: string
+        channel_title:
+          type: string
+        thumbnail_url:
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
+        duration_text:
+          type: string
+        duration_seconds:
+          type: integer
+          nullable: true
+      required:
+      - channel_title
+      - duration_seconds
+      - duration_text
+      - thumbnail_url
+      - title
+      - video_id
+      - youtube_url
   securitySchemes:
     bearerAuth:
       type: http
