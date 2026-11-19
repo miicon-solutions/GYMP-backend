@@ -8,11 +8,13 @@ from django.urls import path, reverse
 
 from accounts.models import StaffProfile, User
 from accounts.services import begin_mfa
-from core.admin import ReadOnlyAdmin
+from core.admin import OperatorModelAdmin
 
 
 @admin.register(User)
-class UserAdmin(ReadOnlyAdmin):
+class UserAdmin(OperatorModelAdmin):
+    # Password hash and firebase_uid stay off the form; set passwords via bootstrap/seed only.
+    # Deleting a user cascades staff/member profile, payments, sessions, and check-ins.
     fields = [
         "id",
         "phone_e164",
@@ -23,18 +25,27 @@ class UserAdmin(ReadOnlyAdmin):
         "is_staff",
         "is_superuser",
         "created_at",
+        "updated_at",
     ]
     list_display = ["phone_e164", "full_name", "role", "is_active", "is_staff"]
     list_filter = ["role", "is_active", "is_staff"]
     search_fields = ["phone_e164", "full_name", "email"]
+    readonly_fields = ("id", "created_at", "updated_at")
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and obj.pk == request.user.pk:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 @admin.register(StaffProfile)
-class StaffAdmin(ReadOnlyAdmin):
+class StaffAdmin(OperatorModelAdmin):
     change_form_template = "admin/accounts/staffprofile/change_form.html"
-    fields = ["id", "user", "short_id", "mfa_enrolled_at", "created_at"]
+    # TOTP secret, setup token hash, and last step stay off the form.
+    fields = ["id", "user", "short_id", "mfa_enrolled_at", "created_at", "updated_at"]
     list_display = ["short_id", "user", "mfa_enrolled_at"]
     search_fields = ["short_id", "user__full_name", "user__phone_e164"]
+    readonly_fields = ("id", "created_at", "updated_at", "mfa_enrolled_at")
 
     def get_urls(self):
         return [

@@ -169,7 +169,7 @@ def test_model_constraints(member, plan):
         )
 
 
-def test_admin_is_inspect_only_and_secrets_hidden(client, super_admin):
+def test_admin_allows_crud_and_secrets_hidden(client, super_admin):
     client.force_login(super_admin)
     assert client.get("/admin/").status_code == 200
     url = f"/admin/accounts/user/{super_admin.pk}/change/"
@@ -177,6 +177,9 @@ def test_admin_is_inspect_only_and_secrets_hidden(client, super_admin):
     assert response.status_code == 200
     assert super_admin.password.encode() not in response.content
     assert b'name="password"' not in response.content
+    assert client.get("/admin/operations/weekdayhours/").status_code == 200
+    assert client.get("/admin/operations/weekdayhours/add/").status_code == 200
+    assert client.get("/admin/plans/plan/add/").status_code == 200
     for model, registered in admin.site._registry.items():
         if model._meta.app_label in {
             "accounts",
@@ -187,12 +190,51 @@ def test_admin_is_inspect_only_and_secrets_hidden(client, super_admin):
             "attendance",
         }:
             request = type("R", (), {"user": super_admin})()
-            assert not registered.has_add_permission(request)
-            assert not registered.has_change_permission(request)
-            assert not registered.has_delete_permission(request)
+            assert registered.has_add_permission(request)
+            assert registered.has_change_permission(request)
+            assert registered.has_delete_permission(request)
     assert Challenge not in admin.site._registry
     client.force_login(User.objects.create_user("+8801412345678", role="admin"))
     assert client.get("/admin/").status_code == 302
+
+
+def test_admin_can_delete_user_with_related_profile(client, super_admin, member, staff, plan):
+    from accounts.models import StaffProfile
+    from attendance.models import CheckIn
+    from django.utils import timezone
+    from members.models import MemberProfile
+
+    add_payment(member, plan, timezone.now())
+    CheckIn.objects.create(
+        member=member.member_profile,
+        checked_in_at=timezone.now(),
+        check_in_date=timezone.localdate(),
+        source="manual",
+    )
+    member_id = member.pk
+    staff_id = staff.pk
+    client.force_login(super_admin)
+
+    member_delete = client.post(
+        f"/admin/accounts/user/{member_id}/delete/", {"post": "yes"}
+    )
+    assert member_delete.status_code == 302
+    assert not User.objects.filter(pk=member_id).exists()
+    assert not MemberProfile.objects.filter(user_id=member_id).exists()
+    assert not Payment.objects.filter(member__user_id=member_id).exists()
+
+    staff_delete = client.post(f"/admin/accounts/user/{staff_id}/delete/", {"post": "yes"})
+    assert staff_delete.status_code == 302
+    assert not User.objects.filter(pk=staff_id).exists()
+    assert not StaffProfile.objects.filter(user_id=staff_id).exists()
+
+    # Operators cannot delete their own account from the change form.
+    assert (
+        admin.site._registry[User].has_delete_permission(
+            type("R", (), {"user": super_admin})(), super_admin
+        )
+        is False
+    )
 
 
 def test_log_redaction():

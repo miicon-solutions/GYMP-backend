@@ -12,7 +12,7 @@ from members.models import MemberProfile
 from members.services import owned_profile
 from operations.services import DHAKA, record
 from payments import gateway
-from payments.models import Payment, PaymentSession
+from payments.models import CashPaymentRequest, Payment, PaymentSession
 from plans.models import Plan
 from plans.services import pricing
 
@@ -248,6 +248,48 @@ def format_taka(amount):
     return "৳" + ",".join(groups + [last])
 
 
+def _cash_audit(actor, member, plan, payment, kind, previous_plan_name):
+    params = {
+        "member_id": member.member_id,
+        "name": member.user.full_name,
+        "amount": format_taka(payment.amount_taka),
+        "plan": plan.name,
+    }
+    if kind == "plan_change":
+        params.update(from_plan=previous_plan_name, to_plan=plan.name)
+    record(
+        actor,
+        "member",
+        "activate" if kind == "first_payment" else "update",
+        {
+            "first_payment": "adminActivityMemberCashActivated",
+            "renewal": "adminActivityMemberCashRenewed",
+            "plan_change": "adminActivityMemberCashPlanChanged",
+        }[kind],
+        params,
+    )
+
+
+def _link_pending_cash_request(member, plan, payment, actor):
+    now = timezone.now()
+    pending = (
+        CashPaymentRequest.objects.select_for_update()
+        .filter(member=member, status="pending", plan=plan)
+        .first()
+    )
+    if pending is None:
+        CashPaymentRequest.objects.filter(member=member, status="pending").update(
+            status="cancelled", resolved_at=now
+        )
+        return None
+    pending.status = "accepted"
+    pending.resolved_at = now
+    pending.resolved_by = actor
+    pending.payment = payment
+    pending.save(update_fields=["status", "resolved_at", "resolved_by", "payment", "updated_at"])
+    return pending
+
+
 @transaction.atomic
 def receive_cash(actor, member, plan_id):
     require_admin(actor)
@@ -267,23 +309,160 @@ def receive_cash(actor, member, plan_id):
         paid_at=timezone.now(),
     )
     activate(member, plan, preview["new_expires_on"])
-    params = {
-        "member_id": member.member_id,
-        "name": member.user.full_name,
-        "amount": format_taka(payment.amount_taka),
-        "plan": plan.name,
-    }
-    if preview["kind"] == "plan_change":
-        params.update(from_plan=previous_plan, to_plan=plan.name)
-    record(
-        actor,
-        "member",
-        "activate" if preview["kind"] == "first_payment" else "update",
-        {
-            "first_payment": "adminActivityMemberCashActivated",
-            "renewal": "adminActivityMemberCashRenewed",
-            "plan_change": "adminActivityMemberCashPlanChanged",
-        }[preview["kind"]],
-        params,
-    )
+    _cash_audit(actor, member, plan, payment, preview["kind"], previous_plan)
+    _link_pending_cash_request(member, plan, payment, actor)
     return member, payment
+
+
+@transaction.atomic
+def create_cash_request(user, data):
+    member = owned_profile(user)
+    member = MemberProfile.objects.select_for_update().get(pk=member.pk)
+    if not member.profile_complete:
+        raise ValidationError({"profile": "Complete your profile first."})
+    if (
+        member.membership_status == "active"
+        or member.payments.filter(status="paid", is_first_payment=True).exists()
+    ):
+        raise Conflict("First purchase is not available.")
+    plan = get_object_or_404(Plan.objects.select_for_update(), pk=data["plan_id"], is_active=True)
+    preview, price = cash_details(member, plan)
+    if preview["kind"] != "first_payment":
+        raise Conflict("Cash requests are only available for first payment.")
+    now = timezone.now()
+    CashPaymentRequest.objects.filter(member=member, status="pending").update(
+        status="cancelled", resolved_at=now
+    )
+    PaymentSession.objects.filter(member=member, kind="first_purchase", status="pending").update(
+        status="cancelled"
+    )
+    req = CashPaymentRequest.objects.create(
+        member=member,
+        plan=plan,
+        kind=preview["kind"],
+        amount_taka=price["amount_taka"],
+        pricing_snapshot=price,
+        status="pending",
+    )
+    member.membership_status = "pending_payment"
+    member.save(update_fields=["membership_status", "updated_at"])
+    return req
+
+
+def get_cash_request_for_member(user, request_id):
+    member = owned_profile(user)
+    return get_object_or_404(CashPaymentRequest, pk=request_id, member=member)
+
+
+def list_member_cash_requests(user, status=None):
+    member = owned_profile(user)
+    rows = CashPaymentRequest.objects.filter(member=member).select_related("plan", "payment")
+    if status:
+        rows = rows.filter(status=status)
+    return list(rows[:20])
+
+
+@transaction.atomic
+def cancel_cash_request(user, request_id):
+    member = owned_profile(user)
+    member = MemberProfile.objects.select_for_update().get(pk=member.pk)
+    req = get_object_or_404(
+        CashPaymentRequest.objects.select_for_update(), pk=request_id, member=member
+    )
+    if req.status != "pending":
+        raise Conflict("Only pending cash requests can be cancelled.")
+    req.status = "cancelled"
+    req.resolved_at = timezone.now()
+    req.save(update_fields=["status", "resolved_at", "updated_at"])
+    if (
+        member.membership_status == "pending_payment"
+        and not member.payments.filter(status="paid").exists()
+    ):
+        member.membership_status = "none"
+        member.save(update_fields=["membership_status", "updated_at"])
+    return req
+
+
+def list_admin_cash_requests(actor, status="pending", member_id=None):
+    require_admin(actor)
+    rows = CashPaymentRequest.objects.select_related(
+        "member", "member__user", "plan", "payment", "resolved_by"
+    )
+    if status:
+        rows = rows.filter(status=status)
+    if member_id:
+        rows = rows.filter(member_id=member_id)
+    return list(rows[:100])
+
+
+def list_member_admin_cash_requests(actor, member):
+    require_admin(actor)
+    return list(
+        CashPaymentRequest.objects.filter(member=member)
+        .select_related("plan", "payment", "resolved_by")
+        .order_by("-requested_at", "-id")[:50]
+    )
+
+
+@transaction.atomic
+def accept_cash_request(actor, request_id):
+    require_admin(actor)
+    req = get_object_or_404(CashPaymentRequest.objects.select_for_update(), pk=request_id)
+    if req.status == "accepted" and req.payment_id:
+        return req, req.payment, req.member
+    if req.status != "pending":
+        raise Conflict("Only pending cash requests can be accepted.")
+    member = MemberProfile.objects.select_for_update().get(pk=req.member_id)
+    plan = get_object_or_404(Plan.objects.select_for_update(), pk=req.plan_id)
+    price = req.pricing_snapshot or snapshot(plan, req.kind)
+    # Re-validate kind against current membership; prefer frozen amount.
+    preview, live_price = cash_details(member, plan)
+    if preview["kind"] != req.kind:
+        raise Conflict("Cash request kind no longer matches this member.")
+    amount = price.get("amount_taka", live_price["amount_taka"])
+    lines = price.get("line_items", live_price["line_items"])
+    previous_plan = member.plan.name if member.plan_id else plan.name
+    expiry = preview["new_expires_on"]
+    payment = Payment.objects.create(
+        member=member,
+        plan=plan,
+        catalog_id=price.get("catalog_id", plan.catalog_id),
+        channel="cash",
+        kind=req.kind,
+        is_first_payment=req.kind == "first_payment",
+        amount_taka=amount,
+        line_items=lines,
+        paid_at=timezone.now(),
+    )
+    activate(member, plan, expiry)
+    _cash_audit(actor, member, plan, payment, req.kind, previous_plan)
+    now = timezone.now()
+    req.status = "accepted"
+    req.resolved_at = now
+    req.resolved_by = actor
+    req.payment = payment
+    req.save(update_fields=["status", "resolved_at", "resolved_by", "payment", "updated_at"])
+    return req, payment, member
+
+
+@transaction.atomic
+def reject_cash_request(actor, request_id):
+    require_admin(actor)
+    req = get_object_or_404(CashPaymentRequest.objects.select_for_update(), pk=request_id)
+    if req.status == "rejected":
+        return req
+    if req.status != "pending":
+        raise Conflict("Only pending cash requests can be rejected.")
+    member = MemberProfile.objects.select_for_update().get(pk=req.member_id)
+    now = timezone.now()
+    req.status = "rejected"
+    req.resolved_at = now
+    req.resolved_by = actor
+    req.save(update_fields=["status", "resolved_at", "resolved_by", "updated_at"])
+    if (
+        member.membership_status == "pending_payment"
+        and not member.payments.filter(status="paid").exists()
+    ):
+        member.membership_status = "none"
+        member.save(update_fields=["membership_status", "updated_at"])
+    return req

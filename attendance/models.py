@@ -5,7 +5,7 @@ from core.models import Entity
 
 class CheckIn(Entity):
     member = models.ForeignKey(
-        "members.MemberProfile", on_delete=models.PROTECT, related_name="check_ins"
+        "members.MemberProfile", on_delete=models.CASCADE, related_name="check_ins"
     )
     checked_in_at = models.DateTimeField(db_index=True)
     check_in_date = models.DateField()

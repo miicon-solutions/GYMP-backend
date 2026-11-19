@@ -20,7 +20,7 @@ The Django backend intentionally breaks the Go wire contract. The Flutter client
 
 Send canonical slash-terminated URLs directly, especially for POST/PATCH/PUT; do not rely on redirecting request bodies. Dates are `YYYY-MM-DD`; instants are ISO 8601 with an offset. Monetary values are integer BDT taka. Error field arrays contain short strings. Status codes include 401 unauthenticated, 403 unauthorized role, 404 absent/not-owned resource, 409 conflict, 413 oversized upload, 429 cooldown/rate limit (with `Retry-After`), 502 provider failure, and safe 500 errors.
 
-Member and staff API identity IDs are **user UUIDs**. Internal profile UUIDs are not public account identifiers. Device requests use the human-readable `member_id` (`PG-0001`, etc.). API staff identifiers follow `ADM-1001`, etc.; the bootstrap super admin has `S-ADM-7400`. New UUIDs, sessions, and authenticator enrollment are independent of the Go service.
+Member and staff API identity IDs are **user UUIDs**. Internal profile UUIDs are not public account identifiers. Device requests use the human-readable `member_id` (`PF-0001`, etc.; formerly `PG-…`). API staff identifiers follow `ADM-1001`, etc.; the bootstrap super admin has `S-ADM-7400`. New UUIDs, sessions, and authenticator enrollment are independent of the Go service.
 
 Business enum values remain unchanged, including `confirmCurrentPhone`, `changePhone`, `adminLinkMemberPhone`, `needsPhoneLink`, online payment kinds (`first_purchase`, `renew`, `change_plan`) and cash kinds (`first_payment`, `renewal`, `plan_change`). Field names change; enum strings do not. Activity `summary_key` localization identifiers are unchanged; parameter field names are snake_case.
 
@@ -85,11 +85,13 @@ The port fixes two unsafe legacy behaviors: callbacks with invalid/unrelated val
 
 Cash preview takes query `plan_id`; cash receive takes `{ "plan_id": "<uuid>" }` and returns `{ "member": {...}, "payment": {...} }`. The server determines price/kind; a posted amount is ignored. Activation changes fingerprint `not_required` to `pending` and preserves `ready` on later purchases.
 
+Members may also request cash at first purchase: `POST /api/v1/member/payments/cash-requests/` with `{ "plan_id" }` creates a pending `CashPaymentRequest`, freezes the first-payment price snapshot, sets `membership_status` to `pending_payment`, and cancels any prior pending cash request or first-purchase SSL session. Members poll `GET .../cash-requests/{id}/` (or list via `GET .../cash-requests/list/?status=pending`) and may `POST .../cancel/` while pending. Staff list pending requests at `GET /api/v1/admin/cash-requests/?status=pending`, inspect per member at `GET /api/v1/admin/members/{id}/cash-requests/`, then `POST .../accept/` (records cash using the frozen amount, activates membership, idempotent) or `POST .../reject/` (returns the member to `none` when still unpaid). Legacy `POST .../cash-payments/` for the same member and plan auto-accepts a matching pending request so the counter flow does not double-charge.
+
 Membership expiry intentionally preserves Go `AddDate` overflow: January 31 plus one month can become March 3, rather than February 28. Online expiry bases dates on UTC; cash uses Asia/Dhaka. Existing eligible future expiry is extended according to the original channel-specific rules. Dashboard `days_left` uses UTC calendar days, clamped to 0–9999. Attendance, gym hours, and offer eligibility use Asia/Dhaka. No new scheduler automatically rewrites membership status.
 
 Revenue accepts `range: day|week|month|overall|custom|dates`, `date`, `from`, `to`, comma-separated `dates`, `member_id`, `channel: all|cash|sslcommerz`, and `limit` (1–100, default 50). Nonempty `dates` overrides the range and deduplicates/sorts up to 62 days. Week means the selected date plus its preceding six days. Report defaults use the Dhaka date; payment filtering/chart dates preserve UTC day semantics. Totals cover **all** matching database rows (removing the old 5000-row aggregate cap); `limit` bounds only the embedded payment rows. Overall and custom ranges longer than 90 days use monthly series; shorter custom/week ranges include zero-value buckets.
 
-Receipts remain private, requiring the member Bearer token even when opening the HTML URL. Payment history uses cursor pagination; dashboard previews remain bounded to five entries. Django's operator console is inspect-only and never bypasses settlement services.
+Receipts remain private, requiring the member Bearer token even when opening the HTML URL. Payment history uses cursor pagination; dashboard previews remain bounded to five entries. Django's operator console allows CRUD for registered business models while keeping auth secrets and payment gateway session material off the forms; online settlement still goes through the payment services.
 
 ## Complete route mapping
 
@@ -102,10 +104,20 @@ Placeholders such as `{id}` are UUIDs except `{tranId}` (merchant transaction re
 | GET | `/v1/admin/members/:id` | `/api/v1/admin/members/{id}/` |
 | GET | `/v1/admin/members/:id/cash-preview` | `/api/v1/admin/members/{id}/cash-preview/` |
 | POST | `/v1/admin/members/:id/cash-payments` | `/api/v1/admin/members/{id}/cash-payments/` |
+| GET | (new) admin pending cash requests | `/api/v1/admin/cash-requests/` |
+| GET | (new) admin member cash requests | `/api/v1/admin/members/{id}/cash-requests/` |
+| POST | (new) accept cash request | `/api/v1/admin/cash-requests/{id}/accept/` |
+| POST | (new) reject cash request | `/api/v1/admin/cash-requests/{id}/reject/` |
+| POST | (new) member create cash request | `/api/v1/member/payments/cash-requests/` |
+| GET | (new) member list cash requests | `/api/v1/member/payments/cash-requests/list/` |
+| GET | (new) member get cash request | `/api/v1/member/payments/cash-requests/{id}/` |
+| POST | (new) member cancel cash request | `/api/v1/member/payments/cash-requests/{id}/cancel/` |
 | POST | `/v1/admin/members/:id/phone` | `/api/v1/admin/members/{id}/phone/` |
 | POST | `/v1/admin/members/:id/fingerprint` | `/api/v1/admin/members/{id}/fingerprint/` |
 | GET | `/v1/admin/device/status` | `/api/v1/admin/device/status/` |
-| POST | `/v1/admin/members/:id/fingerprint/enroll` | `/api/v1/admin/members/{id}/fingerprint/enroll/` |
+| GET | (new) list vault finger indexes | `/api/v1/admin/members/{id}/fingerprint/templates/` |
+| DELETE | (new) delete vault+device finger | `/api/v1/admin/members/{id}/fingerprint/templates/{finger_id}/` |
+| POST | `/v1/admin/members/:id/fingerprint/enroll` | `/api/v1/admin/members/{id}/fingerprint/enroll/` (interactive; body `finger_id` 0–9) |
 | POST | (new) pull templates to vault | `/api/v1/admin/members/{id}/fingerprint/pull/` |
 | POST | (new) push vault to device | `/api/v1/admin/members/{id}/fingerprint/push/` |
 | GET | `/v1/member/attendance` | `/api/v1/member/attendance/` |

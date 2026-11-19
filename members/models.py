@@ -6,7 +6,7 @@ from core.models import Entity
 
 class MemberProfile(Entity):
     user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="member_profile"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="member_profile"
     )
     member_id = models.CharField(max_length=24, unique=True)
     emergency_name = models.CharField(max_length=200, blank=True)

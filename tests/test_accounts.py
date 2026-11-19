@@ -326,3 +326,10 @@ def test_sms_failure_invalidates_challenge(settings):
         with pytest.raises(BadGateway):
             send_otp({"phone_e164": "+8801712345678", "purpose": "onboarding"})
     assert Challenge.objects.get().consumed_at is not None
+
+
+def test_member_display_id_uses_pf_prefix(client):
+    from accounts.services import new_member
+
+    member = new_member("+8801712555666")
+    assert member.member_profile.member_id.startswith("PF-")

@@ -2,7 +2,13 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from accounts.seed_super import SEED_SUPER_PHONE, SEED_SUPER_SHORT_ID, ensure_seed_super_admin
+from accounts.seed_super import (
+    SEED_OPERATOR_PASSWORD,
+    SEED_OPERATOR_USERNAME,
+    SEED_SUPER_PHONE,
+    SEED_SUPER_SHORT_ID,
+    ensure_seed_super_admin,
+)
 from operations.services import seed_hours
 from plans.models import Plan
 
@@ -10,7 +16,8 @@ from plans.models import Plan
 class Command(BaseCommand):
     help = (
         "Seed development plans, default gym hours, and the Go-parity seed super admin "
-        f"({SEED_SUPER_PHONE} / {SEED_SUPER_SHORT_ID}). Disabled in production."
+        f"({SEED_SUPER_PHONE} / {SEED_SUPER_SHORT_ID}; browser "
+        f"{SEED_OPERATOR_USERNAME} / {SEED_OPERATOR_PASSWORD}). Disabled in production."
     )
 
     @transaction.atomic
@@ -36,11 +43,12 @@ class Command(BaseCommand):
             )
         self.stdout.write(self.style.SUCCESS("Development plans and gym hours are ready."))
         result = ensure_seed_super_admin()
+        browser = f"Browser /admin/ login: {SEED_OPERATOR_USERNAME} / {SEED_OPERATOR_PASSWORD}."
         if result.status == "created":
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Seed super admin created ({SEED_SUPER_PHONE} / {SEED_SUPER_SHORT_ID}). "
-                    "Keep this one-time MFA setup token private:"
+                    f"{browser} Keep this one-time MFA setup token private:"
                 )
             )
             self.stdout.write(result.setup_token)
@@ -48,7 +56,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Seed super admin reclaimed from member ({SEED_SUPER_PHONE}). "
-                    "Keep this one-time MFA setup token private:"
+                    f"{browser} Keep this one-time MFA setup token private:"
                 )
             )
             self.stdout.write(result.setup_token)
@@ -56,7 +64,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Seed super admin MFA setup token refreshed ({SEED_SUPER_PHONE}). "
-                    "Keep this one-time MFA setup token private:"
+                    f"{browser} Keep this one-time MFA setup token private:"
                 )
             )
             self.stdout.write(result.setup_token)
@@ -64,6 +72,6 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Seed super admin ready ({SEED_SUPER_PHONE} / "
-                    f"{result.user.staff_profile.short_id})."
+                    f"{result.user.staff_profile.short_id}). {browser}"
                 )
             )

@@ -1,6 +1,7 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from payments.models import Payment, PaymentSession
+from payments.models import CashPaymentRequest, Payment, PaymentSession
 
 
 class SessionInput(serializers.Serializer):
@@ -53,3 +54,71 @@ class CashPreviewOutput(serializers.Serializer):
     new_expires_on = serializers.DateField()
     plan_id = serializers.UUIDField()
     catalog_id = serializers.CharField(allow_null=True)
+
+
+class CashRequestStatusFilter(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=["pending", "accepted", "rejected", "cancelled"],
+        required=False,
+        default="pending",
+    )
+
+
+class CashPaymentRequestSerializer(serializers.ModelSerializer):
+    plan_id = serializers.UUIDField(read_only=True)
+    payment_id = serializers.UUIDField(read_only=True, allow_null=True)
+    member_id = serializers.UUIDField(read_only=True)
+    member_display_id = serializers.CharField(source="member.member_id", read_only=True)
+    member_name = serializers.CharField(source="member.user.full_name", read_only=True)
+    member_phone_e164 = serializers.CharField(source="member.user.phone_e164", read_only=True)
+    catalog_id = serializers.SerializerMethodField()
+    plan_name = serializers.CharField(source="plan.name", read_only=True)
+
+    class Meta:
+        model = CashPaymentRequest
+        fields = [
+            "id",
+            "member_id",
+            "member_display_id",
+            "member_name",
+            "member_phone_e164",
+            "plan_id",
+            "plan_name",
+            "catalog_id",
+            "kind",
+            "amount_taka",
+            "status",
+            "requested_at",
+            "resolved_at",
+            "payment_id",
+        ]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_catalog_id(self, obj):
+        snap = obj.pricing_snapshot or {}
+        return snap.get("catalog_id") or obj.plan.catalog_id
+
+
+class MemberCashPaymentRequestSerializer(serializers.ModelSerializer):
+    plan_id = serializers.UUIDField(read_only=True)
+    payment_id = serializers.UUIDField(read_only=True, allow_null=True)
+    catalog_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CashPaymentRequest
+        fields = [
+            "id",
+            "plan_id",
+            "catalog_id",
+            "kind",
+            "amount_taka",
+            "status",
+            "requested_at",
+            "resolved_at",
+            "payment_id",
+        ]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_catalog_id(self, obj):
+        snap = obj.pricing_snapshot or {}
+        return snap.get("catalog_id") or obj.plan.catalog_id

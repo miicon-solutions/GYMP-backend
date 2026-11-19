@@ -1,4 +1,7 @@
-"""Go-parity local/dev seed super admin (+8801700000000 / S-ADM-7400)."""
+"""Go-parity local/dev seed super admin (+8801700000000 / S-ADM-7400).
+
+Browser operator console (local/dev): username ``gym-pm`` / password ``GYM-PM-7400``.
+"""
 
 from dataclasses import dataclass
 
@@ -14,6 +17,8 @@ from members.models import MemberProfile
 SEED_SUPER_PHONE = "+8801700000000"
 SEED_SUPER_SHORT_ID = "S-ADM-7400"
 SEED_SUPER_NAME = "Seed Super"
+SEED_OPERATOR_USERNAME = "gym-pm"
+SEED_OPERATOR_PASSWORD = "GYM-PM-7400"
 
 
 @dataclass(frozen=True)
@@ -57,7 +62,15 @@ def _clear_auth_rows(user: User):
         GoogleLinkSession.objects.filter(firebase_uid=user.firebase_uid).delete()
 
 
+def _ensure_browser_access(user: User) -> None:
+    """Grant fixed local operator console credentials (is_staff + known password)."""
+    user.is_staff = True
+    user.set_password(SEED_OPERATOR_PASSWORD)
+    user.save()
+
+
 def _refresh_setup_if_needed(user: User) -> SeedSuperResult:
+    _ensure_browser_access(user)
     profile = user.staff_profile
     if profile.mfa_enrolled_at:
         return SeedSuperResult(status="unchanged", user=user)
@@ -77,13 +90,11 @@ def _create_staff_profile(user: User) -> SeedSuperResult:
     _assert_short_id_free_or_owned_by(user)
     user.role = "admin"
     user.is_superuser = True
-    user.is_staff = False
     user.is_active = True
     if not user.full_name:
         user.full_name = SEED_SUPER_NAME
     user.firebase_uid = None
-    user.set_unusable_password()
-    user.save()
+    _ensure_browser_access(user)
     StaffProfile.objects.create(user=user, short_id=SEED_SUPER_SHORT_ID)
     setup = begin_mfa(user)
     return SeedSuperResult(status="reclaimed", user=user, setup_token=setup["setup_token"])
@@ -100,10 +111,11 @@ def ensure_seed_super_admin() -> SeedSuperResult:
         _assert_short_id_free_or_owned_by(None)
         user = User.objects.create_user(
             SEED_SUPER_PHONE,
+            SEED_OPERATOR_PASSWORD,
             full_name=SEED_SUPER_NAME,
             role="admin",
             is_superuser=True,
-            is_staff=False,
+            is_staff=True,
         )
         StaffProfile.objects.create(user=user, short_id=SEED_SUPER_SHORT_ID)
         setup = begin_mfa(user)

@@ -5,11 +5,13 @@ import logging
 
 from django.db.models import Prefetch
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from biometrics import bridge, crypto
 from biometrics.models import FingerprintDevice, FingerprintDeviceSyncState, MemberBiometricTemplate
 from members.models import MemberProfile
 from members.services import get_member
+from operations.services import record
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +51,23 @@ def _resolve_target_device(bridge_device_id: str | None = None) -> FingerprintDe
     return FingerprintDevice.objects.filter(is_active=True).order_by("created_at").first()
 
 
+def _finger_indexes(member: MemberProfile) -> list[int]:
+    return list(
+        member.biometric_templates.order_by("finger_index").values_list(
+            "finger_index", flat=True
+        )
+    )
+
+
+def list_member_templates(member: MemberProfile) -> dict:
+    return {
+        "finger_indexes": _finger_indexes(member),
+        "fingerprint_status": member.fingerprint_status,
+    }
+
+
 def enroll_prepare(actor, member: MemberProfile, pin: str = "", *, device_id: str | None = None):
+    """Ensure the member exists on the device (used internally before interactive enroll)."""
     _ = actor
     name = (member.user.full_name or member.member_id).strip() or member.member_id
     bridge.ensure_user(
@@ -65,6 +83,82 @@ def enroll_prepare(actor, member: MemberProfile, pin: str = "", *, device_id: st
             "Member is on the device. Capture the fingerprint on the scanner, "
             "then mark enrolled when done."
         ),
+    }
+
+
+def enroll_interactive(
+    actor,
+    member: MemberProfile,
+    finger_id: int,
+    *,
+    pin: str = "",
+    device_id: str | None = None,
+) -> dict:
+    try:
+        finger_id = int(finger_id)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({"finger_id": "Must be an integer 0–9."}) from exc
+    if finger_id < 0 or finger_id > 9:
+        raise ValidationError({"finger_id": "Must be between 0 and 9."})
+
+    enroll_prepare(actor, member, pin=pin or "", device_id=device_id)
+    bridge.enroll_fingerprint(member.member_id, finger_id, device_id=device_id)
+    pulled = pull_templates(actor, member, device_id=device_id)
+    member.refresh_from_db(fields=["fingerprint_status"])
+    indexes = _finger_indexes(member)
+    if actor is not None:
+        record(
+            actor,
+            "member",
+            "update",
+            "adminActivityMemberFingerprintUpdated",
+            {"memberId": member.member_id, "status": member.fingerprint_status, "fingerId": finger_id},
+        )
+    return {
+        "enrolled": True,
+        "finger_id": finger_id,
+        "stored": int(pulled.get("stored") or 0),
+        "fingerprint_status": member.fingerprint_status,
+        "finger_indexes": indexes,
+    }
+
+
+def delete_member_template(
+    actor,
+    member: MemberProfile,
+    finger_id: int,
+    *,
+    device_id: str | None = None,
+) -> dict:
+    try:
+        finger_id = int(finger_id)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({"finger_id": "Must be an integer 0–9."}) from exc
+    if finger_id < 0 or finger_id > 9:
+        raise ValidationError({"finger_id": "Must be between 0 and 9."})
+
+    bridge.delete_fingerprint(member.member_id, finger_id, device_id=device_id)
+    MemberBiometricTemplate.objects.filter(member=member, finger_index=finger_id).delete()
+    indexes = _finger_indexes(member)
+    if not indexes and member.fingerprint_status not in ("not_required",):
+        member.fingerprint_status = "pending"
+        member.save(update_fields=["fingerprint_status", "updated_at"])
+    if actor is not None:
+        record(
+            actor,
+            "member",
+            "update",
+            "adminActivityMemberFingerprintUpdated",
+            {
+                "memberId": member.member_id,
+                "status": member.fingerprint_status,
+                "fingerId": finger_id,
+                "deleted": True,
+            },
+        )
+    return {
+        "finger_indexes": indexes,
+        "fingerprint_status": member.fingerprint_status,
     }
 
 

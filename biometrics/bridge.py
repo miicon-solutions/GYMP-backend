@@ -39,8 +39,10 @@ def _headers() -> dict[str, str]:
     return {"X-Bridge-Key": settings.ZKTECO_BRIDGE_KEY, "Content-Type": "application/json"}
 
 
-def _client() -> httpx.Client:
-    return httpx.Client(base_url=settings.ZKTECO_BRIDGE_URL, timeout=70.0, headers=_headers())
+def _client(*, timeout: float = 70.0) -> httpx.Client:
+    return httpx.Client(
+        base_url=settings.ZKTECO_BRIDGE_URL, timeout=timeout, headers=_headers()
+    )
 
 
 def require_configured() -> None:
@@ -152,6 +154,47 @@ def push_user(
             resp = client.post("/internal/users/push/", json=payload)
             if resp.status_code >= 400:
                 raise BridgeUnavailable(resp.text or "Bridge push failed.")
+            return resp.json()
+    except httpx.HTTPError as exc:
+        raise BridgeUnavailable(str(exc)) from exc
+
+
+def enroll_fingerprint(
+    user_id: str,
+    finger_id: int,
+    *,
+    device_id: str | None = None,
+) -> dict:
+    """Interactive capture on the scanner; bridge blocks until done (~1–2 min)."""
+    require_configured()
+    try:
+        with _client(timeout=120.0) as client:
+            payload: dict = {"user_id": user_id, "finger_id": int(finger_id)}
+            if device_id:
+                payload["device_id"] = str(device_id)
+            resp = client.post("/internal/users/enroll/", json=payload)
+            if resp.status_code >= 400:
+                raise BridgeUnavailable(resp.text or "Bridge enroll failed.")
+            return resp.json()
+    except httpx.HTTPError as exc:
+        raise BridgeUnavailable(str(exc)) from exc
+
+
+def delete_fingerprint(
+    user_id: str,
+    finger_id: int,
+    *,
+    device_id: str | None = None,
+) -> dict:
+    require_configured()
+    try:
+        with _client() as client:
+            resp = client.delete(
+                f"/internal/users/{user_id}/templates/{int(finger_id)}/",
+                params=_device_params(device_id),
+            )
+            if resp.status_code >= 400:
+                raise BridgeUnavailable(resp.text or "Bridge delete failed.")
             return resp.json()
     except httpx.HTTPError as exc:
         raise BridgeUnavailable(str(exc)) from exc

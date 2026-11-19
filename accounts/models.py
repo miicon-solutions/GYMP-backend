@@ -62,7 +62,7 @@ class User(Entity, AbstractBaseUser, PermissionsMixin):
 
 
 class StaffProfile(Entity):
-    user = models.OneToOneField(User, on_delete=models.PROTECT, related_name="staff_profile")
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="staff_profile")
     short_id = models.CharField(max_length=24, unique=True)
     totp_secret_encrypted = models.TextField(blank=True)
     mfa_enrolled_at = models.DateTimeField(null=True, blank=True)

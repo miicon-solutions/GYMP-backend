@@ -12,4 +12,4 @@ def next_display(kind):
     )
     sequence.value += 1
     sequence.save(update_fields=["value"])
-    return f"ADM-{sequence.value:04d}" if kind == "staff" else f"PG-{sequence.value:04d}"
+    return f"ADM-{sequence.value:04d}" if kind == "staff" else f"PF-{sequence.value:04d}"

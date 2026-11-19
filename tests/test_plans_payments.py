@@ -8,7 +8,7 @@ from rest_framework.exceptions import ValidationError
 from core.api import BadGateway
 from members.models import MemberProfile
 from operations.models import Activity
-from payments.models import Payment, PaymentSession
+from payments.models import CashPaymentRequest, Payment, PaymentSession
 from payments.services import create_session, go_add_months, handle_ipn, new_expiry, receive_cash
 from plans.models import Offer, Plan
 from plans.services import pricing
@@ -320,3 +320,134 @@ def test_payment_and_activation_rollback(staff, member, plan):
             receive_cash(staff, member.member_profile, plan.pk)
     assert not Payment.objects.exists()
     assert MemberProfile.objects.get(user=member).membership_status == "none"
+
+
+def test_member_cash_request_create_poll_accept(client, staff, member, plan):
+    complete(member)
+    client.force_authenticate(member)
+    created = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    )
+    assert created.status_code == 201
+    assert created.data["status"] == "pending"
+    assert created.data["amount_taka"] == 2500
+    assert created.data["kind"] == "first_payment"
+    request_id = created.data["id"]
+    member.member_profile.refresh_from_db()
+    assert member.member_profile.membership_status == "pending_payment"
+
+    polled = client.get(f"/api/v1/member/payments/cash-requests/{request_id}/")
+    assert polled.status_code == 200 and polled.data["status"] == "pending"
+
+    listed = client.get("/api/v1/member/payments/cash-requests/list/", {"status": "pending"})
+    assert listed.status_code == 200 and len(listed.data) == 1
+
+    client.force_authenticate(staff)
+    pending = client.get("/api/v1/admin/cash-requests/", {"status": "pending"})
+    assert pending.status_code == 200 and len(pending.data) == 1
+    assert pending.data[0]["member_display_id"] == member.member_profile.member_id
+
+    accepted = client.post(f"/api/v1/admin/cash-requests/{request_id}/accept/", {}, format="json")
+    assert accepted.status_code == 200
+    assert accepted.data["request"]["status"] == "accepted"
+    assert accepted.data["payment"]["amount_taka"] == 2500
+    assert accepted.data["payment"]["channel"] == "cash"
+    assert accepted.data["member"]["membership_status"] == "active"
+    assert Payment.objects.count() == 1
+    assert CashPaymentRequest.objects.get(pk=request_id).payment_id is not None
+
+    # Idempotent accept
+    again = client.post(f"/api/v1/admin/cash-requests/{request_id}/accept/", {}, format="json")
+    assert again.status_code == 200 and Payment.objects.count() == 1
+
+    client.force_authenticate(member)
+    assert (
+        client.get(f"/api/v1/member/payments/cash-requests/{request_id}/").data["status"]
+        == "accepted"
+    )
+
+
+def test_member_cash_request_reject_and_cancel(client, staff, member, plan):
+    complete(member)
+    client.force_authenticate(member)
+    first = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    ).data
+    client.force_authenticate(staff)
+    rejected = client.post(f"/api/v1/admin/cash-requests/{first['id']}/reject/", {}, format="json")
+    assert rejected.status_code == 200 and rejected.data["status"] == "rejected"
+    member.member_profile.refresh_from_db()
+    assert member.member_profile.membership_status == "none"
+
+    client.force_authenticate(member)
+    second = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    ).data
+    cancelled = client.post(
+        f"/api/v1/member/payments/cash-requests/{second['id']}/cancel/", {}, format="json"
+    )
+    assert cancelled.status_code == 200 and cancelled.data["status"] == "cancelled"
+    member.member_profile.refresh_from_db()
+    assert member.member_profile.membership_status == "none"
+
+
+def test_cash_request_replaces_prior_pending_and_legacy_receive_links(client, staff, member, plan):
+    complete(member)
+    client.force_authenticate(member)
+    first = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    ).data
+    second = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    ).data
+    assert first["id"] != second["id"]
+    assert CashPaymentRequest.objects.get(pk=first["id"]).status == "cancelled"
+    assert (
+        CashPaymentRequest.objects.filter(member=member.member_profile, status="pending").count()
+        == 1
+    )
+
+    client.force_authenticate(staff)
+    received = client.post(
+        f"/api/v1/admin/members/{member.pk}/cash-payments/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    )
+    assert received.status_code == 201
+    linked = CashPaymentRequest.objects.get(pk=second["id"])
+    assert linked.status == "accepted"
+    assert str(linked.payment_id) == received.data["payment"]["id"]
+
+
+def test_cash_request_requires_profile_and_ownership(client, member, other_member, plan):
+    client.force_authenticate(member)
+    assert (
+        client.post(
+            "/api/v1/member/payments/cash-requests/",
+            {"plan_id": str(plan.pk)},
+            format="json",
+        ).status_code
+        == 400
+    )
+    complete(member)
+    created = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    )
+    assert created.status_code == 201
+    client.force_authenticate(other_member)
+    assert (
+        client.get(f"/api/v1/member/payments/cash-requests/{created.data['id']}/").status_code
+        == 404
+    )

@@ -14,12 +14,42 @@ class DeviceStatusOutput(serializers.Serializer):
 
 
 class EnrollPrepareInput(serializers.Serializer):
+    """Legacy prepare-only body; interactive enroll prefers finger_id."""
+
     pin = serializers.CharField(required=False, allow_blank=True, max_length=16)
+    finger_id = serializers.IntegerField(required=False, min_value=0, max_value=9)
+    device_id = serializers.CharField(required=False, allow_blank=True)
 
 
 class EnrollPrepareOutput(serializers.Serializer):
-    prepared = serializers.BooleanField()
-    message = serializers.CharField()
+    prepared = serializers.BooleanField(required=False)
+    message = serializers.CharField(required=False)
+    enrolled = serializers.BooleanField(required=False)
+    finger_id = serializers.IntegerField(required=False)
+    stored = serializers.IntegerField(required=False)
+    fingerprint_status = serializers.CharField(required=False)
+    finger_indexes = serializers.ListField(
+        child=serializers.IntegerField(), required=False
+    )
+
+
+class EnrollInteractiveInput(serializers.Serializer):
+    finger_id = serializers.IntegerField(min_value=0, max_value=9)
+    pin = serializers.CharField(required=False, allow_blank=True, max_length=16)
+    device_id = serializers.CharField(required=False, allow_blank=True)
+
+
+class EnrollInteractiveOutput(serializers.Serializer):
+    enrolled = serializers.BooleanField()
+    finger_id = serializers.IntegerField()
+    stored = serializers.IntegerField()
+    fingerprint_status = serializers.CharField()
+    finger_indexes = serializers.ListField(child=serializers.IntegerField())
+
+
+class MemberTemplatesOutput(serializers.Serializer):
+    finger_indexes = serializers.ListField(child=serializers.IntegerField())
+    fingerprint_status = serializers.CharField()
 
 
 class VaultSyncOutput(serializers.Serializer):
@@ -27,6 +57,9 @@ class VaultSyncOutput(serializers.Serializer):
     pushed = serializers.BooleanField(required=False)
     template_count = serializers.IntegerField(required=False)
     fingerprint_status = serializers.CharField(required=False)
+    finger_indexes = serializers.ListField(
+        child=serializers.IntegerField(), required=False
+    )
 
 
 class VaultMemberOutput(serializers.Serializer):

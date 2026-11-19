@@ -17,8 +17,9 @@ from attendance.services import month_attendance, record_checkin
 from biometrics import services as bio
 from biometrics.serializers import (
     DeviceStatusOutput,
-    EnrollPrepareInput,
-    EnrollPrepareOutput,
+    EnrollInteractiveInput,
+    EnrollInteractiveOutput,
+    MemberTemplatesOutput,
     VaultBulkPushInput,
     VaultBulkPushOutput,
     VaultMembersOutput,
@@ -57,8 +58,11 @@ from operations.views import (
 )
 from payments import services as payment
 from payments.serializers import (
+    CashPaymentRequestSerializer,
     CashPreviewOutput,
+    CashRequestStatusFilter,
     IPNInput,
+    MemberCashPaymentRequestSerializer,
     PaymentSerializer,
     PlanInput,
     SessionInput,
@@ -81,6 +85,15 @@ from reporting.services import revenue
 def cash_receive(request, data, pk):
     m, p = payment.receive_cash(request.user, member.get_member(pk), data["plan_id"])
     return {
+        "member": member.admin_member_data(member.get_member(m.user_id)),
+        "payment": PaymentSerializer(p).data,
+    }
+
+
+def cash_request_accept(request, data, pk):
+    req, p, m = payment.accept_cash_request(request.user, pk)
+    return {
+        "request": CashPaymentRequestSerializer(req).data,
         "member": member.admin_member_data(member.get_member(m.user_id)),
         "payment": PaymentSerializer(p).data,
     }
@@ -229,6 +242,61 @@ api = [
             permission=MemberOnly,
         ),
     ),
+    path(
+        "member/payments/cash-requests/",
+        endpoint(
+            "payments_create_cash_request",
+            handler=lambda r, d: (
+                MemberCashPaymentRequestSerializer(payment.create_cash_request(r.user, d)).data
+            ),
+            request=PlanInput,
+            response=MemberCashPaymentRequestSerializer,
+            permission=MemberOnly,
+            status=201,
+        ),
+    ),
+    path(
+        "member/payments/cash-requests/list/",
+        endpoint(
+            "payments_list_cash_requests",
+            handler=lambda r, d: (
+                MemberCashPaymentRequestSerializer(
+                    payment.list_member_cash_requests(r.user, d.get("status")),
+                    many=True,
+                ).data
+            ),
+            method="get",
+            request=CashRequestStatusFilter,
+            response=MemberCashPaymentRequestSerializer(many=True),
+            permission=MemberOnly,
+            parameters=query_parameters("status"),
+        ),
+    ),
+    path(
+        "member/payments/cash-requests/<uuid:pk>/",
+        endpoint(
+            "payments_get_cash_request",
+            handler=lambda r, d, pk: (
+                MemberCashPaymentRequestSerializer(
+                    payment.get_cash_request_for_member(r.user, pk)
+                ).data
+            ),
+            method="get",
+            response=MemberCashPaymentRequestSerializer,
+            permission=MemberOnly,
+        ),
+    ),
+    path(
+        "member/payments/cash-requests/<uuid:pk>/cancel/",
+        endpoint(
+            "payments_cancel_cash_request",
+            handler=lambda r, d, pk: (
+                MemberCashPaymentRequestSerializer(payment.cancel_cash_request(r.user, pk)).data
+            ),
+            response=MemberCashPaymentRequestSerializer,
+            permission=MemberOnly,
+        ),
+    ),
     path("member/payments/", PaymentList.as_view()),
     path("member/payments/<uuid:pk>/", PaymentDetail.as_view()),
     path(
@@ -338,14 +406,40 @@ api = [
         ),
     ),
     path(
+        "admin/members/<uuid:pk>/fingerprint/templates/",
+        endpoint(
+            "admin_member_fingerprint_templates",
+            response=MemberTemplatesOutput,
+            handler=lambda r, d, pk: bio.list_member_templates(member.get_member(pk)),
+            method="get",
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/members/<uuid:pk>/fingerprint/templates/<int:finger_id>/",
+        endpoint(
+            "admin_member_fingerprint_template_delete",
+            response=MemberTemplatesOutput,
+            handler=lambda r, d, pk, finger_id: bio.delete_member_template(
+                r.user, member.get_member(pk), finger_id
+            ),
+            method="delete",
+            permission=AdminOnly,
+        ),
+    ),
+    path(
         "admin/members/<uuid:pk>/fingerprint/enroll/",
         endpoint(
             "admin_member_fingerprint_enroll",
-            response=EnrollPrepareOutput,
-            handler=lambda r, d, pk: bio.enroll_prepare(
-                r.user, member.get_member(pk), d.get("pin", "")
+            response=EnrollInteractiveOutput,
+            handler=lambda r, d, pk: bio.enroll_interactive(
+                r.user,
+                member.get_member(pk),
+                d["finger_id"],
+                pin=d.get("pin", "") or "",
+                device_id=(d.get("device_id") or None) or None,
             ),
-            request=EnrollPrepareInput,
+            request=EnrollInteractiveInput,
             permission=AdminOnly,
         ),
     ),
@@ -393,6 +487,65 @@ api = [
             request=PlanInput,
             permission=AdminOnly,
             status=201,
+        ),
+    ),
+    path(
+        "admin/cash-requests/",
+        endpoint(
+            "admin_list_cash_requests",
+            handler=lambda r, d: (
+                CashPaymentRequestSerializer(
+                    payment.list_admin_cash_requests(r.user, d.get("status") or "pending"),
+                    many=True,
+                ).data
+            ),
+            method="get",
+            request=CashRequestStatusFilter,
+            response=CashPaymentRequestSerializer(many=True),
+            permission=AdminOnly,
+            parameters=query_parameters("status"),
+        ),
+    ),
+    path(
+        "admin/members/<uuid:pk>/cash-requests/",
+        endpoint(
+            "admin_member_cash_requests",
+            handler=lambda r, d, pk: (
+                CashPaymentRequestSerializer(
+                    payment.list_member_admin_cash_requests(r.user, member.get_member(pk)),
+                    many=True,
+                ).data
+            ),
+            method="get",
+            response=CashPaymentRequestSerializer(many=True),
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/cash-requests/<uuid:pk>/accept/",
+        endpoint(
+            "admin_accept_cash_request",
+            response=inline_serializer(
+                "CashRequestAccept",
+                fields={
+                    "request": CashPaymentRequestSerializer(),
+                    "member": AdminMemberOutput(),
+                    "payment": PaymentSerializer(),
+                },
+            ),
+            handler=cash_request_accept,
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/cash-requests/<uuid:pk>/reject/",
+        endpoint(
+            "admin_reject_cash_request",
+            handler=lambda r, d, pk: (
+                CashPaymentRequestSerializer(payment.reject_cash_request(r.user, pk)).data
+            ),
+            response=CashPaymentRequestSerializer,
+            permission=AdminOnly,
         ),
     ),
     path("admin/plans/", PlanList.as_view()),

@@ -8,7 +8,13 @@ from django.utils import timezone
 
 from accounts.crypto import digest
 from accounts.models import StaffProfile, User
-from accounts.seed_super import SEED_SUPER_PHONE, SEED_SUPER_SHORT_ID, ensure_seed_super_admin
+from accounts.seed_super import (
+    SEED_OPERATOR_PASSWORD,
+    SEED_OPERATOR_USERNAME,
+    SEED_SUPER_PHONE,
+    SEED_SUPER_SHORT_ID,
+    ensure_seed_super_admin,
+)
 from accounts.services import begin_mfa, new_member
 from payments.models import Payment
 
@@ -22,10 +28,12 @@ def test_seed_dev_creates_seed_super_and_resolve_phone_staff(client):
     user = User.objects.get(phone_e164=SEED_SUPER_PHONE)
     assert user.role == "admin"
     assert user.is_superuser is True
-    assert user.is_staff is False
+    assert user.is_staff is True
+    assert user.check_password(SEED_OPERATOR_PASSWORD)
     assert user.staff_profile.short_id == SEED_SUPER_SHORT_ID
     assert user.staff_profile.mfa_enrolled_at is None
     assert digest(stream.getvalue().splitlines()[-1]) == user.staff_profile.setup_token_hash
+    assert SEED_OPERATOR_USERNAME in stream.getvalue()
 
     response = client.post(BASE + "resolve-phone/", {"phone_e164": SEED_SUPER_PHONE}, format="json")
     assert response.status_code == 200
@@ -39,6 +47,9 @@ def test_seed_dev_creates_seed_super_and_resolve_phone_staff(client):
         format="json",
     )
     assert otp.status_code == 409
+
+    assert client.login(username=SEED_OPERATOR_USERNAME, password=SEED_OPERATOR_PASSWORD)
+    assert client.get("/admin/").status_code == 200
 
 
 def test_seed_dev_reclaims_bare_member_at_seed_phone(client):

@@ -68,17 +68,24 @@ core/             # shared API helpers, middleware, permissions
 
 - Members: phone OTP (sms.net.bd) or Firebase Google; Bearer HS256 access JWT +
   opaque refresh rotation.
-- Staff: TOTP MFA; browser operator console uses Django sessions when provisioned.
+- Staff: TOTP MFA; browser operator console uses Django sessions when provisioned
+  and allows CRUD on registered models (secrets stay off forms).
 - **Local/dev seed super (Go parity):** `seed_dev` ensures
   `+8801700000000` / `S-ADM-7400` (`role=admin`, `is_superuser`, MFA unenrolled +
-  one-time setup token printed). `resolve-phone` → `kind: staff`; member OTP → 409.
-  Reclaims that phone if it was OTP-onboarded as a bare member. Local Compose runs
-  `seed_dev` after migrate. **Production:** no fixed seed — use
+  one-time setup token printed). Browser `/admin/` login:
+  `gym-pm` / `GYM-PM-7400` (`is_staff`). `resolve-phone` → `kind: staff`; member
+  OTP → 409. Reclaims that phone if it was OTP-onboarded as a bare member. Local
+  Compose runs `seed_dev` after migrate. **Production:** no fixed seed — use
   `bootstrap_admin --phone …` only.
 - Device check-in: `X-Device-Key` == `ATTENDANCE_DEVICE_KEY` on
   `POST /api/v1/internal/attendance/check-in/`.
 - SSLCommerz: session → gateway → IPN/confirm; return pages never activate alone;
   IPN idempotent. Same architectural flow as the Go API.
+- Member cash request (first purchase): `POST /api/v1/member/payments/cash-requests/`
+  freezes price + sets `pending_payment`; poll `GET …/cash-requests/{id}/`; cancel
+  while pending. Staff `GET /api/v1/admin/cash-requests/`, per-member list, then
+  accept (cash payment + activate, frozen amount) or reject. Legacy
+  `POST …/cash-payments/` auto-accepts a matching pending request.
 - Local: `OTP_DEV_BYPASS` / master code only outside `APP_ENV=prod`.
 
 ## ZKTeco / biometrics
@@ -86,8 +93,17 @@ core/             # shared API helpers, middleware, permissions
 - Vault (encrypted templates, devices, sync state) lives in **this** database.
 - Admin APIs may call the standalone bridge when configured; otherwise return a
   clear unavailable response — never fail process startup.
-- Device user id on the scanner = display `member_id` (`PG-…`).
+- Device user id on the scanner = display `member_id` (`PF-…`).
+  After the `PG-` → `PF-` rename migration, re-push vault templates to devices
+  if fingers were enrolled under the old display ids.
 - Control-center HTML UI lives only on `zkteco-bridge`, not here.
+- Interactive enroll (`POST …/fingerprint/enroll/` with `finger_id`) blocks on
+  the bridge (~120s client timeout) while the member presses the scanner, then
+  pulls templates into the vault and sets `fingerprint_status=ready`.
+- List/delete vault fingers:
+  `GET/DELETE …/fingerprint/templates/` (+ `{finger_id}/` for delete). Delete
+  removes the slot on the device via bridge, then the vault row; empty vault
+  returns status to `pending` (unless `not_required`).
 
 ## Testing and quality
 

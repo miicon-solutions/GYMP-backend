@@ -58,6 +58,69 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedActivityList'
           description: ''
+  /api/v1/admin/cash-requests/:
+    get:
+      operationId: admin_list_cash_requests
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CashPaymentRequest'
+          description: ''
+  /api/v1/admin/cash-requests/{id}/accept/:
+    post:
+      operationId: admin_accept_cash_request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashRequestAccept'
+          description: ''
+  /api/v1/admin/cash-requests/{id}/reject/:
+    post:
+      operationId: admin_reject_cash_request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashPaymentRequest'
+          description: ''
   /api/v1/admin/costs/:
     get:
       operationId: api_v1_admin_costs_list
@@ -182,6 +245,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Cost'
+          description: ''
+  /api/v1/admin/device/status/:
+    get:
+      operationId: admin_device_status
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceStatusOutput'
           description: ''
   /api/v1/admin/gym-hours/:
     get:
@@ -447,6 +524,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/CashPreviewOutput'
           description: ''
+  /api/v1/admin/members/{id}/cash-requests/:
+    get:
+      operationId: admin_member_cash_requests
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CashPaymentRequest'
+          description: ''
   /api/v1/admin/members/{id}/fingerprint/:
     post:
       operationId: admin_member_fingerprint
@@ -479,6 +579,128 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminMemberOutput'
+          description: ''
+  /api/v1/admin/members/{id}/fingerprint/enroll/:
+    post:
+      operationId: admin_member_fingerprint_enroll
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollInteractiveInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EnrollInteractiveInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EnrollInteractiveInput'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollInteractiveOutput'
+          description: ''
+  /api/v1/admin/members/{id}/fingerprint/pull/:
+    post:
+      operationId: admin_member_fingerprint_pull
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultSyncOutput'
+          description: ''
+  /api/v1/admin/members/{id}/fingerprint/push/:
+    post:
+      operationId: admin_member_fingerprint_push
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultSyncOutput'
+          description: ''
+  /api/v1/admin/members/{id}/fingerprint/templates/:
+    get:
+      operationId: admin_member_fingerprint_templates
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberTemplatesOutput'
+          description: ''
+  /api/v1/admin/members/{id}/fingerprint/templates/{finger_id}/:
+    delete:
+      operationId: admin_member_fingerprint_template_delete
+      parameters:
+      - in: path
+        name: finger_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberTemplatesOutput'
           description: ''
   /api/v1/admin/members/{id}/phone/:
     post:
@@ -1241,6 +1463,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/CheckInOutput'
           description: ''
+  /api/v1/internal/biometrics/vault-members/:
+    get:
+      operationId: internal_vault_members
+      tags:
+      - internal
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultMembersOutput'
+          description: ''
+  /api/v1/internal/biometrics/vault-push/:
+    post:
+      operationId: internal_vault_push
+      tags:
+      - internal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultBulkPushInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VaultBulkPushInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VaultBulkPushInput'
+        required: true
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultBulkPushOutput'
+          description: ''
   /api/v1/member/attendance/:
     get:
       operationId: member_attendance
@@ -1381,6 +1645,95 @@ paths:
             text/html:
               schema:
                 type: string
+          description: ''
+  /api/v1/member/payments/cash-requests/:
+    post:
+      operationId: payments_create_cash_request
+      tags:
+      - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberCashPaymentRequest'
+          description: ''
+  /api/v1/member/payments/cash-requests/{id}/:
+    get:
+      operationId: payments_get_cash_request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - payments
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberCashPaymentRequest'
+          description: ''
+  /api/v1/member/payments/cash-requests/{id}/cancel/:
+    post:
+      operationId: payments_cancel_cash_request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - payments
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberCashPaymentRequest'
+          description: ''
+  /api/v1/member/payments/cash-requests/list/:
+    get:
+      operationId: payments_list_cash_requests
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - payments
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberCashPaymentRequest'
           description: ''
   /api/v1/member/payments/sessions/:
     post:
@@ -1922,6 +2275,72 @@ components:
         * `O+` - O+
         * `O-` - O-
         * `Unknown` - Unknown
+    CashPaymentRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        member_id:
+          type: string
+          format: uuid
+          readOnly: true
+        member_display_id:
+          type: string
+          readOnly: true
+        member_name:
+          type: string
+          readOnly: true
+        member_phone_e164:
+          type: string
+          readOnly: true
+        plan_id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan_name:
+          type: string
+          readOnly: true
+        catalog_id:
+          type: string
+          nullable: true
+          readOnly: true
+        kind:
+          type: string
+          maxLength: 20
+        amount_taka:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        status:
+          type: string
+          maxLength: 12
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        payment_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+      required:
+      - amount_taka
+      - catalog_id
+      - id
+      - member_display_id
+      - member_id
+      - member_name
+      - member_phone_e164
+      - payment_id
+      - plan_id
+      - plan_name
+      - requested_at
     CashPreviewOutput:
       type: object
       properties:
@@ -1954,6 +2373,19 @@ components:
       required:
       - member
       - payment
+    CashRequestAccept:
+      type: object
+      properties:
+        request:
+          $ref: '#/components/schemas/CashPaymentRequest'
+        member:
+          $ref: '#/components/schemas/AdminMemberOutput'
+        payment:
+          $ref: '#/components/schemas/Payment'
+      required:
+      - member
+      - payment
+      - request
     CategoryEnum:
       enum:
       - rent
@@ -2177,6 +2609,37 @@ components:
       - upcoming_holidays
       - visits_this_month
       - week
+    DeviceStatusOutput:
+      type: object
+      properties:
+        online:
+          type: boolean
+        bridge_ok:
+          type: boolean
+        name:
+          type: string
+        serial:
+          type: string
+        firmware:
+          type: string
+        user_count:
+          type: integer
+        ip:
+          type: string
+        port:
+          type: integer
+        message:
+          type: string
+      required:
+      - bridge_ok
+      - firmware
+      - ip
+      - message
+      - name
+      - online
+      - port
+      - serial
+      - user_count
     DiscountTypeEnum:
       enum:
       - none
@@ -2215,6 +2678,41 @@ components:
         * `sibling` - sibling
         * `friend` - friend
         * `other` - other
+    EnrollInteractiveInput:
+      type: object
+      properties:
+        finger_id:
+          type: integer
+          maximum: 9
+          minimum: 0
+        pin:
+          type: string
+          maxLength: 16
+        device_id:
+          type: string
+      required:
+      - finger_id
+    EnrollInteractiveOutput:
+      type: object
+      properties:
+        enrolled:
+          type: boolean
+        finger_id:
+          type: integer
+        stored:
+          type: integer
+        fingerprint_status:
+          type: string
+        finger_indexes:
+          type: array
+          items:
+            type: integer
+      required:
+      - enrolled
+      - finger_id
+      - finger_indexes
+      - fingerprint_status
+      - stored
     FingerprintInput:
       type: object
       properties:
@@ -2457,6 +2955,51 @@ components:
       - otpauth_uri
       - phone_e164
       - secret_base32
+    MemberCashPaymentRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan_id:
+          type: string
+          format: uuid
+          readOnly: true
+        catalog_id:
+          type: string
+          nullable: true
+          readOnly: true
+        kind:
+          type: string
+          maxLength: 20
+        amount_taka:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        status:
+          type: string
+          maxLength: 12
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        payment_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+      required:
+      - amount_taka
+      - catalog_id
+      - id
+      - payment_id
+      - plan_id
+      - requested_at
     MemberOutput:
       type: object
       properties:
@@ -2488,6 +3031,18 @@ components:
       - phone_e164
       - profile_complete
       - signed_in_with_google
+    MemberTemplatesOutput:
+      type: object
+      properties:
+        finger_indexes:
+          type: array
+          items:
+            type: integer
+        fingerprint_status:
+          type: string
+      required:
+      - finger_indexes
+      - fingerprint_status
     MonthOutput:
       type: object
       properties:
@@ -3482,6 +4037,91 @@ components:
       required:
       - phone_e164
       - totp_code
+    VaultBulkFailure:
+      type: object
+      properties:
+        member_id:
+          type: string
+        error:
+          type: string
+      required:
+      - error
+      - member_id
+    VaultBulkPushInput:
+      type: object
+      properties:
+        bridge_device_id:
+          type: string
+        member_ids:
+          type: array
+          items:
+            type: string
+          nullable: true
+      required:
+      - bridge_device_id
+    VaultBulkPushOutput:
+      type: object
+      properties:
+        pushed:
+          type: integer
+        failed:
+          type: integer
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaultBulkFailure'
+      required:
+      - failed
+      - failures
+      - pushed
+    VaultMemberOutput:
+      type: object
+      properties:
+        member_id:
+          type: string
+        name:
+          type: string
+        finger_indexes:
+          type: array
+          items:
+            type: integer
+        has_pin:
+          type: boolean
+        fingerprint_status:
+          type: string
+      required:
+      - finger_indexes
+      - fingerprint_status
+      - has_pin
+      - member_id
+      - name
+    VaultMembersOutput:
+      type: object
+      properties:
+        count:
+          type: integer
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaultMemberOutput'
+      required:
+      - count
+      - members
+    VaultSyncOutput:
+      type: object
+      properties:
+        stored:
+          type: integer
+        pushed:
+          type: boolean
+        template_count:
+          type: integer
+        fingerprint_status:
+          type: string
+        finger_indexes:
+          type: array
+          items:
+            type: integer
     VerifyInput:
       type: object
       properties:

@@ -30,7 +30,7 @@ docker compose exec api python manage.py bootstrap_admin --phone +88017XXXXXXXX 
 
 Agent notes: see [AGENTS.md](AGENTS.md). ZK control center lives in sibling `zkteco-bridge/` (own `docker compose up`).
 
-**Local/dev seed super (Go parity):** `seed_dev` ensures phone `+8801700000000` (`01700000000`), short id `S-ADM-7400`, starts MFA-unenrolled, and prints a one-time setup token. `POST /api/v1/auth/resolve-phone/` returns `kind: staff` for that number; member onboarding OTP is rejected (409). If that phone was accidentally OTP-onboarded as a member (no payment/attendance history), `seed_dev` reclaims it as the seed super.
+**Local/dev seed super (Go parity):** `seed_dev` ensures phone `+8801700000000` (`01700000000`), short id `S-ADM-7400`, starts MFA-unenrolled, and prints a one-time setup token. Browser operator console at `/admin/` uses username `gym-pm` / password `GYM-PM-7400`. `POST /api/v1/auth/resolve-phone/` returns `kind: staff` for that number; member onboarding OTP is rejected (409). If that phone was accidentally OTP-onboarded as a member (no payment/attendance history), `seed_dev` reclaims it as the seed super.
 
 **Production:** use `bootstrap_admin --phone …` with a real number. It prompts for an operator password only with `--browser-access`, prints a **one-time setup token**, and refuses to replace an existing super admin. Production does not use the fixed seed phone.
 
