@@ -12,8 +12,19 @@ from rest_framework.permissions import AllowAny
 from accounts import serializers as auth_s
 from accounts import services as auth
 from attendance.authentication import DeviceAuthentication
-from attendance.serializers import CheckInInput, CheckInOutput, MonthInput, MonthOutput
-from attendance.services import month_attendance, record_checkin
+from attendance.serializers import (
+    CheckInInput,
+    CheckInOutput,
+    MemberSessionAdjustInput,
+    MonthInput,
+    MonthOutput,
+)
+from attendance.services import (
+    member_adjust_session,
+    month_attendance,
+    record_checkin,
+    record_checkout,
+)
 from biometrics import services as bio
 from biometrics.serializers import (
     DeviceStatusOutput,
@@ -113,6 +124,13 @@ def mfa_enroll(request, data, pk):
 api = [
     path("public/plans/", PublicPlanList.as_view()),
     path("auth/", include("accounts.urls")),
+    path("users/", include("fitness.urls")),
+    path("workouts/", include("workouts.urls")),
+    path("schedules/", include("schedules.urls")),
+    path("nutrition/", include("nutrition.urls")),
+    path("journal/", include("journal.urls")),
+    path("feed/", include("fitness.feed_urls")),
+    path("music/", include("music.urls")),
     path(
         "welcome/",
         endpoint(
@@ -206,6 +224,17 @@ api = [
             request=MonthInput,
             permission=MemberOnly,
             parameters=query_parameters("year", "month"),
+        ),
+    ),
+    path(
+        "member/attendance/session/",
+        endpoint(
+            "member_attendance_session_adjust",
+            response=MonthOutput,
+            handler=lambda r, d: member_adjust_session(r.user, d),
+            method="post",
+            request=MemberSessionAdjustInput,
+            permission=MemberOnly,
         ),
     ),
     path(
@@ -338,6 +367,18 @@ api = [
             "attendance_check_in",
             response=CheckInOutput,
             handler=lambda r, d: record_checkin(d),
+            request=CheckInInput,
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+        ),
+    ),
+    path(
+        "internal/attendance/check-out/",
+        endpoint(
+            "attendance_check_out",
+            response=CheckInOutput,
+            handler=lambda r, d: record_checkout(d),
             request=CheckInInput,
             permission=AllowAny,
             authentication=[DeviceAuthentication],
@@ -644,6 +685,7 @@ api = [
 ]
 urlpatterns = [
     path("api/v1/", include(api)),
+    path("api/", include(api)),
     path("admin/", admin.site.urls),
     path("", public.landing),
     path("terms/", public.legal, {"page": "terms"}),

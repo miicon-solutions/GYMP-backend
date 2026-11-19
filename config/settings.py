@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -32,7 +33,20 @@ if PRODUCTION and (
     raise ImproperlyConfigured("Production requires a private secret and DEBUG=false.")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "testserver"])
 DATABASE_URL = env("DATABASE_URL", default="postgres://gyma:gyma@localhost:55432/gyma_django")
-DATABASES = {"default": env.db_url_config(DATABASE_URL, engine="django.db.backends.postgresql")}
+if "host.docker.internal" in DATABASE_URL:
+    import socket
+
+    try:
+        socket.gethostbyname("host.docker.internal")
+    except OSError:
+        DATABASE_URL = f"sqlite:///{BASE_DIR / 'local_dev.db'}"
+
+db_engine = (
+    "django.db.backends.sqlite3"
+    if DATABASE_URL.startswith("sqlite")
+    else "django.db.backends.postgresql"
+)
+DATABASES = {"default": env.db_url_config(DATABASE_URL, engine=db_engine)}
 DATABASES["default"]["CONN_MAX_AGE"] = 60
 INSTALLED_APPS = [
     "accounts.admin_config.OperatorAdminConfig",
@@ -53,6 +67,13 @@ INSTALLED_APPS = [
     "attendance",
     "reporting",
     "biometrics",
+    "django_filters",
+    "fitness",
+    "workouts",
+    "schedules",
+    "nutrition",
+    "journal",
+    "music",
 ]
 MIDDLEWARE = [
     "core.middleware.RequestLogMiddleware",
@@ -181,8 +202,16 @@ SECURE_HSTS_PRELOAD = PRODUCTION
 X_FRAME_OPTIONS = "DENY"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["accounts.authentication.BearerAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.authentication.BearerAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
     "DEFAULT_PAGINATION_CLASS": "core.api.Pagination",
     "PAGE_SIZE": 50,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
@@ -190,11 +219,22 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "UNAUTHENTICATED_USER": None,
 }
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(seconds=env.int("JWT_ACCESS_TTL_SEC", default=3600)),
+    "REFRESH_TOKEN_LIFETIME": timedelta(seconds=env.int("JWT_REFRESH_TTL_SEC", default=2592000)),
+    "SIGNING_KEY": JWT_SECRET,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "sub",
+}
 SPECTACULAR_SETTINGS = {
     "TITLE": "GYMA API",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
-    "ENUM_NAME_OVERRIDES": {"DiscountTypeEnum": "plans.models.DISCOUNTS"},
+    "ENUM_NAME_OVERRIDES": {
+        "DiscountTypeEnum": "plans.models.DISCOUNTS",
+        "MusicQueueStatusEnum": "music.models.QUEUE_STATUS_CHOICES",
+    },
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
 }

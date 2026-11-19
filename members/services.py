@@ -1,7 +1,5 @@
 import secrets
-import warnings
 from datetime import UTC, timedelta
-from io import BytesIO
 from urllib.parse import urljoin
 
 from django.conf import settings
@@ -9,7 +7,6 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from PIL import Image, UnidentifiedImageError
 from rest_framework.exceptions import PermissionDenied, Throttled, ValidationError
 
 from accounts import providers
@@ -24,6 +21,7 @@ from accounts.services import (
     member_data,
 )
 from core.api import BadGateway, Conflict, require_admin
+from core.images import read_image
 from members.models import MemberProfile
 from operations.services import DHAKA, gym_status, record
 
@@ -42,12 +40,17 @@ def get_member(member_id):
 
 def profile_data(user):
     p = owned_profile(user)
+    fp = getattr(user, "fitness_profile", None)
     return {
         **member_data(user),
         "emergency_name": p.emergency_name,
         "emergency_relationship": p.emergency_relationship,
         "emergency_phone_e164": p.emergency_phone_e164,
         "blood_group": p.blood_group,
+        "height_cm": p.height_cm if p.height_cm is not None else (fp.height_cm if fp else None),
+        "weight_kg": p.weight_kg if p.weight_kg is not None else (fp.weight_kg if fp else None),
+        "age": p.age if p.age is not None else (fp.age if fp else None),
+        "sex": p.sex or (fp.sex if fp else ""),
         "photo_url": urljoin(settings.PUBLIC_BASE_URL + "/", p.photo.url) if p.photo else None,
     }
 
@@ -90,11 +93,35 @@ def save_profile(user, data, complete=False):
         )
     user.full_name = data["full_name"]
     user.save(update_fields=["full_name"])
+    old_weight = p.weight_kg
     for key, value in data.items():
         if key != "full_name":
             setattr(p, key, value)
     p.profile_complete = True
     p.save()
+
+    # Sync body data with FitnessProfile and auto-recalculate suggested targets (Suggestions 6 & 9)
+    from fitness.models import AnthropometryLog, FitnessProfile
+    from fitness.services import apply_suggested_targets_to_profile
+
+    fp, _ = FitnessProfile.objects.get_or_create(user=user)
+    body_changed = False
+    for attr in ("height_cm", "weight_kg", "age", "sex"):
+        val = getattr(p, attr, None)
+        if val is not None and val != "" and getattr(fp, attr, None) != val:
+            setattr(fp, attr, val)
+            body_changed = True
+    if body_changed:
+        if not fp.has_custom_targets or (p.weight_kg is not None and p.weight_kg != old_weight):
+            apply_suggested_targets_to_profile(user, fp, save=False)
+        fp.save()
+    if p.weight_kg is not None and p.weight_kg != old_weight:
+        AnthropometryLog.objects.create(
+            user=user,
+            weight=p.weight_kg,
+            weight_unit="kg",
+            logged_at=timezone.now(),
+        )
     return profile_data(user)
 
 
@@ -176,26 +203,7 @@ def recover_email(user):
 
 def upload_photo(user, file):
     owned_profile(user)
-    if file.size > 5 * 1024 * 1024 or file.size == 0:
-        raise ValidationError({"photo": "Choose a photo under 5 MB."})
-    raw = file.read(5 * 1024 * 1024 + 1)
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(BytesIO(raw)) as img:
-                fmt = img.format
-                img.verify()
-        extension = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}[fmt]
-    except (
-        OSError,
-        ValueError,
-        KeyError,
-        UnidentifiedImageError,
-        SyntaxError,
-        Image.DecompressionBombError,
-        Image.DecompressionBombWarning,
-    ) as exc:
-        raise ValidationError({"photo": "Use a JPG, PNG, or WebP photo."}) from exc
+    raw, extension = read_image(file, "photo")
     p = MemberProfile.objects.get(user=user)
     new_name = p.photo.storage.save(secrets.token_hex(16) + "." + extension, ContentFile(raw))
     try:

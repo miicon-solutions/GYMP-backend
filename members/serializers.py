@@ -22,6 +22,33 @@ class ProfileInput(serializers.Serializer):
     blood_group = BloodGroupField(
         choices=["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"]
     )
+    height_cm = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        min_value=50,
+        max_value=260,
+        required=False,
+        allow_null=True,
+    )
+    weight_kg = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=20,
+        max_value=350,
+        required=False,
+        allow_null=True,
+    )
+    age = serializers.IntegerField(
+        min_value=10,
+        max_value=120,
+        required=False,
+        allow_null=True,
+    )
+    sex = serializers.ChoiceField(
+        choices=["", "male", "female", "other"],
+        required=False,
+        allow_blank=True,
+    )
 
     def validate(self, attrs):
         for field in ("full_name", "emergency_name"):
@@ -47,6 +74,14 @@ class ProfileOutput(MemberOutput):
     emergency_relationship = serializers.CharField(allow_blank=True)
     emergency_phone_e164 = serializers.CharField(allow_blank=True)
     blood_group = serializers.CharField()
+    height_cm = serializers.DecimalField(
+        max_digits=5, decimal_places=1, allow_null=True, required=False
+    )
+    weight_kg = serializers.DecimalField(
+        max_digits=5, decimal_places=2, allow_null=True, required=False
+    )
+    age = serializers.IntegerField(allow_null=True, required=False)
+    sex = serializers.CharField(allow_blank=True, required=False)
     photo_url = serializers.CharField(allow_null=True)
 
 

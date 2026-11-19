@@ -97,6 +97,25 @@ urlpatterns = [
         ),
     ),
     path(
+        "register/",
+        endpoint(
+            "auth_register",
+            response=s.AuthTokenOutput,
+            handler=lambda r, d: services.register_user(d),
+            request=s.RegisterInput,
+            status=201,
+        ),
+    ),
+    path(
+        "login/",
+        endpoint(
+            "auth_login",
+            response=s.AuthTokenOutput,
+            handler=lambda r, d: services.login_user(d),
+            request=s.LoginInput,
+        ),
+    ),
+    path(
         "refresh/",
         endpoint(
             "auth_refresh",

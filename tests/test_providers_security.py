@@ -174,6 +174,7 @@ def production_env():
         "SSLCOMMERZ_STORE_PASSWD": "dummy",
         "ATTENDANCE_DEVICE_KEY": "dummy",
         "PUBLIC_BASE_URL": "https://example.test",
+        "WEB_APP_BASE_URL": "https://example.test",
         "OTP_DEV_BYPASS": "true",
         "EMAIL_DEV_BYPASS": "true",
     }
