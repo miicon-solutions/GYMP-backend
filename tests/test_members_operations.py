@@ -250,6 +250,14 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
     attended = [str(d) for d in month.data["attended_days"]]
     assert "2026-11-15" in attended
     assert month.data["closed_weekday"] == 5
+    assert len(month.data["sessions"]) == 1
+    session = month.data["sessions"][0]
+    assert str(session["date"]) == "2026-11-15"
+    assert session["last_punch_at"] == last_punch
+    assert session["checked_in_at"] == first_in
+    assert len(session["punches"]) >= 2
+    assert session["punches"][0] == first_in
+    assert session["punches"][-1] == last_punch
     assert client.get("/api/v1/member/attendance/", {"month": 13}).status_code == 400
     dashboard = client.get("/api/v1/member/dashboard/")
     assert dashboard.status_code == 200

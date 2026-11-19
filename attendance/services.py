@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
-from attendance.models import CheckIn
+from attendance.models import CheckIn, CheckInPunch
 from fitness.services import get_profile
 from members.models import MemberProfile
 from members.services import owned_profile
@@ -303,18 +303,25 @@ def month_attendance(user, year, month):
     week_start = today_dhaka - timedelta(days=today_dhaka.weekday())
 
     month_checkins = list(
-        p.check_ins.filter(check_in_date__year=year, check_in_date__month=month).order_by(
-            "check_in_date"
-        )
+        p.check_ins.filter(check_in_date__year=year, check_in_date__month=month)
+        .prefetch_related("punches")
+        .order_by("check_in_date")
     )
     days = [c.check_in_date for c in month_checkins]
     sessions = []
     for c in month_checkins:
         dur, is_active = resolve_visit_duration(c, now=now)
+        punch_times = [p.punched_at for p in c.punches.all()]
+        if not punch_times:
+            punch_times = [c.checked_in_at]
+            if c.last_punch_at and c.last_punch_at != c.checked_in_at:
+                punch_times.append(c.last_punch_at)
         sessions.append(
             {
                 "date": c.check_in_date,
                 "checked_in_at": c.checked_in_at,
+                "last_punch_at": c.last_punch_at or c.checked_in_at,
+                "punches": punch_times,
                 "checked_out_at": c.checked_out_at,
                 "duration_minutes": dur,
                 "auto_closed": c.auto_closed,
@@ -419,13 +426,14 @@ def record_checkin(data):
         raise PermissionDenied("Membership payment is required before checking in.")
     at = data.get("checked_in_at") or timezone.now()
     day = at.astimezone(DHAKA).date()
+    source = data.get("source", "device")
     row, created = CheckIn.objects.get_or_create(
         member=member,
         check_in_date=day,
         defaults={
             "checked_in_at": at,
             "last_punch_at": at,
-            "source": data.get("source", "device"),
+            "source": source,
         },
     )
     if not created:
@@ -433,6 +441,14 @@ def record_checkin(data):
         if at >= prior:
             row.last_punch_at = at
             row.save(update_fields=["last_punch_at", "updated_at"])
+    CheckInPunch.objects.get_or_create(
+        check_in=row,
+        punched_at=at,
+        defaults={"source": source},
+    )
+    punches = list(
+        row.punches.order_by("punched_at").values_list("punched_at", flat=True)
+    )
     return {
         "member_uuid": str(member.user_id),
         "member_id": member.member_id,
@@ -440,6 +456,7 @@ def record_checkin(data):
         "recorded": created,
         "checked_in_at": row.checked_in_at,
         "last_punch_at": row.last_punch_at or row.checked_in_at,
+        "punches": punches,
         "checked_out_at": row.checked_out_at,
         "duration_minutes": row.duration_minutes,
     }

@@ -33,3 +33,21 @@ class CheckIn(Entity):
             ),
             models.UniqueConstraint(fields=["member", "check_in_date"], name="one_checkin_per_day"),
         ]
+
+
+class CheckInPunch(Entity):
+    """Every fingerprint punch for a visit day (timeline log)."""
+
+    check_in = models.ForeignKey(CheckIn, on_delete=models.CASCADE, related_name="punches")
+    punched_at = models.DateTimeField(db_index=True)
+    source = models.CharField(
+        max_length=10, choices=[(x, x) for x in ("device", "admin", "manual")], default="device"
+    )
+
+    class Meta(Entity.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["check_in", "punched_at"], name="unique_punch_per_checkin_time"
+            ),
+        ]
+        ordering = ["punched_at"]

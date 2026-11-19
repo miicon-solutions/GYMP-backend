@@ -32,6 +32,8 @@ class MemberSessionAdjustInput(serializers.Serializer):
 class AttendanceSessionItemSerializer(serializers.Serializer):
     date = serializers.DateField()
     checked_in_at = serializers.DateTimeField()
+    last_punch_at = serializers.DateTimeField()
+    punches = serializers.ListField(child=serializers.DateTimeField(), required=False)
     checked_out_at = serializers.DateTimeField(allow_null=True)
     duration_minutes = serializers.IntegerField()
     auto_closed = serializers.BooleanField()
@@ -90,6 +92,7 @@ class CheckInOutput(serializers.Serializer):
     recorded = serializers.BooleanField()
     checked_in_at = serializers.DateTimeField()
     last_punch_at = serializers.DateTimeField(required=False)
+    punches = serializers.ListField(child=serializers.DateTimeField(), required=False)
     checked_out_at = serializers.DateTimeField(allow_null=True, required=False)
     duration_minutes = serializers.IntegerField(allow_null=True, required=False)
     exit_only_record = serializers.BooleanField(required=False)
