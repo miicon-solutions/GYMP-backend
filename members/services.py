@@ -240,15 +240,19 @@ def dashboard(user):
     last = p.check_ins.order_by("-checked_in_at").first()
     local = now.astimezone(DHAKA)
     include = p.membership_status in {"active", "expired"}
+    today_utc = now.astimezone(UTC).date()
+    if include and p.expires_on:
+        remaining = (p.expires_on - today_utc).days + 1 if p.expires_on >= today_utc else 0
+        days_left = min(9999, max(0, remaining))
+    else:
+        days_left = None
     result = {
         "member_id": p.member_id,
         "full_name": user.full_name,
         "plan": plan_brief(p),
         "status": p.membership_status,
         "expires_on": p.expires_on if include else None,
-        "days_left": min(9999, max(0, (p.expires_on - now.astimezone(UTC).date()).days))
-        if include and p.expires_on
-        else None,
+        "days_left": days_left,
         "visits_this_month": p.check_ins.filter(
             check_in_date__year=local.year, check_in_date__month=local.month
         ).count(),

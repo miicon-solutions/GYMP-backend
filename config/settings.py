@@ -48,6 +48,10 @@ db_engine = (
 )
 DATABASES = {"default": env.db_url_config(DATABASE_URL, engine=db_engine)}
 DATABASES["default"]["CONN_MAX_AGE"] = 60
+# Keep pytest on an isolated DB (never the live gyma_django catalog).
+_live_db_name = DATABASES["default"].get("NAME") or "gyma_django"
+DATABASES["default"].setdefault("TEST", {})
+DATABASES["default"]["TEST"].setdefault("NAME", f"test_{_live_db_name}")
 INSTALLED_APPS = [
     "accounts.admin_config.OperatorAdminConfig",
     "django.contrib.auth",

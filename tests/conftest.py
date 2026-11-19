@@ -1,11 +1,25 @@
 import secrets
 
 import pytest
+from django.conf import settings as django_settings
 from rest_framework.test import APIClient
 
 from accounts.models import StaffProfile, User
 from accounts.services import new_member
 from plans.models import Plan
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _refuse_live_database(django_db_setup, django_db_blocker):
+    """Fail fast if pytest is pointed at the real app database."""
+    with django_db_blocker.unblock():
+        name = str(django_settings.DATABASES["default"]["NAME"])
+    if not name.startswith("test"):
+        pytest.exit(
+            f"Refusing to run tests against live database {name!r}. "
+            "Expected a name starting with 'test'.",
+            returncode=1,
+        )
 
 
 @pytest.fixture(autouse=True)

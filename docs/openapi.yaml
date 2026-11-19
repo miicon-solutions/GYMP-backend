@@ -10352,6 +10352,8 @@ components:
         days_left:
           type: integer
           nullable: true
+          description: Inclusive remaining UTC calendar days until expires_on (pack day 1
+            shows N for an N-day pack); null when membership details are hidden.
         visits_this_month:
           type: integer
         last_check_in_at:

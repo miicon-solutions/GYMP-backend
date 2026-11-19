@@ -17,7 +17,7 @@ from members.models import MemberProfile
 from operations.models import Activity, Cost, Holiday
 from operations.services import DHAKA, seed_hours
 from payments.models import Payment, PaymentSession
-from payments.services import format_taka, go_add_months
+from payments.services import add_pack_days, format_taka
 from plans.models import Offer, Plan
 from plans.services import pricing
 
@@ -241,7 +241,7 @@ class Command(BaseCommand):
             days.append(self.today - timedelta(days=12))
         for payment_index, day in enumerate(days):
             self.seed_payment(profile, plan, index, payment_index, day)
-            intervals.append((day, go_add_months(day, plan.duration_months)))
+            intervals.append((day, add_pack_days(day, plan.duration_months)))
         profile.plan = plan
         profile.expires_on = intervals[-1][1]
         profile.membership_status = "expired" if expired else "active"

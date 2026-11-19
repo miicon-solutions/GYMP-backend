@@ -1,5 +1,5 @@
 import secrets
-from datetime import UTC, date, timedelta
+from datetime import UTC, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
@@ -17,21 +17,30 @@ from plans.models import Plan
 from plans.services import pricing
 
 
-def go_add_months(day, months):
-    """Go time.AddDate normalizes overflow; Jan 31 + 1 month is Mar 3 (non-leap)."""
-    index = day.year * 12 + day.month - 1 + months
-    year, month = divmod(index, 12)
-    return date(year, month + 1, 1) + timedelta(days=day.day - 1)
+PACK_DAYS = {1: 30, 3: 90, 6: 180, 9: 270, 12: 365}
+
+
+def pack_days(months):
+    """Fixed day packs mapped from plan duration_months."""
+    try:
+        return PACK_DAYS[months]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported plan duration_months: {months}") from exc
+
+
+def add_pack_days(base, months, *, extend=False):
+    """Last valid day for a pack starting on base, or extend an existing last-valid day."""
+    days = pack_days(months)
+    return base + timedelta(days=days if extend else days - 1)
 
 
 def new_expiry(member, months, kind, now=None, cash=False):
     now = now or timezone.now()
     today = now.astimezone(DHAKA if cash else UTC).date()
-    base = today
     if member.expires_on and member.expires_on >= today:
         if member.membership_status == "active" or (not cash and kind in {"renew", "change_plan"}):
-            base = member.expires_on
-    return go_add_months(base, months)
+            return add_pack_days(member.expires_on, months, extend=True)
+    return add_pack_days(today, months)
 
 
 def get_plan(plan_id):

@@ -9,7 +9,7 @@ from core.api import BadGateway
 from members.models import MemberProfile
 from operations.models import Activity
 from payments.models import CashPaymentRequest, Payment, PaymentSession
-from payments.services import create_session, go_add_months, handle_ipn, new_expiry, receive_cash
+from payments.services import add_pack_days, create_session, handle_ipn, new_expiry, receive_cash
 from plans.models import Offer, Plan
 from plans.services import pricing
 
@@ -36,31 +36,32 @@ def valid(session, **changes):
 
 
 @pytest.mark.parametrize(
-    "day,months,expected",
+    "day,months,extend,expected",
     [
-        (date(2025, 1, 31), 1, date(2025, 3, 3)),
-        (date(2024, 1, 31), 1, date(2024, 3, 2)),
-        (date(2024, 2, 29), 12, date(2025, 3, 1)),
-        (date(2025, 10, 31), 3, date(2026, 1, 31)),
-        (date(2025, 12, 15), 1, date(2026, 1, 15)),
+        (date(2025, 11, 19), 1, False, date(2025, 12, 18)),
+        (date(2025, 11, 19), 3, False, date(2026, 2, 16)),
+        (date(2025, 11, 19), 12, False, date(2026, 11, 18)),
+        (date(2025, 12, 18), 1, True, date(2026, 1, 17)),
+        (date(2025, 12, 15), 1, False, date(2026, 1, 13)),
     ],
 )
-def test_go_month_overflow(day, months, expected):
-    assert go_add_months(day, months) == expected
+def test_fixed_day_packs(day, months, extend, expected):
+    assert add_pack_days(day, months, extend=extend) == expected
 
 
 def test_cash_and_online_date_boundaries(member):
     p = member.member_profile
     now = datetime(2026, 1, 1, 20, tzinfo=UTC)
-    assert new_expiry(p, 1, "first_purchase", now) == date(2026, 2, 1)
-    assert new_expiry(p, 1, "first_payment", now, cash=True) == date(2026, 2, 2)
+    # Online today=2026-01-01 UTC → +29; cash today=2026-01-02 Dhaka → +29
+    assert new_expiry(p, 1, "first_purchase", now) == date(2026, 1, 30)
+    assert new_expiry(p, 1, "first_payment", now, cash=True) == date(2026, 1, 31)
     p.expires_on = date(2026, 3, 31)
     p.membership_status = "active"
-    assert new_expiry(p, 1, "renew", now) == date(2026, 5, 1)
-    assert new_expiry(p, 1, "renewal", now, cash=True) == date(2026, 5, 1)
+    assert new_expiry(p, 1, "renew", now) == date(2026, 4, 30)
+    assert new_expiry(p, 1, "renewal", now, cash=True) == date(2026, 4, 30)
     p.membership_status = "expired"
-    assert new_expiry(p, 1, "renew", now) == date(2026, 5, 1)
-    assert new_expiry(p, 1, "renewal", now, cash=True) == date(2026, 2, 2)
+    assert new_expiry(p, 1, "renew", now) == date(2026, 4, 30)
+    assert new_expiry(p, 1, "renewal", now, cash=True) == date(2026, 1, 31)
 
 
 def test_standing_and_offer_discounts(plan):
@@ -288,7 +289,7 @@ def test_cash_first_renewal_plan_change(client, staff, member, plan):
     assert second.data["payment"]["kind"] == "renewal"
     assert second.data["payment"]["amount_taka"] == 1500
     p = MemberProfile.objects.get(user=member)
-    assert p.expires_on == go_add_months(expiry, 1)
+    assert p.expires_on == add_pack_days(expiry, 1, extend=True)
     assert p.fingerprint_status == "ready"
     quarterly = Plan.objects.create(name="Quarterly", duration_months=3, monthly_rate_taka=1400)
     third = client.post(url + "cash-payments/", {"plan_id": str(quarterly.pk)}, format="json")
