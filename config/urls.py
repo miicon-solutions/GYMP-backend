@@ -31,6 +31,8 @@ from biometrics.serializers import (
     EnrollInteractiveInput,
     EnrollInteractiveOutput,
     MemberTemplatesOutput,
+    StaffEnrollInteractiveOutput,
+    StaffTemplatesOutput,
     VaultBulkPushInput,
     VaultBulkPushOutput,
     VaultMembersOutput,
@@ -52,6 +54,7 @@ from members.views import AdminMemberDetail, AdminMemberList, PhotoView, Profile
 from operations import services as ops
 from operations.serializers import (
     CostSerializer,
+    DeviceControllerRemovedOutput,
     GymHoursOutput,
     GymStatusOutput,
     StaffSerializer,
@@ -61,6 +64,7 @@ from operations.views import (
     ActivityList,
     CostDetail,
     CostList,
+    DeviceControllersList,
     HolidayDetail,
     HolidayList,
     StaffDetail,
@@ -446,6 +450,19 @@ api = [
             permission=AdminOnly,
         ),
     ),
+    path("admin/device/controllers/", DeviceControllersList.as_view()),
+    path(
+        "admin/device/controllers/<uuid:staff_id>/",
+        endpoint(
+            "admin_device_controllers_remove",
+            response=DeviceControllerRemovedOutput,
+            handler=lambda r, d, staff_id: bio.remove_device_controller(
+                r.user, bio.device_controller_input_staff(staff_id)
+            ),
+            method="delete",
+            permission=SuperOnly,
+        ),
+    ),
     path(
         "admin/members/<uuid:pk>/fingerprint/templates/",
         endpoint(
@@ -624,6 +641,67 @@ api = [
             response=auth_s.MFAEnrollOutput,
             handler=mfa_enroll,
             permission=SuperOnly,
+        ),
+    ),
+    path(
+        "admin/staff/<uuid:pk>/fingerprint/templates/",
+        endpoint(
+            "admin_staff_fingerprint_templates",
+            response=StaffTemplatesOutput,
+            handler=lambda r, d, pk: bio.list_staff_templates(
+                bio.staff_profile_for_user(staff_by_id(pk))
+            ),
+            method="get",
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/staff/<uuid:pk>/fingerprint/templates/<int:finger_id>/",
+        endpoint(
+            "admin_staff_fingerprint_template_delete",
+            response=StaffTemplatesOutput,
+            handler=lambda r, d, pk, finger_id: bio.delete_staff_template(
+                r.user, bio.staff_profile_for_user(staff_by_id(pk)), finger_id
+            ),
+            method="delete",
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/staff/<uuid:pk>/fingerprint/enroll/",
+        endpoint(
+            "admin_staff_fingerprint_enroll",
+            response=StaffEnrollInteractiveOutput,
+            handler=lambda r, d, pk: bio.enroll_staff_interactive(
+                r.user,
+                bio.staff_profile_for_user(staff_by_id(pk)),
+                d["finger_id"],
+                device_id=(d.get("device_id") or None) or None,
+            ),
+            request=EnrollInteractiveInput,
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/staff/<uuid:pk>/fingerprint/pull/",
+        endpoint(
+            "admin_staff_fingerprint_pull",
+            response=VaultSyncOutput,
+            handler=lambda r, d, pk: bio.pull_staff_templates(
+                r.user, bio.staff_profile_for_user(staff_by_id(pk))
+            ),
+            permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/staff/<uuid:pk>/fingerprint/push/",
+        endpoint(
+            "admin_staff_fingerprint_push",
+            response=VaultSyncOutput,
+            handler=lambda r, d, pk: bio.push_staff_vault_to_device(
+                r.user, bio.staff_profile_for_user(staff_by_id(pk))
+            ),
+            permission=AdminOnly,
         ),
     ),
     path("admin/costs/", CostList.as_view()),

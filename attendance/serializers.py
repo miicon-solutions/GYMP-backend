@@ -96,3 +96,6 @@ class CheckInOutput(serializers.Serializer):
     checked_out_at = serializers.DateTimeField(allow_null=True, required=False)
     duration_minutes = serializers.IntegerField(allow_null=True, required=False)
     exit_only_record = serializers.BooleanField(required=False)
+    subject = serializers.ChoiceField(
+        choices=["member", "staff"], required=False, default="member"
+    )

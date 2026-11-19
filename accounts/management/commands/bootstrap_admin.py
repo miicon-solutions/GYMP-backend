@@ -38,7 +38,7 @@ class Command(BaseCommand):
             is_superuser=True,
             is_staff=options["browser_access"],
         )
-        StaffProfile.objects.create(user=user, short_id="S-ADM-7400")
+        StaffProfile.objects.create(user=user, short_id="SADM-7400")
         setup = begin_mfa(user)
         self.stdout.write(
             self.style.SUCCESS("Super admin created. Keep this one-time MFA setup token private:")

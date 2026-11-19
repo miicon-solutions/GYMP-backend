@@ -71,7 +71,7 @@ core/             # shared API helpers, middleware, permissions
 - Staff: TOTP MFA; browser operator console uses Django sessions when provisioned
   and allows CRUD on registered models (secrets stay off forms).
 - **Local/dev seed super (Go parity):** `seed_dev` ensures
-  `+8801700000000` / `S-ADM-7400` (`role=admin`, `is_superuser`, MFA unenrolled +
+  `+8801700000000` / `SADM-7400` (`role=admin`, `is_superuser`, MFA unenrolled +
   one-time setup token printed). Browser `/admin/` login:
   `gym-pm` / `GYM-PM-7400` (`is_staff`). `resolve-phone` → `kind: staff`; member
   OTP → 409. Reclaims that phone if it was OTP-onboarded as a bare member. Local
@@ -93,17 +93,27 @@ core/             # shared API helpers, middleware, permissions
 - Vault (encrypted templates, devices, sync state) lives in **this** database.
 - Admin APIs may call the standalone bridge when configured; otherwise return a
   clear unavailable response — never fail process startup.
-- Device user id on the scanner = display `member_id` (`PF-…`).
-  After the `PG-` → `PF-` rename migration, re-push vault templates to devices
-  if fingers were enrolled under the old display ids.
+- Device user id on the scanner = display `member_id` (`PF-…`) **or** staff
+  `short_id` (`ADM-…` / seed `SADM-7400`; ≤ device PIN width, often 9). After the `PG-` → `PF-` rename migration,
+  re-push vault templates to devices if fingers were enrolled under the old
+  display ids.
 - Control-center HTML UI lives only on `zkteco-bridge`, not here.
-- Interactive enroll (`POST …/fingerprint/enroll/` with `finger_id`) blocks on
-  the bridge (~120s client timeout) while the member presses the scanner, then
-  pulls templates into the vault and sets `fingerprint_status=ready`.
+- Interactive enroll (`POST …/members|staff/{id}/fingerprint/enroll/` with
+  `finger_id`) blocks on the bridge (~120s client timeout) while the person
+  presses the scanner, then pulls templates into the vault and sets
+  `fingerprint_status=ready`.
 - List/delete vault fingers:
   `GET/DELETE …/fingerprint/templates/` (+ `{finger_id}/` for delete). Delete
   removes the slot on the device via bridge, then the vault row; empty vault
   returns status to `pending` (unless `not_required`).
+- Staff vault: `StaffBiometricTemplate` + `StaffProfile.fingerprint_status`
+  (default `pending`). Staff attendance punches land in `StaffCheckIn` /
+  `StaffCheckInPunch` via the same internal check-in route (wire field still
+  `member_id`; dual-resolves staff `short_id` first).
+- Device controllers (super-only): `StaffProfile.device_admin` +
+  `GET/POST/DELETE …/admin/device/controllers/`. Controllers are ensured on the
+  bridge with ZK `USER_ADMIN` (14) so they can open the scanner settings menu;
+  members and non-controller staff stay `USER_DEFAULT` (0).
 
 ## Testing and quality
 

@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from biometrics.models import FingerprintDevice, FingerprintDeviceSyncState, MemberBiometricTemplate
+from biometrics.models import (
+    FingerprintDevice,
+    FingerprintDeviceStaffSyncState,
+    FingerprintDeviceSyncState,
+    MemberBiometricTemplate,
+    StaffBiometricTemplate,
+)
 
 
 @admin.register(FingerprintDevice)
@@ -15,6 +21,17 @@ class MemberBiometricTemplateAdmin(admin.ModelAdmin):
     readonly_fields = ["template_ciphertext", "template_sha256"]
 
 
+@admin.register(StaffBiometricTemplate)
+class StaffBiometricTemplateAdmin(admin.ModelAdmin):
+    list_display = ["staff", "finger_index", "algorithm", "enrolled_at"]
+    readonly_fields = ["template_ciphertext", "template_sha256"]
+
+
 @admin.register(FingerprintDeviceSyncState)
 class FingerprintDeviceSyncStateAdmin(admin.ModelAdmin):
     list_display = ["device", "member", "templates_synced_at", "pin_synced_at", "updated_at"]
+
+
+@admin.register(FingerprintDeviceStaffSyncState)
+class FingerprintDeviceStaffSyncStateAdmin(admin.ModelAdmin):
+    list_display = ["device", "staff", "templates_synced_at", "updated_at"]

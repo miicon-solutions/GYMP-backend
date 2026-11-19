@@ -1,6 +1,9 @@
-"""Go-parity local/dev seed super admin (+8801700000000 / S-ADM-7400).
+"""Go-parity local/dev seed super admin (+8801700000000 / SADM-7400).
 
 Browser operator console (local/dev): username ``gym-pm`` / password ``GYM-PM-7400``.
+
+Device PIN width is commonly 9. Legacy ``S-ADM-7400`` (10 chars) truncates on ZK
+enroll to ghost ``S-ADM-740``; use ``SADM-7400`` (9) as the canonical short id.
 """
 
 from dataclasses import dataclass
@@ -15,7 +18,9 @@ from accounts.services import begin_mfa
 from members.models import MemberProfile
 
 SEED_SUPER_PHONE = "+8801700000000"
-SEED_SUPER_SHORT_ID = "S-ADM-7400"
+SEED_SUPER_SHORT_ID = "SADM-7400"
+# Pre-pin-width-fix ids still seen in local DBs / devices.
+LEGACY_SEED_SHORT_IDS = frozenset({"S-ADM-7400", "S-ADM-740"})
 SEED_SUPER_NAME = "Seed Super"
 SEED_OPERATOR_USERNAME = "gym-pm"
 SEED_OPERATOR_PASSWORD = "GYM-PM-7400"
@@ -125,6 +130,10 @@ def ensure_seed_super_admin() -> SeedSuperResult:
         if not StaffProfile.objects.filter(user=user).exists():
             return _create_staff_profile(user)
         profile = user.staff_profile
+        if profile.short_id in LEGACY_SEED_SHORT_IDS:
+            _assert_short_id_free_or_owned_by(user)
+            profile.short_id = SEED_SUPER_SHORT_ID
+            profile.save(update_fields=["short_id", "updated_at"])
         if profile.short_id == SEED_SUPER_SHORT_ID:
             if not user.is_superuser or not user.is_active:
                 user.is_superuser = True

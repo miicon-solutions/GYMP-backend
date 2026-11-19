@@ -18,9 +18,34 @@ class StaffSerializer(serializers.Serializer):
     is_active = serializers.BooleanField()
     is_super = serializers.BooleanField(source="is_superuser")
     mfa_enrolled = serializers.SerializerMethodField()
+    fingerprint_status = serializers.CharField(source="staff_profile.fingerprint_status")
+    device_admin = serializers.BooleanField(source="staff_profile.device_admin")
 
     def get_mfa_enrolled(self, obj) -> bool:
         return bool(obj.staff_profile.mfa_enrolled_at)
+
+
+class DeviceControllerInput(serializers.Serializer):
+    staff_id = serializers.UUIDField()
+
+
+class DeviceControllerOutput(serializers.Serializer):
+    id = serializers.CharField()
+    short_id = serializers.CharField()
+    name = serializers.CharField()
+    is_active = serializers.BooleanField()
+    fingerprint_status = serializers.CharField()
+    device_admin = serializers.BooleanField()
+
+
+class DeviceControllersOutput(serializers.Serializer):
+    count = serializers.IntegerField()
+    controllers = DeviceControllerOutput(many=True)
+
+
+class DeviceControllerRemovedOutput(serializers.Serializer):
+    removed = serializers.BooleanField()
+    short_id = serializers.CharField()
 
 
 class CostSerializer(serializers.ModelSerializer):

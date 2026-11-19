@@ -5,7 +5,9 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
-from attendance.models import CheckIn, CheckInPunch
+from accounts.models import StaffProfile
+from accounts.seed_super import LEGACY_SEED_SHORT_IDS, SEED_SUPER_SHORT_ID
+from attendance.models import CheckIn, CheckInPunch, StaffCheckIn, StaffCheckInPunch
 from fitness.services import get_profile
 from members.models import MemberProfile
 from members.services import owned_profile
@@ -416,11 +418,68 @@ def record_checkout(data):
 
 
 @transaction.atomic
+def record_staff_checkin(staff: StaffProfile, data) -> dict:
+    if not staff.user.is_active:
+        raise PermissionDenied("Inactive staff cannot check in.")
+    at = data.get("checked_in_at") or timezone.now()
+    day = at.astimezone(DHAKA).date()
+    source = data.get("source", "device")
+    row, created = StaffCheckIn.objects.get_or_create(
+        staff=staff,
+        check_in_date=day,
+        defaults={
+            "checked_in_at": at,
+            "last_punch_at": at,
+            "source": source,
+        },
+    )
+    if not created:
+        prior = row.last_punch_at or row.checked_in_at
+        if at >= prior:
+            row.last_punch_at = at
+            row.save(update_fields=["last_punch_at", "updated_at"])
+    StaffCheckInPunch.objects.get_or_create(
+        check_in=row,
+        punched_at=at,
+        defaults={"source": source},
+    )
+    punches = list(
+        row.punches.order_by("punched_at").values_list("punched_at", flat=True)
+    )
+    return {
+        "member_uuid": str(staff.user_id),
+        "member_id": staff.short_id,
+        "day": row.check_in_date,
+        "recorded": created,
+        "checked_in_at": row.checked_in_at,
+        "last_punch_at": row.last_punch_at or row.checked_in_at,
+        "punches": punches,
+        "checked_out_at": row.checked_out_at,
+        "duration_minutes": row.duration_minutes,
+        "subject": "staff",
+    }
+
+
+@transaction.atomic
 def record_checkin(data):
     if data.get("action") == "check_out" or data.get("checked_out_at"):
         return record_checkout(data)
+
+    display_id = data["member_id"]
+    # Legacy seed pins truncated by ZK PIN width 9 (S-ADM-7400 → S-ADM-740).
+    if display_id in LEGACY_SEED_SHORT_IDS:
+        display_id = SEED_SUPER_SHORT_ID
+    staff = (
+        StaffProfile.objects.select_related("user")
+        .select_for_update()
+        .filter(short_id=display_id)
+        .first()
+    )
+    if staff is not None:
+        return record_staff_checkin(staff, data)
+
     member = get_object_or_404(
-        MemberProfile.objects.select_for_update(), member_id=data["member_id"]
+        MemberProfile.objects.select_for_update(), member_id=display_id
     )
     if member.membership_status in {"none", "pending_payment"}:
         raise PermissionDenied("Membership payment is required before checking in.")
@@ -459,6 +518,7 @@ def record_checkin(data):
         "punches": punches,
         "checked_out_at": row.checked_out_at,
         "duration_minutes": row.duration_minutes,
+        "subject": "member",
     }
 
 

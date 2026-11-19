@@ -20,7 +20,7 @@ The Django backend intentionally breaks the Go wire contract. The Flutter client
 
 Send canonical slash-terminated URLs directly, especially for POST/PATCH/PUT; do not rely on redirecting request bodies. Dates are `YYYY-MM-DD`; instants are ISO 8601 with an offset. Monetary values are integer BDT taka. Error field arrays contain short strings. Status codes include 401 unauthenticated, 403 unauthorized role, 404 absent/not-owned resource, 409 conflict, 413 oversized upload, 429 cooldown/rate limit (with `Retry-After`), 502 provider failure, and safe 500 errors.
 
-Member and staff API identity IDs are **user UUIDs**. Internal profile UUIDs are not public account identifiers. Device requests use the human-readable `member_id` (`PF-0001`, etc.; formerly `PG-…`). API staff identifiers follow `ADM-1001`, etc.; the bootstrap super admin has `S-ADM-7400`. New UUIDs, sessions, and authenticator enrollment are independent of the Go service.
+Member and staff API identity IDs are **user UUIDs**. Internal profile UUIDs are not public account identifiers. Device requests use the human-readable `member_id` (`PF-0001`, etc.; formerly `PG-…`). API staff identifiers follow `ADM-1001`, etc.; the bootstrap super admin has `SADM-7400`. New UUIDs, sessions, and authenticator enrollment are independent of the Go service.
 
 Business enum values remain unchanged, including `confirmCurrentPhone`, `changePhone`, `adminLinkMemberPhone`, `needsPhoneLink`, online payment kinds (`first_purchase`, `renew`, `change_plan`) and cash kinds (`first_payment`, `renewal`, `plan_change`). Field names change; enum strings do not. Activity `summary_key` localization identifiers are unchanged; parameter field names are snake_case.
 
@@ -120,6 +120,12 @@ Placeholders such as `{id}` are UUIDs except `{tranId}` (merchant transaction re
 | POST | `/v1/admin/members/:id/fingerprint/enroll` | `/api/v1/admin/members/{id}/fingerprint/enroll/` (interactive; body `finger_id` 0–9) |
 | POST | (new) pull templates to vault | `/api/v1/admin/members/{id}/fingerprint/pull/` |
 | POST | (new) push vault to device | `/api/v1/admin/members/{id}/fingerprint/push/` |
+| GET | (new) staff vault finger indexes | `/api/v1/admin/staff/{id}/fingerprint/templates/` |
+| DELETE | (new) staff vault+device finger | `/api/v1/admin/staff/{id}/fingerprint/templates/{finger_id}/` |
+| POST | (new) staff interactive enroll | `/api/v1/admin/staff/{id}/fingerprint/enroll/` |
+| POST | (new) staff pull / push | `/api/v1/admin/staff/{id}/fingerprint/pull/` · `…/push/` |
+| GET/POST | (new) device controllers (super) | `/api/v1/admin/device/controllers/` |
+| DELETE | (new) remove device controller | `/api/v1/admin/device/controllers/{staff_id}/` |
 | GET | `/v1/member/attendance` | `/api/v1/member/attendance/` |
 | POST | `/v1/internal/attendance/check-in` | `/api/v1/internal/attendance/check-in/` |
 | POST | `/v1/auth/resolve-phone` | `/api/v1/auth/resolve-phone/` |

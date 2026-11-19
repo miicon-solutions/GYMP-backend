@@ -5,6 +5,7 @@ from rest_framework import generics, serializers
 from rest_framework.response import Response
 
 from accounts.models import User
+from biometrics import services as bio
 from core.api import AdminOnly, SuperOnly
 from core.endpoints import query_parameters
 from operations import services
@@ -12,6 +13,9 @@ from operations.models import Activity, Cost, Holiday
 from operations.serializers import (
     ActivitySerializer,
     CostSerializer,
+    DeviceControllerInput,
+    DeviceControllerOutput,
+    DeviceControllersOutput,
     HolidaySerializer,
     StaffInput,
     StaffSerializer,
@@ -181,3 +185,20 @@ class HolidayDetail(generics.GenericAPIView):
 
 def staff_by_id(pk):
     return get_object_or_404(User, pk=pk, role="admin")
+
+
+class DeviceControllersList(generics.GenericAPIView):
+    """Super-only list/add of staff who hold ZK device-admin privilege."""
+
+    permission_classes = [SuperOnly]
+
+    @extend_schema(responses={200: DeviceControllersOutput})
+    def get(self, request, *args, **kwargs):
+        return Response(bio.list_device_controllers())
+
+    @extend_schema(request=DeviceControllerInput, responses={200: DeviceControllerOutput})
+    def post(self, request, *args, **kwargs):
+        data = DeviceControllerInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        staff = bio.device_controller_input_staff(data.validated_data["staff_id"])
+        return Response(bio.add_device_controller(request.user, staff))

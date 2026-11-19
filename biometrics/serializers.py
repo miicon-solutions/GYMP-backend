@@ -52,6 +52,11 @@ class MemberTemplatesOutput(serializers.Serializer):
     fingerprint_status = serializers.CharField()
 
 
+# Staff vault uses the same wire shape as member templates / enroll.
+StaffTemplatesOutput = MemberTemplatesOutput
+StaffEnrollInteractiveOutput = EnrollInteractiveOutput
+
+
 class VaultSyncOutput(serializers.Serializer):
     stored = serializers.IntegerField(required=False)
     pushed = serializers.BooleanField(required=False)

@@ -69,6 +69,13 @@ class StaffProfile(Entity):
     setup_token_hash = models.CharField(max_length=64, blank=True)
     setup_expires_at = models.DateTimeField(null=True, blank=True)
     totp_last_step = models.BigIntegerField(null=True, blank=True)
+    fingerprint_status = models.CharField(
+        max_length=16,
+        default="pending",
+        choices=[(x, x) for x in ("not_required", "pending", "ready", "failed")],
+    )
+    # When True, bridge ensure/push uses ZK USER_ADMIN so staff can open device settings.
+    device_admin = models.BooleanField(default=False)
 
 
 class Challenge(Entity):

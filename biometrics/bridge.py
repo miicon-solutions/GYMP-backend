@@ -50,6 +50,21 @@ def require_configured() -> None:
         raise BridgeUnavailable("Fingerprint device is not configured.")
 
 
+def _bridge_error_detail(resp: httpx.Response) -> str:
+    try:
+        body = resp.json()
+        err = body.get("error") if isinstance(body, dict) else None
+        if isinstance(err, str) and err.strip():
+            return err.strip()
+        detail = body.get("detail") if isinstance(body, dict) else None
+        if isinstance(detail, str) and detail.strip():
+            return detail.strip()
+    except Exception:  # noqa: BLE001 — fall back to raw text
+        pass
+    text = (resp.text or "").strip()
+    return text or f"Bridge error ({resp.status_code})."
+
+
 def _device_params(device_id: str | None = None) -> dict[str, str]:
     if device_id:
         return {"device_id": str(device_id)}
@@ -93,6 +108,11 @@ def device_status(*, device_id: str | None = None) -> DeviceStatus:
         )
 
 
+# pyzk privilege levels mirrored on zkteco-bridge.
+ZK_PRIVILEGE_DEFAULT = 0
+ZK_PRIVILEGE_ADMIN = 14
+
+
 def ensure_user(
     *,
     user_id: str,
@@ -100,6 +120,7 @@ def ensure_user(
     pin: str = "",
     uid: int = 0,
     device_id: str | None = None,
+    privilege: int | None = None,
 ) -> dict:
     require_configured()
     try:
@@ -107,6 +128,8 @@ def ensure_user(
             payload = {"user_id": user_id, "name": name, "pin": pin, "uid": uid}
             if device_id:
                 payload["device_id"] = str(device_id)
+            if privilege is not None:
+                payload["privilege"] = int(privilege)
             resp = client.post("/internal/users/ensure/", json=payload)
             if resp.status_code >= 400:
                 raise BridgeUnavailable(resp.text or "Bridge ensure failed.")
@@ -138,6 +161,7 @@ def push_user(
     uid: int = 0,
     templates: dict[str, str] | None = None,
     device_id: str | None = None,
+    privilege: int | None = None,
 ) -> dict:
     require_configured()
     try:
@@ -151,6 +175,8 @@ def push_user(
             }
             if device_id:
                 payload["device_id"] = str(device_id)
+            if privilege is not None:
+                payload["privilege"] = int(privilege)
             resp = client.post("/internal/users/push/", json=payload)
             if resp.status_code >= 400:
                 raise BridgeUnavailable(resp.text or "Bridge push failed.")
@@ -174,7 +200,7 @@ def enroll_fingerprint(
                 payload["device_id"] = str(device_id)
             resp = client.post("/internal/users/enroll/", json=payload)
             if resp.status_code >= 400:
-                raise BridgeUnavailable(resp.text or "Bridge enroll failed.")
+                raise BridgeUnavailable(_bridge_error_detail(resp))
             return resp.json()
     except httpx.HTTPError as exc:
         raise BridgeUnavailable(str(exc)) from exc

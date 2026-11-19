@@ -46,6 +46,31 @@ class MemberBiometricTemplate(Entity):
         ]
 
 
+class StaffBiometricTemplate(Entity):
+    staff = models.ForeignKey(
+        "accounts.StaffProfile",
+        on_delete=models.CASCADE,
+        related_name="biometric_templates",
+    )
+    finger_index = models.PositiveSmallIntegerField()
+    algorithm = models.CharField(max_length=32, default="zk")
+    template_format = models.CharField(max_length=32, default="zk")
+    template_ciphertext = models.TextField()
+    template_sha256 = models.CharField(max_length=64)
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta(Entity.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["staff", "finger_index"], name="staff_biometric_finger"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(finger_index__gte=0, finger_index__lte=9),
+                name="staff_biometric_finger_range",
+            ),
+        ]
+
+
 class FingerprintDeviceSyncState(models.Model):
     device = models.ForeignKey(
         FingerprintDevice, on_delete=models.CASCADE, related_name="sync_states"
@@ -62,5 +87,26 @@ class FingerprintDeviceSyncState(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["device", "member"], name="fingerprint_device_member_sync"
+            ),
+        ]
+
+
+class FingerprintDeviceStaffSyncState(models.Model):
+    device = models.ForeignKey(
+        FingerprintDevice, on_delete=models.CASCADE, related_name="staff_sync_states"
+    )
+    staff = models.ForeignKey(
+        "accounts.StaffProfile",
+        on_delete=models.CASCADE,
+        related_name="device_sync_states",
+    )
+    templates_synced_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device", "staff"], name="fingerprint_device_staff_sync"
             ),
         ]
