@@ -8,6 +8,9 @@ class StaffInput(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     phone_e164 = PhoneField()
     is_active = serializers.BooleanField(default=True)
+    permissions = serializers.ListField(
+        child=serializers.CharField(), required=False, allow_empty=True
+    )
 
 
 class StaffSerializer(serializers.Serializer):
@@ -20,9 +23,15 @@ class StaffSerializer(serializers.Serializer):
     mfa_enrolled = serializers.SerializerMethodField()
     fingerprint_status = serializers.CharField(source="staff_profile.fingerprint_status")
     device_admin = serializers.BooleanField(source="staff_profile.device_admin")
+    permissions = serializers.SerializerMethodField()
 
     def get_mfa_enrolled(self, obj) -> bool:
         return bool(obj.staff_profile.mfa_enrolled_at)
+
+    def get_permissions(self, obj) -> list[str]:
+        from accounts.staff_permissions import effective_permissions
+
+        return effective_permissions(obj)
 
 
 class DeviceControllerInput(serializers.Serializer):

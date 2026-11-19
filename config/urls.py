@@ -11,6 +11,7 @@ from rest_framework.permissions import AllowAny
 
 from accounts import serializers as auth_s
 from accounts import services as auth
+from accounts.staff_permissions import catalog_payload
 from attendance.authentication import DeviceAuthentication
 from attendance.serializers import (
     CheckInInput,
@@ -39,7 +40,7 @@ from biometrics.serializers import (
     VaultSyncOutput,
 )
 from core import public
-from core.api import AdminOnly, MemberOnly, SuperOnly
+from core.api import MemberOnly, StaffPermission, SuperOnly
 from core.endpoints import endpoint, query_parameters
 from members import services as member
 from members.serializers import (
@@ -425,7 +426,7 @@ api = [
             response=AdminMemberOutput,
             handler=lambda r, d, pk: member.admin_link_phone(r.user, member.get_member(pk), d),
             request=auth_s.VerifyInput,
-            permission=AdminOnly,
+            permission=StaffPermission("members.update"),
         ),
     ),
     path(
@@ -437,7 +438,7 @@ api = [
                 r.user, member.get_member(pk), d["status"]
             ),
             request=FingerprintInput,
-            permission=AdminOnly,
+            permission=StaffPermission("members.update"),
         ),
     ),
     path(
@@ -447,7 +448,7 @@ api = [
             response=DeviceStatusOutput,
             handler=lambda r, d: bio.status_payload(),
             method="get",
-            permission=AdminOnly,
+            permission=StaffPermission("device_controllers.view"),
         ),
     ),
     path("admin/device/controllers/", DeviceControllersList.as_view()),
@@ -460,7 +461,7 @@ api = [
                 r.user, bio.device_controller_input_staff(staff_id)
             ),
             method="delete",
-            permission=SuperOnly,
+            permission=StaffPermission("device_controllers.delete"),
         ),
     ),
     path(
@@ -470,7 +471,7 @@ api = [
             response=MemberTemplatesOutput,
             handler=lambda r, d, pk: bio.list_member_templates(member.get_member(pk)),
             method="get",
-            permission=AdminOnly,
+            permission=StaffPermission("members.view"),
         ),
     ),
     path(
@@ -482,7 +483,7 @@ api = [
                 r.user, member.get_member(pk), finger_id
             ),
             method="delete",
-            permission=AdminOnly,
+            permission=StaffPermission("members.delete"),
         ),
     ),
     path(
@@ -498,7 +499,7 @@ api = [
                 device_id=(d.get("device_id") or None) or None,
             ),
             request=EnrollInteractiveInput,
-            permission=AdminOnly,
+            permission=StaffPermission("members.update"),
         ),
     ),
     path(
@@ -507,7 +508,7 @@ api = [
             "admin_member_fingerprint_pull",
             response=VaultSyncOutput,
             handler=lambda r, d, pk: bio.pull_templates(r.user, member.get_member(pk)),
-            permission=AdminOnly,
+            permission=StaffPermission("members.update"),
         ),
     ),
     path(
@@ -516,7 +517,7 @@ api = [
             "admin_member_fingerprint_push",
             response=VaultSyncOutput,
             handler=lambda r, d, pk: bio.push_vault_to_device(r.user, member.get_member(pk)),
-            permission=AdminOnly,
+            permission=StaffPermission("members.update"),
         ),
     ),
     path(
@@ -529,7 +530,7 @@ api = [
             ),
             method="get",
             request=PlanInput,
-            permission=AdminOnly,
+            permission=StaffPermission("members.update"),
             parameters=query_parameters("plan_id"),
         ),
     ),
@@ -543,7 +544,7 @@ api = [
             ),
             handler=cash_receive,
             request=PlanInput,
-            permission=AdminOnly,
+            permission=StaffPermission("members.update"),
             status=201,
         ),
     ),
@@ -560,7 +561,7 @@ api = [
             method="get",
             request=CashRequestStatusFilter,
             response=CashPaymentRequestSerializer(many=True),
-            permission=AdminOnly,
+            permission=StaffPermission("members.view"),
             parameters=query_parameters("status"),
         ),
     ),
@@ -576,7 +577,7 @@ api = [
             ),
             method="get",
             response=CashPaymentRequestSerializer(many=True),
-            permission=AdminOnly,
+            permission=StaffPermission("members.view"),
         ),
     ),
     path(
@@ -592,7 +593,7 @@ api = [
                 },
             ),
             handler=cash_request_accept,
-            permission=AdminOnly,
+            permission=StaffPermission("members.update"),
         ),
     ),
     path(
@@ -603,13 +604,35 @@ api = [
                 CashPaymentRequestSerializer(payment.reject_cash_request(r.user, pk)).data
             ),
             response=CashPaymentRequestSerializer,
-            permission=AdminOnly,
+            permission=StaffPermission("members.update"),
         ),
     ),
     path("admin/plans/", PlanList.as_view()),
     path("admin/plans/<uuid:pk>/", PlanDetail.as_view()),
     path("admin/plans/<uuid:pk>/offers/", OfferList.as_view()),
     path("admin/plans/<uuid:pk>/offers/<uuid:offer_id>/", OfferDetail.as_view()),
+    path(
+        "admin/staff/permissions/catalog/",
+        endpoint(
+            "admin_staff_permissions_catalog",
+            response=inline_serializer(
+                "StaffPermissionCatalog",
+                fields={
+                    "features": inline_serializer(
+                        "StaffPermissionFeature",
+                        fields={
+                            "feature": serializers.CharField(),
+                            "actions": serializers.ListField(child=serializers.CharField()),
+                        },
+                        many=True,
+                    )
+                },
+            ),
+            handler=lambda r, d: {"features": catalog_payload()},
+            method="get",
+            permission=SuperOnly,
+        ),
+    ),
     path("admin/staff/", StaffList.as_view()),
     path("admin/staff/<uuid:pk>/", StaffDetail.as_view()),
     path(
@@ -652,7 +675,7 @@ api = [
                 bio.staff_profile_for_user(staff_by_id(pk))
             ),
             method="get",
-            permission=AdminOnly,
+            permission=StaffPermission("staff.view"),
         ),
     ),
     path(
@@ -664,7 +687,7 @@ api = [
                 r.user, bio.staff_profile_for_user(staff_by_id(pk)), finger_id
             ),
             method="delete",
-            permission=AdminOnly,
+            permission=SuperOnly,
         ),
     ),
     path(
@@ -679,7 +702,7 @@ api = [
                 device_id=(d.get("device_id") or None) or None,
             ),
             request=EnrollInteractiveInput,
-            permission=AdminOnly,
+            permission=SuperOnly,
         ),
     ),
     path(
@@ -690,7 +713,7 @@ api = [
             handler=lambda r, d, pk: bio.pull_staff_templates(
                 r.user, bio.staff_profile_for_user(staff_by_id(pk))
             ),
-            permission=AdminOnly,
+            permission=SuperOnly,
         ),
     ),
     path(
@@ -701,7 +724,7 @@ api = [
             handler=lambda r, d, pk: bio.push_staff_vault_to_device(
                 r.user, bio.staff_profile_for_user(staff_by_id(pk))
             ),
-            permission=AdminOnly,
+            permission=SuperOnly,
         ),
     ),
     path("admin/costs/", CostList.as_view()),
@@ -715,7 +738,7 @@ api = [
                     ops.mutate_cost(r.user, get_object_or_404(ops.Cost, pk=pk), "archive")
                 ).data
             ),
-            permission=AdminOnly,
+            permission=StaffPermission("costs.update"),
             response=CostSerializer,
         ),
     ),
@@ -730,7 +753,7 @@ api = [
                 "holidays": [ops.holiday_data(h) for h in ops.Holiday.objects.order_by("date")],
             },
             method="get",
-            permission=AdminOnly,
+            permission=StaffPermission("gym_hours.view"),
         ),
     ),
     path(
@@ -741,7 +764,7 @@ api = [
             handler=lambda r, d: ops.put_week(r.user, d["week"]),
             method="put",
             request=WeekInput,
-            permission=AdminOnly,
+            permission=StaffPermission("gym_hours.update"),
         ),
     ),
     path("admin/gym-hours/holidays/", HolidayList.as_view()),
@@ -754,7 +777,7 @@ api = [
             handler=lambda r, d: revenue(r.user, d),
             method="get",
             request=RevenueQuery,
-            permission=AdminOnly,
+            permission=StaffPermission("reports.view"),
             parameters=query_parameters(
                 "range", "date", "from", "to", "dates", "member_id", "channel", "limit"
             ),

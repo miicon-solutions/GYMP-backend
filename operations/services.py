@@ -34,6 +34,8 @@ def record(actor, area, action, key, params=None):
 
 @transaction.atomic
 def save_staff(actor, data, instance=None):
+    from accounts.staff_permissions import normalize_permissions
+
     require_admin(actor, True)
     created = instance is None
     if instance:
@@ -48,16 +50,26 @@ def save_staff(actor, data, instance=None):
     phone = normalize_phone(data.get("phone_e164", instance.phone_e164 if instance else ""))
     if User.objects.filter(phone_e164=phone).exclude(pk=getattr(instance, "pk", None)).exists():
         raise Conflict("Phone number is already registered.")
+    perms_provided = "permissions" in data
+    permissions = normalize_permissions(data.get("permissions")) if perms_provided else None
     if not instance:
         instance = User.objects.create_user(
             phone, role="admin", full_name=data["name"], is_active=data.get("is_active", True)
         )
-        StaffProfile.objects.create(user=instance, short_id=next_display("staff"))
+        StaffProfile.objects.create(
+            user=instance,
+            short_id=next_display("staff"),
+            permissions=permissions if permissions is not None else [],
+        )
     else:
         instance.full_name = data.get("name", instance.full_name)
         instance.phone_e164 = phone
         instance.is_active = data.get("is_active", instance.is_active)
         instance.save()
+        if permissions is not None and not instance.is_superuser:
+            profile = instance.staff_profile
+            profile.permissions = permissions
+            profile.save(update_fields=["permissions", "updated_at"])
     record(
         actor,
         "staff",

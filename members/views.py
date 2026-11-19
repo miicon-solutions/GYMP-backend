@@ -3,7 +3,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import generics, serializers
 from rest_framework.response import Response
 
-from core.api import AdminOnly, MemberOnly
+from core.api import MemberOnly, StaffPermission
 from members import services
 from members.models import MemberProfile
 from members.serializers import AdminMemberOutput, ProfileInput, ProfileOutput
@@ -35,7 +35,7 @@ class MemberSearch(serializers.Serializer):
 
 
 class AdminMemberList(generics.ListAPIView):
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("members.view")]
     serializer_class = AdminMemberSerializer
 
     @extend_schema(parameters=[MemberSearch])
@@ -58,7 +58,7 @@ class AdminMemberList(generics.ListAPIView):
 
 
 class AdminMemberDetail(generics.GenericAPIView):
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("members.view")]
     serializer_class = AdminMemberSerializer
 
     def get(self, request, pk):

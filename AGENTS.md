@@ -77,6 +77,13 @@ core/             # shared API helpers, middleware, permissions
   OTP → 409. Reclaims that phone if it was OTP-onboarded as a bare member. Local
   Compose runs `seed_dev` after migrate. **Production:** no fixed seed — use
   `bootstrap_admin --phone …` only.
+- **Staff feature permissions:** `StaffProfile.permissions` is a list of
+  `feature.action` codes (`accounts/staff_permissions.py`). Super
+  (`is_superuser` / `SADM-7400`) always has the full catalog. Non-super staff
+  need an explicit grant; empty list → no admin feature APIs. Staff identity
+  mutations (create/update/delete/activate/MFA enroll) stay **SuperOnly**.
+  Unlock/refresh `staff.permissions` returns effective grants. Catalog:
+  `GET /api/v1/admin/staff/permissions/catalog/`.
 - Device check-in: `X-Device-Key` == `ATTENDANCE_DEVICE_KEY` on
   `POST /api/v1/internal/attendance/check-in/`.
 - SSLCommerz: session → gateway → IPN/confirm; return pages never activate alone;

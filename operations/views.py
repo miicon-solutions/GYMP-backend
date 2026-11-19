@@ -6,7 +6,7 @@ from rest_framework.response import Response
 
 from accounts.models import User
 from biometrics import services as bio
-from core.api import AdminOnly, SuperOnly
+from core.api import StaffPermission, SuperOnly
 from core.endpoints import query_parameters
 from operations import services
 from operations.models import Activity, Cost, Holiday
@@ -22,10 +22,24 @@ from operations.serializers import (
 )
 
 
+def _method_permissions(mapping):
+    """Build get_permissions using feature.action codes (or SuperOnly)."""
+
+    def get_permissions(self):
+        entry = mapping.get(self.request.method)
+        if entry is SuperOnly:
+            return [SuperOnly()]
+        if entry is None:
+            return [SuperOnly()]
+        return [StaffPermission(entry)()]
+
+    return get_permissions
+
+
 class StaffList(generics.ListCreateAPIView):
-    permission_classes = [AdminOnly]
     serializer_class = StaffSerializer
     queryset = User.objects.filter(role="admin").select_related("staff_profile")
+    get_permissions = _method_permissions({"GET": "staff.view", "POST": SuperOnly})
 
     @extend_schema(request=StaffInput, responses={201: StaffSerializer})
     def post(self, request, *args, **kwargs):
@@ -62,8 +76,8 @@ class CostQuery(serializers.Serializer):
 
 
 class CostList(generics.ListCreateAPIView):
-    permission_classes = [AdminOnly]
     serializer_class = CostSerializer
+    get_permissions = _method_permissions({"GET": "costs.view", "POST": "costs.create"})
 
     @extend_schema(parameters=query_parameters("include_archived"))
     def get(self, *args, **kwargs):
@@ -83,9 +97,11 @@ class CostList(generics.ListCreateAPIView):
 
 
 class CostDetail(generics.GenericAPIView):
-    permission_classes = [AdminOnly]
     serializer_class = CostSerializer
     queryset = Cost.objects.all()
+    get_permissions = _method_permissions(
+        {"GET": "costs.view", "PATCH": "costs.update", "DELETE": "costs.delete"}
+    )
 
     def patch(self, request, *args, **kwargs):
         data = CostSerializer(data=request.data, partial=True)
@@ -121,7 +137,7 @@ class ActivityQuery(serializers.Serializer):
 
 
 class ActivityList(generics.ListAPIView):
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("activity.view")]
     serializer_class = ActivitySerializer
 
     @extend_schema(
@@ -156,18 +172,26 @@ class ActivityList(generics.ListAPIView):
 
 
 class HolidayList(generics.ListCreateAPIView):
-    permission_classes = [AdminOnly]
     serializer_class = HolidaySerializer
     queryset = Holiday.objects.all()
+    get_permissions = _method_permissions(
+        {"GET": "gym_hours.view", "POST": "gym_hours.create"}
+    )
 
     def perform_create(self, serializer):
         serializer.instance = services.save_holiday(self.request.user, serializer.validated_data)
 
 
 class HolidayDetail(generics.GenericAPIView):
-    permission_classes = [AdminOnly]
     serializer_class = HolidaySerializer
     queryset = Holiday.objects.all()
+    get_permissions = _method_permissions(
+        {
+            "GET": "gym_hours.view",
+            "PATCH": "gym_hours.update",
+            "DELETE": "gym_hours.delete",
+        }
+    )
 
     def patch(self, request, *args, **kwargs):
         data = HolidaySerializer(data=request.data, partial=True)
@@ -188,9 +212,11 @@ def staff_by_id(pk):
 
 
 class DeviceControllersList(generics.GenericAPIView):
-    """Super-only list/add of staff who hold ZK device-admin privilege."""
+    """List/add staff who hold ZK device-admin privilege (permission-gated)."""
 
-    permission_classes = [SuperOnly]
+    get_permissions = _method_permissions(
+        {"GET": "device_controllers.view", "POST": "device_controllers.create"}
+    )
 
     @extend_schema(responses={200: DeviceControllersOutput})
     def get(self, request, *args, **kwargs):

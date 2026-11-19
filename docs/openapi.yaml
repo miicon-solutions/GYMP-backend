@@ -282,7 +282,7 @@ paths:
   /api/admin/device/controllers/:
     get:
       operationId: api_admin_device_controllers_retrieve
-      description: Super-only list/add of staff who hold ZK device-admin privilege.
+      description: List/add staff who hold ZK device-admin privilege (permission-gated).
       tags:
       - api
       security:
@@ -297,7 +297,7 @@ paths:
           description: ''
     post:
       operationId: api_admin_device_controllers_create
-      description: Super-only list/add of staff who hold ZK device-admin privilege.
+      description: List/add staff who hold ZK device-admin privilege (permission-gated).
       tags:
       - api
       requestBody:
@@ -1489,6 +1489,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MFAEnrollOutput'
+          description: ''
+  /api/admin/staff/permissions/catalog/:
+    get:
+      operationId: admin_staff_permissions_catalog
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffPermissionCatalog'
           description: ''
   /api/auth/admin/mfa/confirm/:
     post:
@@ -4487,7 +4502,7 @@ paths:
   /api/v1/admin/device/controllers/:
     get:
       operationId: api_v1_admin_device_controllers_retrieve
-      description: Super-only list/add of staff who hold ZK device-admin privilege.
+      description: List/add staff who hold ZK device-admin privilege (permission-gated).
       tags:
       - api
       security:
@@ -4502,7 +4517,7 @@ paths:
           description: ''
     post:
       operationId: api_v1_admin_device_controllers_create
-      description: Super-only list/add of staff who hold ZK device-admin privilege.
+      description: List/add staff who hold ZK device-admin privilege (permission-gated).
       tags:
       - api
       requestBody:
@@ -5694,6 +5709,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MFAEnrollOutput'
+          description: ''
+  /api/v1/admin/staff/permissions/catalog/:
+    get:
+      operationId: admin_staff_permissions_catalog_2
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffPermissionCatalog'
           description: ''
   /api/v1/auth/admin/mfa/confirm/:
     post:
@@ -13854,6 +13884,10 @@ components:
         is_active:
           type: boolean
           default: true
+        permissions:
+          type: array
+          items:
+            type: string
     PatchedWorkoutSessionUpdate:
       type: object
       properties:
@@ -14945,6 +14979,11 @@ components:
           type: string
         device_admin:
           type: boolean
+        permissions:
+          type: array
+          items:
+            type: string
+          readOnly: true
       required:
       - device_admin
       - fingerprint_status
@@ -14953,6 +14992,7 @@ components:
       - is_super
       - mfa_enrolled
       - name
+      - permissions
       - phone_e164
       - short_id
     StaffInput:
@@ -14966,6 +15006,10 @@ components:
         is_active:
           type: boolean
           default: true
+        permissions:
+          type: array
+          items:
+            type: string
       required:
       - name
       - phone_e164
@@ -14987,6 +15031,10 @@ components:
           type: boolean
         mfa_enrolled:
           type: boolean
+        permissions:
+          type: array
+          items:
+            type: string
       required:
       - id
       - is_active
@@ -14995,6 +15043,27 @@ components:
       - name
       - phone_e164
       - short_id
+    StaffPermissionCatalog:
+      type: object
+      properties:
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffPermissionFeature'
+      required:
+      - features
+    StaffPermissionFeature:
+      type: object
+      properties:
+        feature:
+          type: string
+        actions:
+          type: array
+          items:
+            type: string
+      required:
+      - actions
+      - feature
     StartSessionInput:
       type: object
       properties:

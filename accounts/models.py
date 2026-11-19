@@ -76,6 +76,9 @@ class StaffProfile(Entity):
     )
     # When True, bridge ensure/push uses ZK USER_ADMIN so staff can open device settings.
     device_admin = models.BooleanField(default=False)
+    # Grantable admin-app feature.action codes (see accounts.staff_permissions).
+    # Superuser ignores this and always has the full catalog.
+    permissions = models.JSONField(default=list, blank=True)
 
 
 class Challenge(Entity):

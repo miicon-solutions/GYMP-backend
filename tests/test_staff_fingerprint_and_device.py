@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from django.utils import timezone
 
-from accounts.models import StaffProfile
+from accounts.models import StaffProfile, User
 from attendance.models import StaffCheckIn
 from biometrics.crypto import encrypt_bytes, sha256_hex
 from biometrics.models import StaffBiometricTemplate
@@ -33,13 +33,13 @@ def test_list_staff_templates_empty(client, staff):
     assert resp.data["fingerprint_status"] == profile.fingerprint_status
 
 
-def test_enroll_staff_interactive_sets_ready(client, staff, settings):
+def test_enroll_staff_interactive_sets_ready(client, staff, super_admin, settings):
     settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
     settings.ZKTECO_BRIDGE_KEY = "test-key"
     profile = staff.staff_profile
     template_b64 = base64.b64encode(b"captured-staff-template").decode()
 
-    client.force_authenticate(staff)
+    client.force_authenticate(super_admin)
     with (
         patch("biometrics.bridge.ensure_user", return_value={"ok": True}) as ensure,
         patch("biometrics.bridge.enroll_fingerprint", return_value={"ok": True, "finger_id": 2}),
@@ -66,7 +66,7 @@ def test_enroll_staff_interactive_sets_ready(client, staff, settings):
     assert ensure.call_args.kwargs["privilege"] == 0
 
 
-def test_delete_staff_template_sets_pending(client, staff, settings):
+def test_delete_staff_template_sets_pending(client, staff, super_admin, settings):
     settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
     settings.ZKTECO_BRIDGE_KEY = "test-key"
     profile = staff.staff_profile
@@ -74,7 +74,7 @@ def test_delete_staff_template_sets_pending(client, staff, settings):
     profile.save(update_fields=["fingerprint_status", "updated_at"])
     _seed_staff_template(profile, 0)
 
-    client.force_authenticate(staff)
+    client.force_authenticate(super_admin)
     with patch("biometrics.bridge.delete_fingerprint", return_value={"ok": True}):
         resp = client.delete(f"/api/v1/admin/staff/{staff.pk}/fingerprint/templates/0/")
     assert resp.status_code == 200
@@ -97,15 +97,18 @@ def test_device_checkin_resolves_staff_short_id(client, staff):
     assert StaffCheckIn.objects.filter(staff=staff.staff_profile).exists()
 
 
-def test_device_controllers_crud_super_only(client, staff, super_admin, settings):
+def test_device_controllers_permission_gated(client, staff, super_admin, settings):
     settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
     settings.ZKTECO_BRIDGE_KEY = "test-key"
 
-    client.force_authenticate(staff)
+    limited = User.objects.create_user("+8801511111111", role="admin", full_name="Limited")
+    StaffProfile.objects.create(user=limited, short_id="ADM-LIM", permissions=["members.view"])
+
+    client.force_authenticate(limited)
     denied = client.get("/api/v1/admin/device/controllers/")
     assert denied.status_code == 403
 
-    client.force_authenticate(super_admin)
+    client.force_authenticate(staff)
     empty = client.get("/api/v1/admin/device/controllers/")
     assert empty.status_code == 200
     assert empty.data["count"] == 0

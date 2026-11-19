@@ -84,6 +84,8 @@ def member_data(user):
 
 
 def staff_data(user):
+    from accounts.staff_permissions import effective_permissions
+
     p = StaffProfile.objects.get(user=user)
     return {
         "id": str(user.pk),
@@ -93,6 +95,7 @@ def staff_data(user):
         "is_super": user.is_superuser,
         "is_active": user.is_active,
         "mfa_enrolled": bool(p.mfa_enrolled_at),
+        "permissions": effective_permissions(user),
     }
 
 

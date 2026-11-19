@@ -75,6 +75,7 @@ class StaffOutput(serializers.Serializer):
     is_super = serializers.BooleanField()
     is_active = serializers.BooleanField()
     mfa_enrolled = serializers.BooleanField()
+    permissions = serializers.ListField(child=serializers.CharField(), required=False)
 
 
 class TokenOutput(serializers.Serializer):

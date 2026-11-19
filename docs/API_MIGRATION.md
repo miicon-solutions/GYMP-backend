@@ -187,9 +187,10 @@ Placeholders such as `{id}` are UUIDs except `{tranId}` (merchant transaction re
 | GET | `/v1/member/plans` | `/api/v1/member/plans/` |
 | GET | `/v1/member/plans/:planId` | `/api/v1/member/plans/{planId}/` |
 | GET | `/v1/admin/revenue` | `/api/v1/admin/revenue/` |
-| GET | `/v1/admin/staff` | `/api/v1/admin/staff/` |
-| POST | `/v1/admin/staff` | `/api/v1/admin/staff/` |
-| PATCH | `/v1/admin/staff/:id` | `/api/v1/admin/staff/{id}/` |
+| GET | `/v1/admin/staff` | `/api/v1/admin/staff/` (`staff.view`) |
+| GET | (new) permission catalog | `/api/v1/admin/staff/permissions/catalog/` (super) |
+| POST | `/v1/admin/staff` | `/api/v1/admin/staff/` (super; optional `permissions`) |
+| PATCH | `/v1/admin/staff/:id` | `/api/v1/admin/staff/{id}/` (super; optional `permissions`) |
 | DELETE | `/v1/admin/staff/:id` | `/api/v1/admin/staff/{id}/` |
 | POST | `/v1/admin/staff/:id/activate` | `/api/v1/admin/staff/{id}/activate/` |
 | POST | `/v1/admin/staff/:id/deactivate` | `/api/v1/admin/staff/{id}/deactivate/` |

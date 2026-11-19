@@ -57,8 +57,12 @@ def other_member(db):
 
 @pytest.fixture
 def staff(db):
+    from accounts.staff_permissions import all_permission_codes
+
     u = User.objects.create_user("+8801912345678", role="admin", full_name="Staff")
-    StaffProfile.objects.create(user=u, short_id="S-TEST")
+    StaffProfile.objects.create(
+        user=u, short_id="S-TEST", permissions=all_permission_codes()
+    )
     return u
 
 

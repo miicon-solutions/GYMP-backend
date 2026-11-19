@@ -4,15 +4,23 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from core.api import AdminOnly, MemberOnly
+from core.api import MemberOnly, StaffPermission
 from plans import services
 from plans.models import Offer, Plan
 from plans.serializers import OfferInput, OfferSerializer, PlanInput, PlanSerializer
 
 
+def _plan_method_permissions(mapping):
+    def get_permissions(self):
+        code = mapping.get(self.request.method, "plans.view")
+        return [StaffPermission(code)()]
+
+    return get_permissions
+
+
 class PlanList(generics.ListCreateAPIView):
-    permission_classes = [AdminOnly]
     serializer_class = PlanSerializer
+    get_permissions = _plan_method_permissions({"GET": "plans.view", "POST": "plans.create"})
 
     def get_queryset(self):
         services.expire_offers()
@@ -27,9 +35,11 @@ class PlanList(generics.ListCreateAPIView):
 
 
 class PlanDetail(generics.GenericAPIView):
-    permission_classes = [AdminOnly]
     serializer_class = PlanSerializer
     queryset = Plan.objects.all()
+    get_permissions = _plan_method_permissions(
+        {"GET": "plans.view", "PATCH": "plans.update", "DELETE": "plans.delete"}
+    )
 
     @extend_schema(request=PlanInput, responses=PlanSerializer)
     def patch(self, request, *args, **kwargs):
@@ -69,8 +79,8 @@ class MemberPlanDetail(generics.RetrieveAPIView):
 
 
 class OfferList(generics.ListCreateAPIView):
-    permission_classes = [AdminOnly]
     serializer_class = OfferSerializer
+    get_permissions = _plan_method_permissions({"GET": "plans.view", "POST": "plans.create"})
 
     def get_queryset(self):
         services.expire_offers()
@@ -86,8 +96,10 @@ class OfferList(generics.ListCreateAPIView):
 
 
 class OfferDetail(generics.GenericAPIView):
-    permission_classes = [AdminOnly]
     serializer_class = OfferSerializer
+    get_permissions = _plan_method_permissions(
+        {"GET": "plans.view", "PATCH": "plans.update", "DELETE": "plans.delete"}
+    )
 
     def get_object(self):
         return get_object_or_404(Offer, pk=self.kwargs["offer_id"], plan_id=self.kwargs["pk"])

@@ -63,6 +63,22 @@ class SuperOnly(AdminOnly):
         return super().has_permission(request, view) and request.user.is_superuser
 
 
+def StaffPermission(code: str):
+    """DRF permission class factory: admin + feature.action (super always allowed)."""
+
+    from accounts.staff_permissions import staff_has_permission
+
+    class _StaffPermission(AdminOnly):
+        def has_permission(self, request, view):
+            return super().has_permission(request, view) and staff_has_permission(
+                request.user, code
+            )
+
+    _StaffPermission.__name__ = "StaffPermission_" + code.replace(".", "_")
+    _StaffPermission.__qualname__ = _StaffPermission.__name__
+    return _StaffPermission
+
+
 def require_admin(user, super_only=False):
     if (
         not user
@@ -71,6 +87,12 @@ def require_admin(user, super_only=False):
         or (super_only and not user.is_superuser)
     ):
         raise PermissionDenied("Only authorized staff can do that.")
+
+
+def require_staff_permission(user, code: str):
+    from accounts.staff_permissions import require_staff_permission as _require
+
+    _require(user, code)
 
 
 def exception_handler(exc, context):
