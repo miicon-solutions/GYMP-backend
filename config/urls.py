@@ -40,7 +40,7 @@ from biometrics.serializers import (
     VaultSyncOutput,
 )
 from core import public
-from core.api import MemberOnly, StaffPermission, SuperOnly
+from core.api import AdminOnly, MemberOnly, StaffPermission, SuperOnly
 from core.endpoints import endpoint, query_parameters
 from members import services as member
 from members.serializers import (
@@ -448,7 +448,9 @@ api = [
             response=DeviceStatusOutput,
             handler=lambda r, d: bio.status_payload(),
             method="get",
-            permission=StaffPermission("device_controllers.view"),
+            # Any staff may probe reachability so fingerprint UIs can gate
+            # enroll/delete without requiring device_controllers.view.
+            permission=AdminOnly,
         ),
     ),
     path("admin/device/controllers/", DeviceControllersList.as_view()),

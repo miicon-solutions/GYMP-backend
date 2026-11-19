@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
+from biometrics.bridge import BridgeUnavailable, DeviceStatus
 from biometrics.crypto import encrypt_bytes, sha256_hex
 from biometrics.models import MemberBiometricTemplate
 from members.models import MemberProfile
@@ -49,6 +50,7 @@ def test_enroll_interactive_sets_ready(client, staff, member, settings):
 
     client.force_authenticate(staff)
     with (
+        patch("biometrics.bridge.require_device_online", return_value=None),
         patch("biometrics.bridge.ensure_user", return_value={"ok": True}),
         patch("biometrics.bridge.enroll_fingerprint", return_value={"ok": True, "finger_id": 1}),
         patch(
@@ -82,6 +84,61 @@ def test_enroll_interactive_requires_finger_id(client, staff, member):
     assert resp.status_code == 400
 
 
+def test_enroll_blocked_when_device_unreachable(client, staff, member, settings):
+    settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
+    settings.ZKTECO_BRIDGE_KEY = "test-key"
+    client.force_authenticate(staff)
+    with patch(
+        "biometrics.bridge.require_device_online",
+        side_effect=BridgeUnavailable(
+            "Fingerprint device is offline. Try again when the scanner is connected."
+        ),
+    ):
+        resp = client.post(
+            f"/api/v1/admin/members/{member.pk}/fingerprint/enroll/",
+            {"finger_id": 1},
+            format="json",
+        )
+    assert resp.status_code == 503
+
+
+def test_delete_blocked_when_device_unreachable(client, staff, member, settings):
+    settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
+    settings.ZKTECO_BRIDGE_KEY = "test-key"
+    _seed_template(member.member_profile, 0)
+    client.force_authenticate(staff)
+    with patch(
+        "biometrics.bridge.require_device_online",
+        side_effect=BridgeUnavailable(
+            "Fingerprint device is offline. Try again when the scanner is connected."
+        ),
+    ):
+        resp = client.delete(
+            f"/api/v1/admin/members/{member.pk}/fingerprint/templates/0/"
+        )
+    assert resp.status_code == 503
+    assert MemberBiometricTemplate.objects.filter(
+        member=member.member_profile, finger_index=0
+    ).exists()
+
+
+def test_device_status_available_to_any_staff(client, staff, settings):
+    settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
+    settings.ZKTECO_BRIDGE_KEY = "test-key"
+    client.force_authenticate(staff)
+    offline = DeviceStatus(
+        online=False,
+        bridge_ok=True,
+        message="Fingerprint device is offline. Try again when the scanner is connected.",
+    )
+    with patch("biometrics.bridge.device_status", return_value=offline):
+        resp = client.get("/api/v1/admin/device/status/")
+    assert resp.status_code == 200
+    assert resp.data["online"] is False
+    assert resp.data["bridge_ok"] is True
+    assert "offline" in resp.data["message"].lower()
+
+
 def test_delete_last_template_sets_pending(client, staff, member, settings):
     settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
     settings.ZKTECO_BRIDGE_KEY = "test-key"
@@ -91,7 +148,10 @@ def test_delete_last_template_sets_pending(client, staff, member, settings):
     _seed_template(profile, 0)
 
     client.force_authenticate(staff)
-    with patch("biometrics.bridge.delete_fingerprint", return_value={"ok": True}):
+    with (
+        patch("biometrics.bridge.require_device_online", return_value=None),
+        patch("biometrics.bridge.delete_fingerprint", return_value={"ok": True}),
+    ):
         resp = client.delete(
             f"/api/v1/admin/members/{member.pk}/fingerprint/templates/0/"
         )
@@ -113,7 +173,10 @@ def test_delete_keeps_ready_when_other_fingers_remain(client, staff, member, set
     _seed_template(profile, 2)
 
     client.force_authenticate(staff)
-    with patch("biometrics.bridge.delete_fingerprint", return_value={"ok": True}):
+    with (
+        patch("biometrics.bridge.require_device_online", return_value=None),
+        patch("biometrics.bridge.delete_fingerprint", return_value={"ok": True}),
+    ):
         resp = client.delete(
             f"/api/v1/admin/members/{member.pk}/fingerprint/templates/0/"
         )

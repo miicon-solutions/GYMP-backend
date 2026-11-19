@@ -41,6 +41,7 @@ def test_enroll_staff_interactive_sets_ready(client, staff, super_admin, setting
 
     client.force_authenticate(super_admin)
     with (
+        patch("biometrics.bridge.require_device_online", return_value=None),
         patch("biometrics.bridge.ensure_user", return_value={"ok": True}) as ensure,
         patch("biometrics.bridge.enroll_fingerprint", return_value={"ok": True, "finger_id": 2}),
         patch(
@@ -75,7 +76,10 @@ def test_delete_staff_template_sets_pending(client, staff, super_admin, settings
     _seed_staff_template(profile, 0)
 
     client.force_authenticate(super_admin)
-    with patch("biometrics.bridge.delete_fingerprint", return_value={"ok": True}):
+    with (
+        patch("biometrics.bridge.require_device_online", return_value=None),
+        patch("biometrics.bridge.delete_fingerprint", return_value={"ok": True}),
+    ):
         resp = client.delete(f"/api/v1/admin/staff/{staff.pk}/fingerprint/templates/0/")
     assert resp.status_code == 200
     assert resp.data["finger_indexes"] == []
@@ -113,7 +117,13 @@ def test_device_controllers_permission_gated(client, staff, super_admin, setting
     assert empty.status_code == 200
     assert empty.data["count"] == 0
 
-    with patch("biometrics.bridge.ensure_user", return_value={"ok": True}) as ensure:
+    with (
+        patch(
+            "biometrics.bridge.require_device_online",
+            return_value=None,
+        ),
+        patch("biometrics.bridge.ensure_user", return_value={"ok": True}) as ensure,
+    ):
         added = client.post(
             "/api/v1/admin/device/controllers/",
             {"staff_id": str(staff.pk)},

@@ -120,6 +120,7 @@ def enroll_interactive(
     if finger_id < 0 or finger_id > 9:
         raise ValidationError({"finger_id": "Must be between 0 and 9."})
 
+    bridge.require_device_online(device_id=device_id)
     enroll_prepare(actor, member, pin=pin or "", device_id=device_id)
     bridge.enroll_fingerprint(member.member_id, finger_id, device_id=device_id)
     pulled = pull_templates(actor, member, device_id=device_id)
@@ -156,6 +157,7 @@ def delete_member_template(
     if finger_id < 0 or finger_id > 9:
         raise ValidationError({"finger_id": "Must be between 0 and 9."})
 
+    bridge.require_device_online(device_id=device_id)
     bridge.delete_fingerprint(member.member_id, finger_id, device_id=device_id)
     MemberBiometricTemplate.objects.filter(member=member, finger_index=finger_id).delete()
     indexes = _finger_indexes(member)
@@ -337,6 +339,7 @@ def enroll_staff_interactive(
     if finger_id < 0 or finger_id > 9:
         raise ValidationError({"finger_id": "Must be between 0 and 9."})
 
+    bridge.require_device_online(device_id=device_id)
     enroll_staff_prepare(actor, staff, device_id=device_id)
     bridge.enroll_fingerprint(staff.short_id, finger_id, device_id=device_id)
     pulled = pull_staff_templates(actor, staff, device_id=device_id)
@@ -377,6 +380,7 @@ def delete_staff_template(
     if finger_id < 0 or finger_id > 9:
         raise ValidationError({"finger_id": "Must be between 0 and 9."})
 
+    bridge.require_device_online(device_id=device_id)
     bridge.delete_fingerprint(staff.short_id, finger_id, device_id=device_id)
     StaffBiometricTemplate.objects.filter(staff=staff, finger_index=finger_id).delete()
     indexes = _staff_finger_indexes(staff)
@@ -485,6 +489,7 @@ def add_device_controller(actor, staff_user: User) -> dict:
     staff = staff_profile_for_user(staff_user)
     if not staff_user.is_active:
         raise PermissionDenied("Inactive staff cannot control the device.")
+    bridge.require_device_online()
     if not staff.device_admin:
         staff.device_admin = True
         staff.save(update_fields=["device_admin", "updated_at"])

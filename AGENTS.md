@@ -121,6 +121,11 @@ core/             # shared API helpers, middleware, permissions
   `GET/POST/DELETE …/admin/device/controllers/`. Controllers are ensured on the
   bridge with ZK `USER_ADMIN` (14) so they can open the scanner settings menu;
   members and non-controller staff stay `USER_DEFAULT` (0).
+- Device reachability: `GET …/admin/device/status/` (any authenticated staff).
+  `online` is true only when the bridge can probe the scanner. Fingerprint
+  enroll/delete and device-controller add call `require_device_online` and
+  return **503** when the scanner is unreachable — admin UIs should disable
+  those actions after a status probe rather than letting staff start a wait.
 
 ## Testing and quality
 

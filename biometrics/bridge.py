@@ -82,10 +82,13 @@ def device_status(*, device_id: str | None = None) -> DeviceStatus:
         with _client() as client:
             resp = client.get("/internal/device/", params=_device_params(device_id))
             if resp.status_code >= 400:
+                # Bridge answered; the scanner itself is unreachable / errored.
+                detail = _bridge_error_detail(resp)
                 return DeviceStatus(
                     online=False,
-                    bridge_ok=False,
-                    message=f"Bridge error ({resp.status_code}).",
+                    bridge_ok=True,
+                    message=detail
+                    or "Fingerprint device is offline. Try again when the scanner is connected.",
                 )
             body = resp.json()
             device = body.get("device") or {}
@@ -104,8 +107,19 @@ def device_status(*, device_id: str | None = None) -> DeviceStatus:
         return DeviceStatus(
             online=False,
             bridge_ok=False,
-            message="Fingerprint device is offline. Try again when the bridge is connected.",
+            message="Fingerprint device bridge is offline. Try again when the bridge is connected.",
         )
+
+
+def require_device_online(*, device_id: str | None = None) -> DeviceStatus:
+    """Raise BridgeUnavailable when the scanner cannot be managed."""
+    st = device_status(device_id=device_id)
+    if st.online:
+        return st
+    raise BridgeUnavailable(
+        st.message
+        or "Fingerprint device is offline. Try again when the scanner is connected."
+    )
 
 
 # pyzk privilege levels mirrored on zkteco-bridge.
