@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, Throttled, ValidationError
@@ -237,7 +238,11 @@ def dashboard(user):
     p = owned_profile(user)
     now = timezone.now()
     status = gym_status(now)
-    last = p.check_ins.order_by("-checked_in_at").first()
+    last = (
+        p.check_ins.annotate(punch_at=Coalesce("last_punch_at", "checked_in_at"))
+        .order_by("-punch_at")
+        .first()
+    )
     local = now.astimezone(DHAKA)
     include = p.membership_status in {"active", "expired"}
     today_utc = now.astimezone(UTC).date()
@@ -256,7 +261,9 @@ def dashboard(user):
         "visits_this_month": p.check_ins.filter(
             check_in_date__year=local.year, check_in_date__month=local.month
         ).count(),
-        "last_check_in_at": last.checked_in_at if last else None,
+        "last_check_in_at": (
+            (last.last_punch_at or last.checked_in_at) if last else None
+        ),
         "fingerprint_status": p.fingerprint_status,
         "payment_preview": PaymentSerializer(
             p.payments.order_by("-created_at")[:5], many=True

@@ -368,15 +368,18 @@ def record_checkout(data):
         row.duration_minutes = min(raw_mins, 480)
         row.auto_closed = False
         row.check_out_source = source
-        row.save(
-            update_fields=[
-                "checked_out_at",
-                "duration_minutes",
-                "auto_closed",
-                "check_out_source",
-                "updated_at",
-            ]
-        )
+        update_fields = [
+            "checked_out_at",
+            "duration_minutes",
+            "auto_closed",
+            "check_out_source",
+            "updated_at",
+        ]
+        prior = row.last_punch_at or row.checked_in_at
+        if at >= prior:
+            row.last_punch_at = at
+            update_fields.append("last_punch_at")
+        row.save(update_fields=update_fields)
     else:
         # Record-only exit when arrival scan was missed
         in_at = at - timedelta(minutes=60)
@@ -384,6 +387,7 @@ def record_checkout(data):
             member=member,
             check_in_date=day,
             checked_in_at=in_at,
+            last_punch_at=at,
             checked_out_at=at,
             source=source,
             check_out_source=source,
@@ -397,6 +401,7 @@ def record_checkout(data):
         "day": row.check_in_date,
         "recorded": True,
         "checked_in_at": row.checked_in_at,
+        "last_punch_at": row.last_punch_at or row.checked_in_at,
         "checked_out_at": row.checked_out_at,
         "duration_minutes": row.duration_minutes,
         "exit_only_record": True,
@@ -413,17 +418,28 @@ def record_checkin(data):
     if member.membership_status in {"none", "pending_payment"}:
         raise PermissionDenied("Membership payment is required before checking in.")
     at = data.get("checked_in_at") or timezone.now()
+    day = at.astimezone(DHAKA).date()
     row, created = CheckIn.objects.get_or_create(
         member=member,
-        check_in_date=at.astimezone(DHAKA).date(),
-        defaults={"checked_in_at": at, "source": data.get("source", "device")},
+        check_in_date=day,
+        defaults={
+            "checked_in_at": at,
+            "last_punch_at": at,
+            "source": data.get("source", "device"),
+        },
     )
+    if not created:
+        prior = row.last_punch_at or row.checked_in_at
+        if at >= prior:
+            row.last_punch_at = at
+            row.save(update_fields=["last_punch_at", "updated_at"])
     return {
         "member_uuid": str(member.user_id),
         "member_id": member.member_id,
         "day": row.check_in_date,
         "recorded": created,
         "checked_in_at": row.checked_in_at,
+        "last_punch_at": row.last_punch_at or row.checked_in_at,
         "checked_out_at": row.checked_out_at,
         "duration_minutes": row.duration_minutes,
     }

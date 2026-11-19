@@ -89,6 +89,7 @@ class CheckInOutput(serializers.Serializer):
     day = serializers.DateField()
     recorded = serializers.BooleanField()
     checked_in_at = serializers.DateTimeField()
+    last_punch_at = serializers.DateTimeField(required=False)
     checked_out_at = serializers.DateTimeField(allow_null=True, required=False)
     duration_minutes = serializers.IntegerField(allow_null=True, required=False)
     exit_only_record = serializers.BooleanField(required=False)

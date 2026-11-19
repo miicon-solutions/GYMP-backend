@@ -207,9 +207,12 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
     seed_hours()
     member.member_profile.profile_complete = True
     member.member_profile.save()
-    receive_cash(staff, member.member_profile, plan.pk)
     url = "/api/v1/internal/attendance/check-in/"
     body = {"member_id": member.member_profile.member_id, "checked_in_at": "2026-11-14T20:30:00Z"}
+    # Unpaid / pending_payment members cannot check in (no calendar row).
+    unpaid = client.post(url, body, format="json", HTTP_X_DEVICE_KEY="test-device-key")
+    assert unpaid.status_code == 403
+    receive_cash(staff, member.member_profile, plan.pk)
     assert client.post(url, body, format="json").status_code == 401
     response = client.post(url, body, format="json", HTTP_X_DEVICE_KEY="test-device-key")
     assert response.status_code == 200
@@ -219,9 +222,33 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
         client.post(url, body, format="json", HTTP_X_DEVICE_KEY="test-device-key").data["recorded"]
         is False
     )
+    # Same-day later punch: still one visit day, but last_punch_at / dashboard move forward.
+    later = {
+        "member_id": member.member_profile.member_id,
+        "checked_in_at": "2026-11-15T08:45:00+06:00",
+        "source": "device",
+    }
+    second = client.post(url, later, format="json", HTTP_X_DEVICE_KEY="test-device-key")
+    assert second.status_code == 200
+    assert second.data["recorded"] is False
+    first_in = second.data["checked_in_at"]
+    last_punch = second.data["last_punch_at"]
+    assert first_in is not None and last_punch is not None
+    assert last_punch > first_in
+    assert last_punch.hour == 8 and last_punch.minute == 45
+    # Unknown device user id (wrong PF- / leftover PG-) → 404
+    unknown = client.post(
+        url,
+        {**body, "member_id": "PF-NOPE"},
+        format="json",
+        HTTP_X_DEVICE_KEY="test-device-key",
+    )
+    assert unknown.status_code == 404
     client.force_authenticate(member)
     month = client.get("/api/v1/member/attendance/", {"year": 2026, "month": 11})
     assert month.status_code == 200 and month.data["visit_count"] == 1
+    attended = [str(d) for d in month.data["attended_days"]]
+    assert "2026-11-15" in attended
     assert month.data["closed_weekday"] == 5
     assert client.get("/api/v1/member/attendance/", {"month": 13}).status_code == 400
     dashboard = client.get("/api/v1/member/dashboard/")
@@ -230,6 +257,8 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
     assert dashboard.data["has_unread_notifications"] is False
     assert len(dashboard.data["payment_preview"]) == 1
     assert dashboard.data["status"] == "active"
+    assert dashboard.data["visits_this_month"] == 1
+    assert dashboard.data["last_check_in_at"] == last_punch
     client.force_authenticate(staff)
     detail = client.get(f"/api/v1/admin/members/{member.pk}/")
     assert detail.data["last_paid_at"] is not None

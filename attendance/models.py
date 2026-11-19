@@ -8,6 +8,9 @@ class CheckIn(Entity):
         "members.MemberProfile", on_delete=models.CASCADE, related_name="check_ins"
     )
     checked_in_at = models.DateTimeField(db_index=True)
+    # Latest device/admin punch for this visit day (Home "Last check-in").
+    # Session start stays on checked_in_at; same-day re-punches only bump this.
+    last_punch_at = models.DateTimeField(null=True, blank=True, db_index=True)
     checked_out_at = models.DateTimeField(null=True, blank=True)
     check_in_date = models.DateField()
     source = models.CharField(
