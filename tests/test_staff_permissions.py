@@ -16,6 +16,8 @@ pytestmark = pytest.mark.django_db
 def test_super_effective_permissions_are_full_catalog(super_admin):
     codes = effective_permissions(super_admin)
     assert codes == all_permission_codes()
+    assert "dashboard.view" in codes
+    assert staff_has_permission(super_admin, "dashboard.view")
     assert staff_has_permission(super_admin, "members.delete")
     assert staff_has_permission(super_admin, "device_controllers.create")
 
@@ -108,5 +110,6 @@ def test_permissions_catalog_super_only(client, staff, super_admin):
     resp = client.get("/api/v1/admin/staff/permissions/catalog/")
     assert resp.status_code == 200
     features = {row["feature"] for row in resp.data["features"]}
+    assert "dashboard" in features
     assert "members" in features
     assert "staff" in features

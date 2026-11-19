@@ -12,6 +12,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 # feature → allowed CRUD actions (subset of view/create/update/delete)
 STAFF_PERMISSION_CATALOG: dict[str, tuple[str, ...]] = {
+    "dashboard": ("view",),
     "members": ("view", "create", "update", "delete"),
     "reports": ("view",),
     "costs": ("view", "create", "update", "delete"),
