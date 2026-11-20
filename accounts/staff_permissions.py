@@ -21,7 +21,7 @@ STAFF_PERMISSION_CATALOG: dict[str, tuple[str, ...]] = {
     "activity": ("view",),
     "staff": ("view",),
     "device_controllers": ("view", "create", "delete"),
-    "notifications": ("view", "create"),
+    "notifications": ("view", "create", "update", "delete"),
 }
 
 def all_permission_codes() -> list[str]:

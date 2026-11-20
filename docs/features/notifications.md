@@ -1,10 +1,10 @@
 # Notifications
 
-Member in-app notification feed, FCM device registration, and staff announcements.
+Member in-app notification feed, FCM device registration, and staff announcement campaigns.
 
 - **OpenAPI:** `/openapi/v1/notifications.yaml`
 - **Base paths:** `/api/v1/member/notifications/`, `/api/v1/member/devices/fcm/`, `/api/v1/admin/notifications/`
-- **Auth:** Member Bearer for feed/devices; staff with `notifications.create` for announcements
+- **Auth:** Member Bearer for feed/devices; staff with `notifications.*` for campaigns
 
 ## Member feed
 
@@ -25,7 +25,7 @@ Resource fields: `id`, `kind` (`membership` \| `payment` \| `attendance` \| `gen
 | `POST` | `/api/v1/member/devices/fcm/` | `{ token, platform: ios\|android }` |
 | `DELETE` | `/api/v1/member/devices/fcm/` | `{ token }` |
 
-Push uses the same Firebase project as Google auth (`FIREBASE_CREDENTIALS_FILE`). Invalid tokens are dropped on send.
+Push uses the same Firebase project as Google auth (`FIREBASE_CREDENTIALS_FILE`). Invalid tokens are dropped on send. iOS requires an APNs auth key on the matching Firebase iOS app bundle id.
 
 ## Auto catalog
 
@@ -40,9 +40,26 @@ Push uses the same Firebase project as Google auth (`FIREBASE_CREDENTIALS_FILE`)
 
 Run expiry batch: `python manage.py notify_membership_expiry` (daily cron, Asia/Dhaka).
 
-## Admin announcement
+## Admin announcement campaigns
 
-`POST /api/v1/admin/notifications/` with `{ scope: member|active, member_id?, title, body, send_push }` requires `notifications.create`.
+`StaffAnnouncement` is the staff-facing campaign. Create fans out one `MemberNotification` (`code=announcement`) per recipient with `related_object_id = campaign id`.
+
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/v1/admin/notifications/` | `notifications.view` |
+| `POST` | `/api/v1/admin/notifications/` | `notifications.create` |
+| `GET` | `/api/v1/admin/notifications/{id}/` | `notifications.view` |
+| `PATCH` | `/api/v1/admin/notifications/{id}/` | `notifications.update` |
+| `DELETE` | `/api/v1/admin/notifications/{id}/` | `notifications.delete` |
+| `POST` | `/api/v1/admin/notifications/{id}/resend-push/` | `notifications.create` |
+
+Create body: `{ scope: member\|active, member_id?, title, body, send_push }`.
+
+PATCH body: `{ title?, body? }` — updates campaign and all linked member rows; does **not** resend push.
+
+Delete removes the campaign and all linked fan-out rows.
+
+Create / resend responses include `push_sent`, `push_failed`, `push_skipped_no_device`, `push_skipped_disabled`.
 
 ## Django operator console (manual test)
 

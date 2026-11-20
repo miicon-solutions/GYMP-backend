@@ -9,7 +9,8 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from core.api import require_admin, require_staff_permission
-from notifications.models import MemberDeviceToken, MemberNotification
+from notifications.models import MemberDeviceToken, MemberNotification, StaffAnnouncement
+from notifications.serializers import announcement_payload
 
 logger = logging.getLogger(__name__)
 
@@ -195,50 +196,38 @@ def unregister_all_devices(user) -> dict:
     return {"deleted": deleted}
 
 
-def send_announcement(actor, data: dict) -> dict:
-    require_admin(actor)
-    require_staff_permission(actor, "notifications.create")
+def list_announcements():
+    return StaffAnnouncement.objects.select_related(
+        "created_by", "created_by__staff_profile"
+    ).all()
+
+
+def get_announcement(announcement_id) -> StaffAnnouncement:
+    return get_object_or_404(
+        StaffAnnouncement.objects.select_related("created_by", "created_by__staff_profile"),
+        pk=announcement_id,
+    )
+
+
+def _announcement_recipients(scope: str, member_id):
     from members.models import MemberProfile
 
-    scope = data["scope"]
-    send_push = bool(data.get("send_push", True))
-    title = data["title"].strip()
-    body = data["body"].strip()
     if scope == "member":
-        profile = get_object_or_404(MemberProfile, user_id=data["member_id"])
-        recipients = [profile.user]
-    else:
-        recipients = [
-            p.user
-            for p in MemberProfile.objects.filter(membership_status="active").select_related(
-                "user"
-            )
-        ]
+        profile = get_object_or_404(MemberProfile, user_id=member_id)
+        return [profile.user]
+    return [
+        p.user
+        for p in MemberProfile.objects.filter(membership_status="active").select_related("user")
+    ]
 
-    created = 0
+
+def _push_fanout(notification_ids: list) -> dict:
     push_sent = 0
     push_failed = 0
     push_skipped_no_device = 0
     push_skipped_disabled = 0
-    for user in recipients:
-        # Create the in-app row first; send FCM inline so the API can report
-        # whether a device token existed (on_commit alone hides "no_device").
-        notif = create_notification(
-            user,
-            code="announcement",
-            kind="general",
-            title=title,
-            body=body,
-            push=False,
-        )
-        if not notif:
-            continue
-        created += 1
-        if not send_push:
-            continue
-        notif.send_push = True
-        notif.save(update_fields=["send_push", "updated_at"])
-        result = send_fcm_for_notification(notif.pk)
+    for notif_id in notification_ids:
+        result = send_fcm_for_notification(notif_id)
         push_sent += int(result.get("sent") or 0)
         push_failed += int(result.get("failed") or 0)
         skipped = result.get("skipped")
@@ -247,13 +236,124 @@ def send_announcement(actor, data: dict) -> dict:
         elif skipped == "push_disabled":
             push_skipped_disabled += 1
     return {
-        "created": created,
-        "push_requested": send_push,
         "push_sent": push_sent,
         "push_failed": push_failed,
         "push_skipped_no_device": push_skipped_no_device,
         "push_skipped_disabled": push_skipped_disabled,
     }
+
+
+def send_announcement(actor, data: dict) -> dict:
+    require_admin(actor)
+    require_staff_permission(actor, "notifications.create")
+
+    scope = data["scope"]
+    send_push = bool(data.get("send_push", True))
+    title = data["title"].strip()
+    body = data["body"].strip()
+    member_id = data.get("member_id")
+    recipients = _announcement_recipients(scope, member_id)
+
+    with transaction.atomic():
+        campaign = StaffAnnouncement.objects.create(
+            title=title,
+            body=body,
+            scope=scope,
+            member_id=member_id if scope == "member" else None,
+            created_by=actor,
+            send_push_requested=send_push,
+        )
+        campaign_id = str(campaign.pk)
+        fanout_ids: list = []
+        for user in recipients:
+            notif = create_notification(
+                user,
+                code="announcement",
+                kind="general",
+                title=title,
+                body=body,
+                related_object_id=campaign_id,
+                push=False,
+            )
+            if notif:
+                fanout_ids.append(notif.pk)
+                if send_push:
+                    notif.send_push = True
+                    notif.save(update_fields=["send_push", "updated_at"])
+
+    push = (
+        _push_fanout(fanout_ids)
+        if send_push and fanout_ids
+        else {
+            "push_sent": 0,
+            "push_failed": 0,
+            "push_skipped_no_device": 0,
+            "push_skipped_disabled": 0,
+        }
+    )
+    payload = announcement_payload(campaign, recipient_count=len(fanout_ids))
+    payload.update(
+        {
+            "created": len(fanout_ids),
+            "push_requested": send_push,
+            **push,
+        }
+    )
+    return payload
+
+
+def update_announcement(actor, announcement_id, data: dict) -> dict:
+    require_admin(actor)
+    require_staff_permission(actor, "notifications.update")
+    campaign = get_announcement(announcement_id)
+    fields: list[str] = []
+    if "title" in data:
+        campaign.title = data["title"].strip()
+        fields.append("title")
+    if "body" in data:
+        campaign.body = data["body"].strip()
+        fields.append("body")
+    if not fields:
+        raise ValidationError("Provide title and/or body.")
+    fields.append("updated_at")
+    campaign.save(update_fields=fields)
+
+    updates = {}
+    if "title" in data:
+        updates["title"] = campaign.title
+    if "body" in data:
+        updates["body"] = campaign.body
+    if updates:
+        MemberNotification.objects.filter(
+            code="announcement",
+            related_object_id=str(campaign.pk),
+        ).update(**updates)
+    return announcement_payload(campaign)
+
+
+def delete_announcement(actor, announcement_id) -> None:
+    require_admin(actor)
+    require_staff_permission(actor, "notifications.delete")
+    campaign = get_announcement(announcement_id)
+    MemberNotification.objects.filter(
+        code="announcement",
+        related_object_id=str(campaign.pk),
+    ).delete()
+    campaign.delete()
+
+
+def resend_announcement_push(actor, announcement_id) -> dict:
+    require_admin(actor)
+    require_staff_permission(actor, "notifications.create")
+    campaign = get_announcement(announcement_id)
+    ids = list(
+        MemberNotification.objects.filter(
+            code="announcement",
+            related_object_id=str(campaign.pk),
+        ).values_list("pk", flat=True)
+    )
+    MemberNotification.objects.filter(pk__in=ids).update(send_push=True)
+    return _push_fanout(ids)
 
 
 def notify_membership_expiry_batch(*, today=None) -> dict:

@@ -282,7 +282,12 @@
       "openapi": "/openapi/v1/notifications.yaml",
       "doc": "/docs/features/notifications/",
       "operations": [
-        "admin_notifications_announce",
+        "api_v1_admin_notifications_create",
+        "api_v1_admin_notifications_destroy",
+        "api_v1_admin_notifications_list",
+        "api_v1_admin_notifications_partial_update",
+        "api_v1_admin_notifications_resend_push_create",
+        "api_v1_admin_notifications_retrieve",
         "member_devices_fcm_register",
         "member_devices_fcm_unregister",
         "member_notifications_list",

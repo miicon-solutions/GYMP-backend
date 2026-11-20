@@ -20,10 +20,37 @@ NOTIFICATION_CODES = [
     ("announcement", "announcement"),
 ]
 
+ANNOUNCEMENT_SCOPES = [
+    ("member", "member"),
+    ("active", "active"),
+]
+
 DEVICE_PLATFORMS = [
     ("ios", "ios"),
     ("android", "android"),
 ]
+
+
+class StaffAnnouncement(Entity):
+    """Staff-facing announcement campaign; fans out to MemberNotification rows."""
+
+    title = models.CharField(max_length=120)
+    body = models.TextField()
+    scope = models.CharField(max_length=16, choices=ANNOUNCEMENT_SCOPES)
+    member_id = models.UUIDField(null=True, blank=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="staff_announcements",
+    )
+    send_push_requested = models.BooleanField(default=True)
+
+    class Meta(Entity.Meta):
+        indexes = [
+            models.Index(fields=["-created_at"], name="staff_announce_created_idx"),
+        ]
 
 
 class MemberNotification(Entity):

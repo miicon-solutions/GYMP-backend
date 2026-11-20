@@ -883,8 +883,47 @@ paths:
                 $ref: '#/components/schemas/AdminMemberOutput'
           description: ''
   /api/v1/admin/notifications/:
+    get:
+      operationId: api_v1_admin_notifications_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - notifications
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAdminAnnouncementList'
+          description: ''
     post:
-      operationId: admin_notifications_announce
+      operationId: api_v1_admin_notifications_create
       tags:
       - notifications
       requestBody:
@@ -903,11 +942,104 @@ paths:
       - bearerAuth: []
       - jwtAuth: []
       responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAnnouncementCreateOutput'
+          description: ''
+  /api/v1/admin/notifications/{id}/:
+    get:
+      operationId: api_v1_admin_notifications_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminAnnouncementOutput'
+                $ref: '#/components/schemas/AdminAnnouncement'
+          description: ''
+    patch:
+      operationId: api_v1_admin_notifications_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminAnnouncementUpdateInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminAnnouncementUpdateInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminAnnouncementUpdateInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAnnouncement'
+          description: ''
+    delete:
+      operationId: api_v1_admin_notifications_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/admin/notifications/{id}/resend-push/:
+    post:
+      operationId: api_v1_admin_notifications_resend_push_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAnnouncementResendOutput'
           description: ''
   /api/v1/admin/plans/:
     get:
@@ -5383,6 +5515,114 @@ components:
       - at
       - id
       - summary_key
+    AdminAnnouncement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        scope:
+          type: string
+        member_id:
+          type: string
+          format: uuid
+          nullable: true
+        recipient_count:
+          type: integer
+        send_push_requested:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminAnnouncementCreatedBy'
+          nullable: true
+      required:
+      - body
+      - created_at
+      - created_by
+      - id
+      - member_id
+      - recipient_count
+      - scope
+      - send_push_requested
+      - title
+    AdminAnnouncementCreateOutput:
+      type: object
+      description: Campaign fields plus push delivery summary and legacy `created`
+        alias.
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        scope:
+          type: string
+        member_id:
+          type: string
+          format: uuid
+          nullable: true
+        recipient_count:
+          type: integer
+        send_push_requested:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          allOf:
+          - $ref: '#/components/schemas/AdminAnnouncementCreatedBy'
+          nullable: true
+        created:
+          type: integer
+        push_requested:
+          type: boolean
+        push_sent:
+          type: integer
+        push_failed:
+          type: integer
+        push_skipped_no_device:
+          type: integer
+        push_skipped_disabled:
+          type: integer
+      required:
+      - body
+      - created
+      - created_at
+      - created_by
+      - id
+      - member_id
+      - push_failed
+      - push_requested
+      - push_sent
+      - push_skipped_disabled
+      - push_skipped_no_device
+      - recipient_count
+      - scope
+      - send_push_requested
+      - title
+    AdminAnnouncementCreatedBy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        short_id:
+          type: string
+      required:
+      - id
+      - name
+      - short_id
     AdminAnnouncementInput:
       type: object
       properties:
@@ -5412,16 +5652,22 @@ components:
       - body
       - scope
       - title
-    AdminAnnouncementOutput:
+    AdminAnnouncementResendOutput:
       type: object
       properties:
-        created:
+        push_sent:
           type: integer
-        push_requested:
-          type: boolean
+        push_failed:
+          type: integer
+        push_skipped_no_device:
+          type: integer
+        push_skipped_disabled:
+          type: integer
       required:
-      - created
-      - push_requested
+      - push_failed
+      - push_sent
+      - push_skipped_disabled
+      - push_skipped_no_device
     AdminMember:
       type: object
       properties:
@@ -8620,6 +8866,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Activity'
+    PaginatedAdminAnnouncementList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminAnnouncement'
     PaginatedAdminMemberList:
       type: object
       required:
@@ -8924,6 +9189,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkoutSessionList'
+    PatchedAdminAnnouncementUpdateInput:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        body:
+          type: string
+          maxLength: 500
     PatchedArticleInput:
       type: object
       properties:

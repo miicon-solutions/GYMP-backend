@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from django.utils import timezone
 
-from notifications.models import MemberDeviceToken, MemberNotification
+from notifications.models import MemberDeviceToken, MemberNotification, StaffAnnouncement
 from notifications.services import (
     create_notification,
     has_unread,
@@ -140,29 +140,53 @@ def test_expiry_batch_idempotent(member, plan):
 
 
 @pytest.mark.django_db
-def test_admin_announcement(client, member, staff, plan):
+def test_admin_announcement_campaign_crud(client, member, staff, plan):
     profile = member.member_profile
     profile.membership_status = "active"
     profile.plan = plan
     profile.save()
     client.force_authenticate(staff)
-    with patch("notifications.services.send_fcm_for_notification"):
-        result = client.post(
-            "/api/v1/admin/notifications/",
-            {
-                "scope": "active",
-                "title": "Friday closed",
-                "body": "Gym closed this Friday.",
-                "send_push": False,
-            },
-            format="json",
-        )
-    assert result.status_code == 200
-    assert result.data["created"] == 1
-    assert result.data["push_requested"] is False
-    assert result.data["push_sent"] == 0
-    assert MemberNotification.objects.filter(
-        user=member, code="announcement", title="Friday closed"
+
+    created = client.post(
+        "/api/v1/admin/notifications/",
+        {
+            "scope": "active",
+            "title": "Friday closed",
+            "body": "Gym closed this Friday.",
+            "send_push": False,
+        },
+        format="json",
+    )
+    assert created.status_code == 201
+    assert created.data["created"] == 1
+    assert created.data["recipient_count"] == 1
+    assert created.data["push_requested"] is False
+    campaign_id = created.data["id"]
+    assert StaffAnnouncement.objects.filter(pk=campaign_id).exists()
+    fanout = MemberNotification.objects.get(user=member, code="announcement")
+    assert fanout.related_object_id == str(campaign_id)
+    assert fanout.title == "Friday closed"
+
+    listed = client.get("/api/v1/admin/notifications/")
+    assert listed.status_code == 200
+    assert listed.data["results"][0]["id"] == campaign_id
+
+    patched = client.patch(
+        f"/api/v1/admin/notifications/{campaign_id}/",
+        {"title": "Saturday closed", "body": "Closed Sat."},
+        format="json",
+    )
+    assert patched.status_code == 200
+    assert patched.data["title"] == "Saturday closed"
+    fanout.refresh_from_db()
+    assert fanout.title == "Saturday closed"
+    assert fanout.body == "Closed Sat."
+
+    deleted = client.delete(f"/api/v1/admin/notifications/{campaign_id}/")
+    assert deleted.status_code == 204
+    assert not StaffAnnouncement.objects.filter(pk=campaign_id).exists()
+    assert not MemberNotification.objects.filter(
+        code="announcement", related_object_id=str(campaign_id)
     ).exists()
 
 
@@ -184,11 +208,65 @@ def test_admin_announcement_reports_no_device(client, member, staff, plan):
         },
         format="json",
     )
-    assert result.status_code == 200
+    assert result.status_code == 201
     assert result.data["created"] == 1
     assert result.data["push_requested"] is True
     assert result.data["push_sent"] == 0
     assert result.data["push_skipped_no_device"] == 1
+
+
+@pytest.mark.django_db
+def test_admin_announcement_resend_push(client, member, staff, plan):
+    profile = member.member_profile
+    profile.membership_status = "active"
+    profile.plan = plan
+    profile.save()
+    client.force_authenticate(staff)
+    created = client.post(
+        "/api/v1/admin/notifications/",
+        {
+            "scope": "member",
+            "member_id": str(member.pk),
+            "title": "Hi",
+            "body": "Again",
+            "send_push": False,
+        },
+        format="json",
+    )
+    campaign_id = created.data["id"]
+    with patch(
+        "notifications.services.send_fcm_for_notification",
+        return_value={"sent": 1, "failed": 0, "skipped": None},
+    ) as send:
+        resend = client.post(f"/api/v1/admin/notifications/{campaign_id}/resend-push/")
+    assert resend.status_code == 200
+    assert resend.data["push_sent"] == 1
+    send.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_admin_announcement_permissions(client, member, staff, plan):
+    profile = member.member_profile
+    profile.membership_status = "active"
+    profile.plan = plan
+    profile.save()
+    staff.staff_profile.permissions = ["notifications.view"]
+    staff.staff_profile.save(update_fields=["permissions", "updated_at"])
+    client.force_authenticate(staff)
+    assert client.get("/api/v1/admin/notifications/").status_code == 200
+    assert (
+        client.post(
+            "/api/v1/admin/notifications/",
+            {
+                "scope": "active",
+                "title": "Nope",
+                "body": "Denied",
+                "send_push": False,
+            },
+            format="json",
+        ).status_code
+        == 403
+    )
 
 
 @pytest.mark.django_db
