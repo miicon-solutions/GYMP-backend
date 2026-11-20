@@ -461,7 +461,15 @@ def _send_fcm(token: str, *, title: str, body: str, data: dict) -> None:
         token=token,
         notification=messaging.Notification(title=title, body=body),
         data={k: str(v) for k, v in data.items()},
-        android=messaging.AndroidConfig(priority="high"),
+        android=messaging.AndroidConfig(
+            priority="high",
+            notification=messaging.AndroidNotification(
+                channel_id="pure_fitness_push",
+                sound="default",
+                priority="high",
+                default_vibrate_timings=True,
+            ),
+        ),
         apns=messaging.APNSConfig(
             payload=messaging.APNSPayload(aps=messaging.Aps(sound="default")),
         ),

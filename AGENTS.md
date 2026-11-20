@@ -84,6 +84,17 @@ core/             # shared API helpers, middleware, permissions
   mutations (create/update/delete/activate/MFA enroll) stay **SuperOnly**.
   Unlock/refresh `staff.permissions` returns effective grants. Catalog:
   `GET /api/v1/admin/staff/permissions/catalog/`.
+  `notifications` actions: `view`, `create`, `update`, `delete` (announcement
+  campaigns under `/api/v1/admin/notifications/`; resend-push uses `create`).
+- **Notifications / FCM:** member feed + device tokens + staff announcement
+  campaigns — see `docs/features/notifications.md` and
+  `/openapi/v1/notifications.yaml`. `StaffAnnouncement` fans out
+  `MemberNotification` rows (`code=announcement`, `related_object_id=campaign`).
+  FCM uses `FIREBASE_CREDENTIALS_FILE` (same project as Google auth). Android
+  payloads set `AndroidNotification.channel_id=pure_fitness_push` (must match
+  the mobile app channel). iOS needs an APNs auth key on the Firebase iOS app
+  whose bundle id matches the shipping app. Invalid/unregistered tokens are
+  dropped on send; APNs/project misconfig must not delete tokens.
 - Device check-in: `X-Device-Key` == `ATTENDANCE_DEVICE_KEY` on
   `POST /api/v1/internal/attendance/check-in/`.
 - SSLCommerz: session → gateway → IPN/confirm; return pages never activate alone;
@@ -170,5 +181,6 @@ checks.
 
 ## Keeping this file current
 
-Update this document when run model, clients, ZKTeco contracts, **docs URL
-layout**, **API version** (`v2+`), or **feature tag taxonomy** change.
+Update this document when run model, clients, ZKTeco contracts, notifications/FCM
+contracts, **docs URL layout**, **API version** (`v2+`), or **feature tag
+taxonomy** change.

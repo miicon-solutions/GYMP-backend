@@ -25,7 +25,7 @@ Resource fields: `id`, `kind` (`membership` \| `payment` \| `attendance` \| `gen
 | `POST` | `/api/v1/member/devices/fcm/` | `{ token, platform: ios\|android }` |
 | `DELETE` | `/api/v1/member/devices/fcm/` | `{ token }` |
 
-Push uses the same Firebase project as Google auth (`FIREBASE_CREDENTIALS_FILE`). Invalid tokens are dropped on send. iOS requires an APNs auth key on the matching Firebase iOS app bundle id.
+Push uses the same Firebase project as Google auth (`FIREBASE_CREDENTIALS_FILE`). Invalid / unregistered tokens are dropped on send; APNs credential or sender-id misconfig must **not** delete tokens. iOS requires an APNs auth key on the matching Firebase iOS app bundle id. Android FCM uses channel `pure_fitness_push` (high importance); the mobile app creates that channel and shows local notifications while foregrounded.
 
 ## Auto catalog
 
