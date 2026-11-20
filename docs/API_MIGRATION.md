@@ -1,6 +1,6 @@
 # API migration reference
 
-The Django backend intentionally breaks the Go wire contract. The Flutter client in `GYMA_a` now targets this contract. Configure its API origin for this backend and use this document alongside [the generated schema](openapi.yaml). There is no legacy `/v1/` compatibility alias and no data/session import.
+The Django backend intentionally breaks the Go wire contract. The Flutter client in `GYMA_a` now targets this contract. Configure its API origin for this backend and use this document alongside [the generated schema](openapi/v1.yaml) and [feature packs](features/). There is no legacy `/v1/` compatibility alias and no data/session import. For day-to-day integration prefer `/docs/` and `/openapi/v1/{feature}.yaml`; this file remains the Go→Django migration history.
 
 ## Common changes
 

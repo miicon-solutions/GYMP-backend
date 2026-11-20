@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GYMA API {{ version }}</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: #14201a;
+      background: #f7f5ef;
+    }
+    .docs-chrome {
+      flex: 0 0 auto;
+      border-bottom: 1px solid #d5d0c4;
+      background: rgba(255, 255, 255, 0.96);
+    }
+    .docs-chrome-top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem 1rem;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+    }
+    .docs-brand {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+    .docs-chrome nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      align-items: center;
+    }
+    .docs-chrome a {
+      color: #0f6b4c;
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    .docs-chrome a:hover { text-decoration: underline; }
+    .docs-chrome select {
+      border: 1px solid #d5d0c4;
+      border-radius: 6px;
+      padding: 0.3rem 0.45rem;
+      background: #fff;
+      color: #14201a;
+      font-size: 0.92rem;
+    }
+    .docs-features {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      padding: 0 1rem 0.7rem;
+    }
+    .docs-features-label {
+      flex: 0 0 auto;
+      align-self: center;
+      font-size: 0.75rem;
+      color: #4d5a53;
+      margin-right: 0.15rem;
+    }
+    .docs-features a {
+      flex: 0 0 auto;
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border: 1px solid #cfe3d8;
+      border-radius: 999px;
+      background: #eef7f2;
+      color: #0f6b4c;
+      font-size: 0.78rem;
+      line-height: 1.2;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    .docs-features a:hover {
+      background: #dcefe5;
+    }
+    .docs-frame {
+      flex: 1 1 0;
+      min-height: 0;
+      width: 100%;
+      border: 0;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <header class="docs-chrome">
+    <div class="docs-chrome-top">
+      <div class="docs-brand">GYMA API</div>
+      <nav>
+        <label>
+          Version
+          <select id="version-select" aria-label="API version">
+            {% for v in versions %}
+            <option value="{{ v }}" {% if v == version %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <a href="{{ schema_yaml_url }}">OpenAPI</a>
+        <a href="{{ features_index_url }}">Feature packs</a>
+        <a href="{{ scalar_url }}">Scalar</a>
+      </nav>
+    </div>
+    <div class="docs-features" aria-label="Feature packs">
+      <span class="docs-features-label">Packs</span>
+      {% for tag in features %}
+      <a href="/docs/features/{{ tag.name }}/" title="{{ tag.description }}">{{ tag.name }}</a>
+      {% endfor %}
+    </div>
+  </header>
+  <iframe
+    class="docs-frame"
+    title="GYMA API reference"
+    src="{{ swagger_frame_url }}"
+  ></iframe>
+  <script>
+    document.getElementById("version-select").addEventListener("change", (event) => {
+      window.location.href = "/docs/" + event.target.value + "/";
+    });
+  </script>
+</body>
+</html>

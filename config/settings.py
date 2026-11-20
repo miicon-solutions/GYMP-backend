@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "drf_spectacular",
     "drf_spectacular_sidecar",
+    "core",
     "accounts",
     "members",
     "plans",
@@ -231,9 +232,12 @@ SIMPLE_JWT = {
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "sub",
 }
+API_DOC_VERSIONS = ("v1",)
+DEFAULT_API_DOC_VERSION = "v1"
+API_DOC_VERSION_LABEL = "1.0.0"
 SPECTACULAR_SETTINGS = {
     "TITLE": "GYMA API",
-    "VERSION": "1.0.0",
+    "VERSION": API_DOC_VERSION_LABEL,
     "SERVE_INCLUDE_SCHEMA": False,
     "ENUM_NAME_OVERRIDES": {
         "DiscountTypeEnum": "plans.models.DISCOUNTS",
@@ -241,6 +245,35 @@ SPECTACULAR_SETTINGS = {
     },
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "TAGS": [
+        {"name": "auth", "description": "OTP, Google, refresh, logout, and staff MFA."},
+        {"name": "member", "description": "Member profile, photo, dashboard, and gym status."},
+        {
+            "name": "admin-members",
+            "description": "Staff member CRUD, phone link, fingerprint, cash.",
+        },
+        {"name": "plans", "description": "Catalog plans, offers, and public plan listing."},
+        {
+            "name": "payments",
+            "description": "SSLCommerz sessions, IPN, cash requests, receipts.",
+        },
+        {
+            "name": "attendance",
+            "description": "Member calendar and device/internal check-in.",
+        },
+        {"name": "device", "description": "Device status, controllers, and biometric vault."},
+        {"name": "staff", "description": "Staff CRUD, permissions catalog, and MFA enroll."},
+        {"name": "operations", "description": "Costs, gym hours, holidays, and activity."},
+        {"name": "reports", "description": "Revenue and reporting."},
+        {
+            "name": "fitness",
+            "description": "Workouts, schedules, nutrition, journal, and feed.",
+        },
+        {"name": "music", "description": "Music queue and catalog."},
+        {"name": "public", "description": "Welcome and other unauthenticated public APIs."},
+    ],
+    "PREPROCESSING_HOOKS": ["core.api_docs.preprocess_versioned_paths"],
+    "POSTPROCESSING_HOOKS": ["core.api_docs.postprocess_feature_tags"],
 }
 JWT_ACCESS_TTL_SEC = env.int("JWT_ACCESS_TTL_SEC", default=3600)
 JWT_REFRESH_TTL_SEC = env.int("JWT_REFRESH_TTL_SEC", default=2592000)

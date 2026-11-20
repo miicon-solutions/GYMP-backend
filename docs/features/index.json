@@ -1,0 +1,289 @@
+{
+  "version": "v1",
+  "base_url": "/api/v1/",
+  "schema": "/openapi/v1.yaml",
+  "docs": "/docs/v1/",
+  "features": {
+    "auth": {
+      "title": "Auth",
+      "description": "OTP, Google, refresh, logout, and staff MFA.",
+      "openapi": "/openapi/v1/auth.yaml",
+      "doc": "/docs/features/auth/",
+      "operations": [
+        "auth_admin_mfa_confirm",
+        "auth_admin_mfa_setup",
+        "auth_admin_unlock",
+        "auth_google",
+        "auth_google_link_phone",
+        "auth_login",
+        "auth_logout",
+        "auth_otp_send",
+        "auth_otp_verify",
+        "auth_refresh",
+        "auth_register",
+        "auth_resolve_phone"
+      ]
+    },
+    "member": {
+      "title": "Member",
+      "description": "Member profile, photo, dashboard, and gym status.",
+      "openapi": "/openapi/v1/member.yaml",
+      "doc": "/docs/features/member/",
+      "operations": [
+        "api_v1_member_profile_photo_create",
+        "api_v1_member_profile_photo_destroy",
+        "api_v1_member_profile_retrieve",
+        "api_v1_member_profile_update",
+        "member_change_phone",
+        "member_complete_profile",
+        "member_dashboard",
+        "member_gym_status",
+        "member_link_google",
+        "member_recover_email"
+      ]
+    },
+    "admin-members": {
+      "title": "Admin Members",
+      "description": "Staff member CRUD, phone link, fingerprint, cash.",
+      "openapi": "/openapi/v1/admin-members.yaml",
+      "doc": "/docs/features/admin-members/",
+      "operations": [
+        "admin_accept_cash_request",
+        "admin_cash_payment",
+        "admin_cash_preview",
+        "admin_link_member_phone",
+        "admin_list_cash_requests",
+        "admin_member_cash_requests",
+        "admin_member_fingerprint",
+        "admin_member_fingerprint_enroll",
+        "admin_member_fingerprint_pull",
+        "admin_member_fingerprint_push",
+        "admin_member_fingerprint_template_delete",
+        "admin_member_fingerprint_templates",
+        "admin_reject_cash_request",
+        "api_v1_admin_members_list",
+        "api_v1_admin_members_retrieve"
+      ]
+    },
+    "plans": {
+      "title": "Plans",
+      "description": "Catalog plans, offers, and public plan listing.",
+      "openapi": "/openapi/v1/plans.yaml",
+      "doc": "/docs/features/plans/",
+      "operations": [
+        "api_v1_admin_plans_create",
+        "api_v1_admin_plans_destroy",
+        "api_v1_admin_plans_list",
+        "api_v1_admin_plans_offers_create",
+        "api_v1_admin_plans_offers_destroy",
+        "api_v1_admin_plans_offers_list",
+        "api_v1_admin_plans_offers_partial_update",
+        "api_v1_admin_plans_partial_update",
+        "api_v1_member_plans_list",
+        "api_v1_member_plans_retrieve",
+        "api_v1_public_plans_list"
+      ]
+    },
+    "payments": {
+      "title": "Payments",
+      "description": "SSLCommerz sessions, IPN, cash requests, receipts.",
+      "openapi": "/openapi/v1/payments.yaml",
+      "doc": "/docs/features/payments/",
+      "operations": [
+        "api_v1_member_payments_list",
+        "api_v1_member_payments_retrieve",
+        "payments_cancel_cash_request",
+        "payments_confirm_session",
+        "payments_create_cash_request",
+        "payments_create_session",
+        "payments_get_cash_request",
+        "payments_get_session",
+        "payments_list_cash_requests",
+        "payments_receipt_html",
+        "payments_receipt_url",
+        "payments_sslcommerz_ipn"
+      ]
+    },
+    "attendance": {
+      "title": "Attendance",
+      "description": "Member calendar and device/internal check-in.",
+      "openapi": "/openapi/v1/attendance.yaml",
+      "doc": "/docs/features/attendance/",
+      "operations": [
+        "attendance_check_in",
+        "attendance_check_out",
+        "member_attendance",
+        "member_attendance_session_adjust"
+      ]
+    },
+    "device": {
+      "title": "Device",
+      "description": "Device status, controllers, and biometric vault.",
+      "openapi": "/openapi/v1/device.yaml",
+      "doc": "/docs/features/device/",
+      "operations": [
+        "admin_device_controllers_remove",
+        "admin_device_status",
+        "api_v1_admin_device_controllers_create",
+        "api_v1_admin_device_controllers_retrieve",
+        "internal_vault_members",
+        "internal_vault_push"
+      ]
+    },
+    "staff": {
+      "title": "Staff",
+      "description": "Staff CRUD, permissions catalog, and MFA enroll.",
+      "openapi": "/openapi/v1/staff.yaml",
+      "doc": "/docs/features/staff/",
+      "operations": [
+        "admin_staff_activate",
+        "admin_staff_deactivate",
+        "admin_staff_fingerprint_enroll",
+        "admin_staff_fingerprint_pull",
+        "admin_staff_fingerprint_push",
+        "admin_staff_fingerprint_template_delete",
+        "admin_staff_fingerprint_templates",
+        "admin_staff_mfa_enroll",
+        "admin_staff_permissions_catalog",
+        "api_v1_admin_staff_create",
+        "api_v1_admin_staff_destroy",
+        "api_v1_admin_staff_list",
+        "api_v1_admin_staff_partial_update"
+      ]
+    },
+    "operations": {
+      "title": "Operations",
+      "description": "Costs, gym hours, holidays, and activity.",
+      "openapi": "/openapi/v1/operations.yaml",
+      "doc": "/docs/features/operations/",
+      "operations": [
+        "admin_cost_archive",
+        "admin_gym_hours",
+        "admin_gym_week_update",
+        "api_v1_admin_activity_list",
+        "api_v1_admin_costs_create",
+        "api_v1_admin_costs_destroy",
+        "api_v1_admin_costs_list",
+        "api_v1_admin_costs_partial_update",
+        "api_v1_admin_gym_hours_holidays_create",
+        "api_v1_admin_gym_hours_holidays_destroy",
+        "api_v1_admin_gym_hours_holidays_list",
+        "api_v1_admin_gym_hours_holidays_partial_update"
+      ]
+    },
+    "reports": {
+      "title": "Reports",
+      "description": "Revenue and reporting.",
+      "openapi": "/openapi/v1/reports.yaml",
+      "doc": "/docs/features/reports/",
+      "operations": [
+        "admin_revenue"
+      ]
+    },
+    "fitness": {
+      "title": "Fitness",
+      "description": "Workouts, schedules, nutrition, journal, and feed.",
+      "openapi": "/openapi/v1/fitness.yaml",
+      "doc": "/docs/features/fitness/",
+      "operations": [
+        "api_v1_feed_articles_create",
+        "api_v1_feed_articles_destroy",
+        "api_v1_feed_articles_list",
+        "api_v1_feed_articles_partial_update",
+        "api_v1_feed_articles_retrieve",
+        "api_v1_feed_articles_save_create",
+        "api_v1_feed_articles_saved_list",
+        "api_v1_feed_articles_unsave_create",
+        "api_v1_feed_articles_update",
+        "api_v1_journal_entries_create",
+        "api_v1_journal_entries_list",
+        "api_v1_journal_entries_partial_update",
+        "api_v1_journal_entries_retrieve",
+        "api_v1_journal_entries_today_create",
+        "api_v1_journal_entries_today_retrieve",
+        "api_v1_journal_entries_update",
+        "api_v1_nutrition_custom_synthesizer_create",
+        "api_v1_nutrition_hydration_quick_add_create",
+        "api_v1_nutrition_hydration_today_retrieve",
+        "api_v1_nutrition_logs_confirm_intake_partial_update",
+        "api_v1_nutrition_logs_create",
+        "api_v1_nutrition_logs_destroy",
+        "api_v1_nutrition_logs_list",
+        "api_v1_nutrition_logs_partial_update",
+        "api_v1_nutrition_logs_retrieve",
+        "api_v1_nutrition_logs_today_create",
+        "api_v1_nutrition_logs_today_retrieve",
+        "api_v1_nutrition_logs_update",
+        "api_v1_nutrition_recipes_create",
+        "api_v1_nutrition_recipes_destroy",
+        "api_v1_nutrition_recipes_list",
+        "api_v1_nutrition_recipes_partial_update",
+        "api_v1_nutrition_recipes_retrieve",
+        "api_v1_nutrition_recipes_update",
+        "api_v1_schedules_active_cycle_auto_populate_create",
+        "api_v1_schedules_active_cycle_create",
+        "api_v1_schedules_active_cycle_days_update",
+        "api_v1_schedules_active_cycle_partial_update",
+        "api_v1_schedules_active_cycle_retrieve",
+        "api_v1_users_anthropometry_create",
+        "api_v1_users_anthropometry_list",
+        "api_v1_users_profile_partial_update",
+        "api_v1_users_profile_retrieve",
+        "api_v1_users_profile_update",
+        "api_v1_workouts_analytics_exercise_retrieve",
+        "api_v1_workouts_analytics_overall_retrieve",
+        "api_v1_workouts_exercises_create",
+        "api_v1_workouts_exercises_destroy",
+        "api_v1_workouts_exercises_list",
+        "api_v1_workouts_exercises_partial_update",
+        "api_v1_workouts_exercises_retrieve",
+        "api_v1_workouts_routines_create",
+        "api_v1_workouts_routines_destroy",
+        "api_v1_workouts_routines_list",
+        "api_v1_workouts_routines_partial_update",
+        "api_v1_workouts_routines_retrieve",
+        "api_v1_workouts_sessions_active_retrieve",
+        "api_v1_workouts_sessions_cancel_create",
+        "api_v1_workouts_sessions_complete_create",
+        "api_v1_workouts_sessions_destroy",
+        "api_v1_workouts_sessions_list",
+        "api_v1_workouts_sessions_log_set_create",
+        "api_v1_workouts_sessions_partial_update",
+        "api_v1_workouts_sessions_retrieve",
+        "api_v1_workouts_sessions_sets_destroy",
+        "api_v1_workouts_sessions_start_create",
+        "api_v1_workouts_sessions_update"
+      ]
+    },
+    "music": {
+      "title": "Music",
+      "description": "Music queue and catalog.",
+      "openapi": "/openapi/v1/music.yaml",
+      "doc": "/docs/features/music/",
+      "operations": [
+        "api_v1_music_blocks_create",
+        "api_v1_music_blocks_destroy",
+        "api_v1_music_queue_approve_create",
+        "api_v1_music_queue_complete_create",
+        "api_v1_music_queue_create",
+        "api_v1_music_queue_destroy",
+        "api_v1_music_queue_report_create",
+        "api_v1_music_queue_restore_create",
+        "api_v1_music_queue_retrieve",
+        "api_v1_music_queue_skip_create",
+        "api_v1_music_search_retrieve",
+        "api_v1_music_settings_create",
+        "api_v1_music_settings_partial_update"
+      ]
+    },
+    "public": {
+      "title": "Public",
+      "description": "Welcome and other unauthenticated public APIs.",
+      "openapi": "/openapi/v1/public.yaml",
+      "doc": "/docs/features/public/",
+      "operations": [
+        "public_welcome"
+      ]
+    }
+  }
+}

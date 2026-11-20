@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GYMA API feature packs</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: #f3f0e8;
+      color: #14201a;
+      line-height: 1.5;
+    }
+    main { max-width: 880px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+    h1 { font-family: "IBM Plex Serif", Georgia, serif; margin-bottom: 0.35rem; }
+    .meta { color: #4d5a53; margin-bottom: 1.5rem; }
+    a { color: #0f6b4c; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { text-align: left; padding: 0.7rem 0.8rem; border-bottom: 1px solid #d5d0c4; vertical-align: top; }
+    th { background: #e7f3ec; }
+    code { font-size: 0.88em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Feature packs</h1>
+    <p class="meta">
+      Version <strong>{{ index.version }}</strong> ·
+      base <code>{{ index.base_url }}</code> ·
+      <a href="{{ index.docs }}">Docs UI</a> ·
+      <a href="{{ index.schema }}">Full OpenAPI</a> ·
+      <a href="/docs/features/?format=json">index.json</a>
+    </p>
+    <p>Give an agent <code>/openapi/v1/{feature}.yaml</code> or <code>/docs/features/{feature}/</code> to wire one feature.</p>
+    <table>
+      <thead>
+        <tr><th>Feature</th><th>Description</th><th>Refs</th></tr>
+      </thead>
+      <tbody>
+        {% for tag in features %}
+        <tr>
+          <td><code>{{ tag.name }}</code></td>
+          <td>{{ tag.description }}</td>
+          <td>
+            <a href="/docs/features/{{ tag.name }}/">pack</a> ·
+            <a href="/openapi/v1/{{ tag.name }}.yaml">openapi</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

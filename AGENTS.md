@@ -14,7 +14,7 @@ product flows that diverge from the Go-era architecture already ported here.
 | Stack | Python 3.14, Django 5.2 LTS, DRF, PostgreSQL |
 | HTTP | `:8080` (local compose / runserver) |
 | Contract | `/api/v1/…` trailing slashes, snake_case |
-| Docs | `README.md`, `docs/API_MIGRATION.md`, `docs/openapi.yaml` |
+| Docs | `/docs/` (Scalar), `/openapi/v1.yaml`, `docs/features/`, `docs/API_MIGRATION.md` |
 
 ## First: understand this project
 
@@ -127,12 +127,48 @@ core/             # shared API helpers, middleware, permissions
   return **503** when the scanner is unreachable — admin UIs should disable
   those actions after a status probe rather than letting staff start a wait.
 
+## API docs (humans + AI agents)
+
+| Ref | Use |
+|---|---|
+| `/docs/` or `/docs/v1/` | Feature-wise Swagger UI (tags = menu) + feature pack links |
+| `/openapi/v1.yaml` | Full v1 OpenAPI (also `/openapi.yaml`) |
+| `/openapi/v1/{feature}.yaml` | One feature only (e.g. `auth`, `payments`) |
+| `/docs/features/` | Feature pack index (`?format=json` for machines) |
+| `/docs/features/{feature}/` | Narrative + samples (`?format=md` for raw markdown) |
+| `docs/openapi/v1.yaml` | Committed schema (from `make schema`) |
+| `docs/features/*.md` + `index.json` | Offline/agent packs |
+
+**Agent contract:** giving `/openapi/v1/auth.yaml` or `/docs/features/auth/` is enough to
+wire the whole auth surface. Giving one `operationId` plus `/openapi/v1.yaml` is
+enough for a single endpoint. Published schema includes only `/api/v1/` paths.
+
+Feature tags: `auth`, `member`, `admin-members`, `plans`, `payments`,
+`attendance`, `device`, `staff`, `operations`, `reports`, `fitness`, `music`,
+`public`. Assign tags via `endpoint(..., tags=[...])` or path rules in
+`core/api_docs.py`.
+
+### When adding or changing an API
+
+1. Set the correct feature `tags` (and `examples` for high-traffic flows) on the
+   view / `endpoint()`.
+2. Run `make schema` (writes `docs/openapi/v1.yaml` + `docs/features/index.json`).
+3. Update `docs/features/{feature}.md` samples/flow if behavior changed.
+4. Add a new `docs/features/{feature}.md` entry when introducing a **new** feature
+   tag (also extend `FEATURE_TAGS` in `core/api_docs.py`).
+5. Keep `docs/API_MIGRATION.md` for Go→Django history only; do not grow it for
+   new product work.
+
+`make check` runs `build_api_docs --check` so stale schema/index fails CI-style
+checks.
+
 ## Testing and quality
 
 - `make test`, `make check`, `make lint`, `make schema` as appropriate.
 - Prefer pytest coverage for new services; mock external SMS/SSLCommerz/bridge HTTP.
-- Keep OpenAPI and `docs/API_MIGRATION.md` current when routes change.
+- Keep OpenAPI, feature packs, and (when relevant) `docs/API_MIGRATION.md` current.
 
 ## Keeping this file current
 
-Update this document when run model, clients, or ZKTeco contracts change.
+Update this document when run model, clients, ZKTeco contracts, **docs URL
+layout**, **API version** (`v2+`), or **feature tag taxonomy** change.

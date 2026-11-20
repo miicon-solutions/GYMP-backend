@@ -83,6 +83,8 @@ class OfferList(generics.ListCreateAPIView):
     get_permissions = _plan_method_permissions({"GET": "plans.view", "POST": "plans.create"})
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Offer.objects.none()
         services.expire_offers()
         return Offer.objects.filter(plan=get_object_or_404(Plan, pk=self.kwargs["pk"]))
 

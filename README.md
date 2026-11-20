@@ -34,7 +34,7 @@ Agent notes: see [AGENTS.md](AGENTS.md). ZK control center lives in sibling `zkt
 
 **Production:** use `bootstrap_admin --phone …` with a real number. It prompts for an operator password only with `--browser-access`, prints a **one-time setup token**, and refuses to replace an existing super admin. Production does not use the fixed seed phone.
 
-The API listens at `http://localhost:8080`. Open `/docs/` for Swagger, `/openapi.yaml` for the schema, `/admin/` for the operator console, `/health/` for database readiness, and `/health/live/` for liveness. Migrations run before Gunicorn starts. The initial migration installs default gym hours: Saturday–Thursday 06:00–22:00, Friday closed.
+The API listens at `http://localhost:8080`. Open `/docs/` for the feature-wise API docs UI (Swagger tag groups; version-pinned at `/docs/v1/`), `/openapi/v1.yaml` for the full schema, `/openapi/v1/{feature}.yaml` for one feature (e.g. `auth`), `/docs/features/` for agent/human feature packs, `/docs/v1/reference/` for Scalar, `/admin/` for the operator console, `/health/` for database readiness, and `/health/live/` for liveness. Migrations run before Gunicorn starts. The initial migration installs default gym hours: Saturday–Thursday 06:00–22:00, Friday closed.
 
 Compose runs the API; PostgreSQL and MinIO/S3 are managed separately. Create a dedicated empty PostgreSQL database for this backend and set `DATABASE_URL` to its connection URL. Do not point it at the Go database: startup runs Django migrations against the configured database. Set `HTTP_PORT` if port 8080 is already occupied. Stopping Compose leaves the external database and bucket untouched.
 
@@ -107,9 +107,26 @@ Leaving `S3_SUB_FOLDER` unset or empty preserves the previous `AWS_LOCATION` pat
 
 `MEDIA_STORAGE=filesystem` is available for tests or standalone development and uses `MEMBER_PHOTO_DIR`. Without `MEDIA_STORAGE`, filesystem storage is used so image builds and isolated checks need no storage credentials. Filesystem mode retains the public local photo route. Compose does not provide a media volume; use S3 mode for durable container uploads. S3 failures never fall back to disk. Static assets remain local and are served by WhiteNoise. Existing local files are not automatically copied to a bucket.
 
+## API documentation
+
+| URL / path | Purpose |
+|---|---|
+| `/docs/` · `/docs/v1/` | Developer UI with feature menu (auth, payments, …) |
+| `/openapi/v1.yaml` | Full v1 OpenAPI (alias: `/openapi.yaml`) |
+| `/openapi/v1/{feature}.yaml` | Filtered OpenAPI for one feature |
+| `/docs/features/` | Feature pack index (`Accept: application/json` or `?format=json`) |
+| `/docs/features/{feature}/` | Narrative + sample requests (`?format=md` for raw) |
+| [docs/openapi/v1.yaml](docs/openapi/v1.yaml) | Committed schema (`make schema`) |
+| [docs/features/](docs/features/) | Committed packs + `index.json` |
+
+**Agent-friendly refs:** point an agent at `/openapi/v1/auth.yaml` or
+`/docs/features/auth/` to connect the whole auth API; use a single operationId
+with the full schema for one endpoint. Regenerate with `make schema` after route
+changes. See [AGENTS.md](AGENTS.md) for the maintenance checklist.
+
 ## API and authentication
 
-See [API migration reference](docs/API_MIGRATION.md) for every old/new route, payload rules, examples, and integration differences. The committed [OpenAPI schema](docs/openapi.yaml) describes the new contract. It is also generated live at `/openapi.yaml`.
+See [API migration reference](docs/API_MIGRATION.md) for every old/new route, payload rules, examples, and integration differences. The committed [OpenAPI schema](docs/openapi/v1.yaml) describes the new contract (also live at `/openapi/v1.yaml`).
 
 Member login uses phone OTP or verified Google/Firebase identity. Staff login uses TOTP. API credentials are Bearer HS256 access JWTs and opaque, hashed refresh tokens with one-time rotation. No password-grant API was added. Browser operator access is granted explicitly and uses Django sessions, password validation, CSRF protection, and login throttling.
 

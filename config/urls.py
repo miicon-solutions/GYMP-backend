@@ -4,8 +4,8 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.urls import include, path
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import inline_serializer
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from drf_spectacular.utils import OpenApiExample, inline_serializer
+from drf_spectacular.views import SpectacularSwaggerView
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 
@@ -41,6 +41,15 @@ from biometrics.serializers import (
 )
 from core import public
 from core.api import AdminOnly, MemberOnly, StaffPermission, SuperOnly
+from core.api_docs import (
+    DocsScalarFrameView,
+    DocsSwaggerFrameView,
+    DocsUIView,
+    FeaturePackView,
+    FeatureSchemaView,
+    FeaturesIndexView,
+    VersionedSchemaView,
+)
 from core.endpoints import endpoint, query_parameters
 from members import services as member
 from members.serializers import (
@@ -154,6 +163,7 @@ api = [
                 "message": "Welcome to GYMA.",
             },
             method="get",
+            tags=["public"],
         ),
     ),
     path("member/profile/", ProfileView.as_view()),
@@ -251,6 +261,18 @@ api = [
             response=SessionSerializer,
             permission=MemberOnly,
             status=201,
+            tags=["payments"],
+            examples=[
+                OpenApiExample(
+                    "Hosted checkout",
+                    value={
+                        "kind": "first_purchase",
+                        "plan_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                        "checkout": "hosted",
+                    },
+                    request_only=True,
+                ),
+            ],
         ),
     ),
     path(
@@ -287,6 +309,14 @@ api = [
             response=MemberCashPaymentRequestSerializer,
             permission=MemberOnly,
             status=201,
+            tags=["payments"],
+            examples=[
+                OpenApiExample(
+                    "Cash request",
+                    value={"plan_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"},
+                    request_only=True,
+                ),
+            ],
         ),
     ),
     path(
@@ -376,6 +406,18 @@ api = [
             permission=AllowAny,
             authentication=[DeviceAuthentication],
             throttle_public=False,
+            tags=["attendance"],
+            examples=[
+                OpenApiExample(
+                    "Device check-in",
+                    value={
+                        "member_id": "PF-0001",
+                        "source": "device",
+                        "checked_in_at": None,
+                    },
+                    request_only=True,
+                ),
+            ],
         ),
     ),
     path(
@@ -388,6 +430,7 @@ api = [
             permission=AllowAny,
             authentication=[DeviceAuthentication],
             throttle_public=False,
+            tags=["attendance"],
         ),
     ),
     path(
@@ -795,11 +838,45 @@ urlpatterns = [
     path("privacy/", public.legal, {"page": "privacy"}),
     path("health/", public.health),
     path("health/live/", public.live),
-    path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
+    path("docs/", DocsUIView.as_view(), name="docs"),
+    path("docs/v1/", DocsUIView.as_view(), {"version": "v1"}, name="docs-v1"),
     path(
-        "openapi.yaml",
-        SpectacularAPIView.as_view(authentication_classes=[], permission_classes=[AllowAny]),
-        name="schema",
+        "docs/v1/reference/",
+        DocsScalarFrameView.as_view(),
+        {"version": "v1"},
+        name="docs-v1-reference",
+    ),
+    path(
+        "docs/swagger/",
+        SpectacularSwaggerView.as_view(url_name="schema-json"),
+        name="docs-swagger",
+    ),
+    path(
+        "docs/swagger/frame/",
+        DocsSwaggerFrameView.as_view(),
+        name="docs-swagger-frame",
+    ),
+    path("docs/features/", FeaturesIndexView.as_view(), name="docs-features"),
+    path(
+        "docs/features/<slug:feature>/",
+        FeaturePackView.as_view(),
+        name="docs-feature-pack",
+    ),
+    path("openapi.yaml", VersionedSchemaView.as_view(), name="schema"),
+    path("openapi.json", VersionedSchemaView.as_view(), name="schema-json"),
+    path("openapi/v1.yaml", VersionedSchemaView.as_view(), {"version": "v1"}, name="schema-v1"),
+    path("openapi/v1.json", VersionedSchemaView.as_view(), {"version": "v1"}, name="schema-v1-json"),
+    path(
+        "openapi/v1/<slug:feature>.yaml",
+        FeatureSchemaView.as_view(),
+        {"version": "v1"},
+        name="schema-v1-feature",
+    ),
+    path(
+        "openapi/v1/<slug:feature>.json",
+        FeatureSchemaView.as_view(),
+        {"version": "v1"},
+        name="schema-v1-feature-json",
     ),
     path("media/member-photos/<str:filename>", public.photo),
     path("payments/return/<str:outcome>/", public.payment_return),

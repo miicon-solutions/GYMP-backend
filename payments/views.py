@@ -14,6 +14,8 @@ class PaymentList(generics.ListAPIView):
     serializer_class = PaymentSerializer
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Payment.objects.none()
         return Payment.objects.filter(member=owned_profile(self.request.user))
 
 
@@ -22,6 +24,8 @@ class PaymentDetail(generics.RetrieveAPIView):
     serializer_class = PaymentSerializer
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Payment.objects.none()
         return Payment.objects.filter(member=owned_profile(self.request.user))
 
 
