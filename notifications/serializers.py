@@ -59,6 +59,7 @@ class AdminAnnouncementSerializer(serializers.Serializer):
     member_id = serializers.UUIDField(allow_null=True)
     recipient_count = serializers.IntegerField()
     send_push_requested = serializers.BooleanField()
+    send_sms_requested = serializers.BooleanField()
     created_at = serializers.DateTimeField()
     created_by = AdminAnnouncementCreatedBy(allow_null=True)
 
@@ -69,6 +70,7 @@ class AdminAnnouncementInput(serializers.Serializer):
     title = serializers.CharField(max_length=120)
     body = serializers.CharField(max_length=500)
     send_push = serializers.BooleanField(default=True)
+    send_sms = serializers.BooleanField(default=False)
 
     def validate(self, attrs):
         if attrs["scope"] == "member" and not attrs.get("member_id"):
@@ -89,7 +91,7 @@ class AdminAnnouncementUpdateInput(serializers.Serializer):
 
 
 class AdminAnnouncementCreateOutput(AdminAnnouncementSerializer):
-    """Campaign fields plus push delivery summary and legacy `created` alias."""
+    """Campaign fields plus push/SMS delivery summary and legacy `created` alias."""
 
     created = serializers.IntegerField()
     push_requested = serializers.BooleanField()
@@ -97,6 +99,11 @@ class AdminAnnouncementCreateOutput(AdminAnnouncementSerializer):
     push_failed = serializers.IntegerField()
     push_skipped_no_device = serializers.IntegerField()
     push_skipped_disabled = serializers.IntegerField()
+    sms_requested = serializers.BooleanField()
+    sms_sent = serializers.IntegerField()
+    sms_failed = serializers.IntegerField()
+    sms_skipped_disabled = serializers.IntegerField()
+    sms_skipped_no_phone = serializers.IntegerField()
 
 
 class AdminAnnouncementResendOutput(serializers.Serializer):
@@ -104,6 +111,13 @@ class AdminAnnouncementResendOutput(serializers.Serializer):
     push_failed = serializers.IntegerField()
     push_skipped_no_device = serializers.IntegerField()
     push_skipped_disabled = serializers.IntegerField()
+
+
+class AdminAnnouncementResendSmsOutput(serializers.Serializer):
+    sms_sent = serializers.IntegerField()
+    sms_failed = serializers.IntegerField()
+    sms_skipped_disabled = serializers.IntegerField()
+    sms_skipped_no_phone = serializers.IntegerField()
 
 
 def announcement_payload(campaign: StaffAnnouncement, *, recipient_count: int | None = None) -> dict:
@@ -129,6 +143,7 @@ def announcement_payload(campaign: StaffAnnouncement, *, recipient_count: int | 
         "member_id": campaign.member_id,
         "recipient_count": recipient_count,
         "send_push_requested": campaign.send_push_requested,
+        "send_sms_requested": campaign.send_sms_requested,
         "created_at": campaign.created_at,
         "created_by": created_by,
     }

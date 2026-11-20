@@ -7,13 +7,13 @@ from rest_framework.exceptions import AuthenticationFailed
 from core.api import BadGateway
 
 
-def send_sms(phone, code):
+def send_sms_message(phone, msg: str) -> None:
     if not settings.SMS_NET_BD_API_KEY:
         raise BadGateway("Text message service is unavailable.")
     form = {
         "api_key": settings.SMS_NET_BD_API_KEY,
         "to": phone.lstrip("+"),
-        "msg": f"Your Titanic Gym verification code is {code}. Do not share this code.",
+        "msg": msg,
     }
     if settings.SMS_NET_BD_SENDER_ID:
         form["sender_id"] = settings.SMS_NET_BD_SENDER_ID
@@ -25,6 +25,16 @@ def send_sms(phone, code):
             raise ValueError
     except (httpx.HTTPError, ValueError, AttributeError) as exc:
         raise BadGateway("Text message service is unavailable.") from exc
+
+
+def send_sms(phone, code):
+    """OTP verification SMS only. Honors OTP_DEV_BYPASS; notification SMS must use send_sms_message."""
+    if settings.OTP_DEV_BYPASS:
+        return
+    send_sms_message(
+        phone,
+        f"Your Pure Fitness verification code is {code}. Do not share this code.",
+    )
 
 
 @lru_cache(maxsize=1)

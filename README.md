@@ -148,7 +148,7 @@ With the bootstrap setup token, call `/api/v1/auth/admin/mfa/setup/` with `phone
 
 ## Providers and production configuration
 
-The local default `OTP_DEV_BYPASS=true` avoids sending SMS and accepts `000000`; `EMAIL_DEV_BYPASS=true` returns a clearly identified development result. Both are forcibly disabled with `APP_ENV=prod`. Local Google and online-payment routes still require real provider configuration; they do not fabricate provider success.
+The local default `OTP_DEV_BYPASS=true` skips **OTP** SMS only and accepts `000000`; it does **not** bypass system/announcement notification SMS (`send_sms_message`). `EMAIL_DEV_BYPASS=true` returns a clearly identified development result. Both are forcibly disabled with `APP_ENV=prod`. Local Google and online-payment routes still require real provider configuration; they do not fabricate provider success.
 
 - **Firebase:** set `FIREBASE_CREDENTIALS_FILE` to a readable service-account JSON file. In Docker, mount it read-only at that container path using a local Compose override. Only verified Google-provider ID tokens are accepted, with revocation checking.
 - **SMS:** set `SMS_NET_BD_API_KEY` and optionally `SMS_NET_BD_SENDER_ID`. Requests use sms.net.bd's form API with a 10-second timeout.

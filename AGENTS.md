@@ -86,14 +86,26 @@ core/             # shared API helpers, middleware, permissions
   `GET /api/v1/admin/staff/permissions/catalog/`.
   `notifications` actions: `view`, `create`, `update`, `delete` (announcement
   campaigns under `/api/v1/admin/notifications/`; resend-push uses `create`).
-- **Notifications / FCM:** member feed + device tokens + staff announcement
+- **Notifications / FCM / SMS:** member feed + device tokens (member **and**
+  staff via `POST/DELETE …/member/devices/fcm/`) + staff announcement
   campaigns — see `docs/features/notifications.md` and
   `/openapi/v1/notifications.yaml`. `StaffAnnouncement` fans out
   `MemberNotification` rows (`code=announcement`, `related_object_id=campaign`).
-  FCM uses `FIREBASE_CREDENTIALS_FILE` (same project as Google auth). Android
-  payloads set `AndroidNotification.channel_id=pure_fitness_push` (must match
-  the mobile app channel). iOS needs an APNs auth key on the Firebase iOS app
-  whose bundle id matches the shipping app. Invalid/unregistered tokens are
+  Channels: in-app always; optional FCM (`send_push`, default on for
+  campaigns); optional SMS (`send_sms`, default **off** for campaigns;
+  `POST …/resend-sms/`). Critical system codes also SMS by catalog:
+  `payment_received`, `cash_request_rejected`, `membership_expiring`,
+  `membership_expired` (not `fingerprint_ready` / `membership_activated`).
+  Cash request create FCM-pushes active staff (`notify_staff_cash_request`).
+  Member opt-out: `push_enabled` / `sms_enabled` on `MemberProfile`. SMS via
+  `accounts.providers.send_sms_message` (sms.net.bd; needs
+  `SMS_NET_BD_API_KEY`). OTP uses `send_sms` only — `OTP_DEV_BYPASS` skips
+  OTP texts, never notification/announcement SMS. System SMS bodies are fixed
+  English plain text. FCM uses `FIREBASE_CREDENTIALS_FILE` (same project as
+  Google auth). Android payloads set
+  `AndroidNotification.channel_id=pure_fitness_push` (must match the mobile
+  app channel). iOS needs an APNs auth key on the Firebase iOS app whose
+  bundle id matches the shipping app. Invalid/unregistered tokens are
   dropped on send; APNs/project misconfig must not delete tokens.
 - Device check-in: `X-Device-Key` == `ATTENDANCE_DEVICE_KEY` on
   `POST /api/v1/internal/attendance/check-in/`.

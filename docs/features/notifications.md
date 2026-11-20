@@ -1,10 +1,10 @@
 # Notifications
 
-Member in-app notification feed, FCM device registration, and staff announcement campaigns.
+Member in-app notification feed, FCM device registration, SMS delivery (critical system + optional announcements), and staff announcement campaigns.
 
 - **OpenAPI:** `/openapi/v1/notifications.yaml`
 - **Base paths:** `/api/v1/member/notifications/`, `/api/v1/member/devices/fcm/`, `/api/v1/admin/notifications/`
-- **Auth:** Member Bearer for feed/devices; staff with `notifications.*` for campaigns
+- **Auth:** Member or staff Bearer for FCM devices; member Bearer for feed; staff with `notifications.*` for campaigns
 
 ## Member feed
 
@@ -25,18 +25,30 @@ Resource fields: `id`, `kind` (`membership` \| `payment` \| `attendance` \| `gen
 | `POST` | `/api/v1/member/devices/fcm/` | `{ token, platform: ios\|android }` |
 | `DELETE` | `/api/v1/member/devices/fcm/` | `{ token }` |
 
-Push uses the same Firebase project as Google auth (`FIREBASE_CREDENTIALS_FILE`). Invalid / unregistered tokens are dropped on send; APNs credential or sender-id misconfig must **not** delete tokens. iOS requires an APNs auth key on the matching Firebase iOS app bundle id. Android FCM uses channel `pure_fitness_push` (high importance); the mobile app creates that channel and shows local notifications while foregrounded.
+Members **and staff** register on this path (same Firebase project). Staff tokens receive operational pushes (e.g. new cash payment request). Invalid / unregistered tokens are dropped on send; APNs credential or sender-id misconfig must **not** delete tokens. iOS requires an APNs auth key on the matching Firebase iOS app bundle id. Android FCM uses channel `pure_fitness_push` (high importance); the mobile app creates that channel and shows local notifications while foregrounded.
+
+System FCM title/body are fixed **Bangla** plain text (tray copy; no member locale on the API). System SMS is always **English**. In-app feed still stores ARB `title_key` / `body_key` for client localization. Announcement pushes use staff free-text as-is.
+
+Member opt-out: `MemberProfile.push_enabled` (default true). SMS opt-out: `MemberProfile.sms_enabled` (default true).
+
+**Staff cash-request push:** when a member creates `POST …/cash-requests/`, after commit the API FCM-pushes all active staff with a registered device (`type=cash_request`, `member_id`, `cash_request_id`). Tap opens admin member detail in the app.
+
+## SMS delivery
+
+Uses sms.net.bd (`SMS_NET_BD_API_KEY`, optional `SMS_NET_BD_SENDER_ID`) via `accounts.providers.send_sms_message`. **Requires a real API key** — without it, notification SMS is skipped (`sms_unconfigured`) and logged; in-app/push still work. OTP auth uses the OTP-only `send_sms` wrapper (which honors `OTP_DEV_BYPASS`); notification SMS never uses that bypass.
+
+System SMS bodies are fixed **English** plain text (no member locale on the API). Announcement SMS uses staff free-text (`"{title}: {body}"`). SMS failures are non-fatal for notifications (in-app row remains; stats count `sms_failed`).
 
 ## Auto catalog
 
-| Code | Trigger | Push |
-|---|---|---|
-| `payment_received` | Online settle / cash accept / receive cash | yes |
-| `membership_activated` | First payment only | no |
-| `cash_request_rejected` | Staff rejects cash request | yes |
-| `fingerprint_ready` | Enroll/pull or manual status → ready | yes |
-| `membership_expiring` | Cron 7d and 1d before expiry | yes |
-| `membership_expired` | Cron day after expiry | yes |
+| Code | Trigger | Push | SMS |
+|---|---|---|---|
+| `payment_received` | Online settle / cash accept / receive cash | yes | **yes** |
+| `membership_activated` | First payment only | no | no |
+| `cash_request_rejected` | Staff rejects cash request | yes | **yes** |
+| `fingerprint_ready` | Enroll/pull or manual status → ready | yes | no |
+| `membership_expiring` | Cron 7d and 1d before expiry | yes | **yes** |
+| `membership_expired` | Cron day after expiry | yes | **yes** |
 
 Run expiry batch: `python manage.py notify_membership_expiry` (daily cron, Asia/Dhaka).
 
@@ -52,14 +64,17 @@ Run expiry batch: `python manage.py notify_membership_expiry` (daily cron, Asia/
 | `PATCH` | `/api/v1/admin/notifications/{id}/` | `notifications.update` |
 | `DELETE` | `/api/v1/admin/notifications/{id}/` | `notifications.delete` |
 | `POST` | `/api/v1/admin/notifications/{id}/resend-push/` | `notifications.create` |
+| `POST` | `/api/v1/admin/notifications/{id}/resend-sms/` | `notifications.create` |
 
-Create body: `{ scope: member\|active, member_id?, title, body, send_push }`.
+Create body: `{ scope: member\|active, member_id?, title, body, send_push, send_sms }`.  
+`send_push` defaults **true**; `send_sms` defaults **false**.
 
-PATCH body: `{ title?, body? }` — updates campaign and all linked member rows; does **not** resend push.
+PATCH body: `{ title?, body? }` — updates campaign and all linked member rows; does **not** resend push or SMS.
 
 Delete removes the campaign and all linked fan-out rows.
 
-Create / resend responses include `push_sent`, `push_failed`, `push_skipped_no_device`, `push_skipped_disabled`.
+Create / resend-push responses include `push_sent`, `push_failed`, `push_skipped_no_device`, `push_skipped_disabled`.  
+Create / resend-sms responses include `sms_sent`, `sms_failed`, `sms_skipped_disabled`, `sms_skipped_no_phone`.
 
 ## Django operator console (manual test)
 
@@ -68,6 +83,7 @@ Create / resend responses include `push_sent`, `push_failed`, `push_skipped_no_d
 1. Pick the member **User** (search phone).
 2. Set free-text **title** / **body**.
 3. Leave **Send push** checked to deliver FCM after save (needs a **Member device tokens** row).
-4. Save → in-app feed updates; admin shows success/warning about FCM.
+4. Optionally check **Send sms** to deliver via sms.net.bd.
+5. Save → in-app feed updates; admin shows success/warning about FCM/SMS.
 
-List action **Send FCM now** re-delivers push for selected rows.
+List actions **Send FCM now** / **Send SMS now** re-deliver for selected rows.

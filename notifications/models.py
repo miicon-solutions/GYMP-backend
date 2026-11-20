@@ -46,6 +46,7 @@ class StaffAnnouncement(Entity):
         related_name="staff_announcements",
     )
     send_push_requested = models.BooleanField(default=True)
+    send_sms_requested = models.BooleanField(default=False)
 
     class Meta(Entity.Meta):
         indexes = [
@@ -71,6 +72,7 @@ class MemberNotification(Entity):
     related_object_id = models.CharField(max_length=64, blank=True, default="")
     dedupe_key = models.CharField(max_length=64, blank=True, default="")
     send_push = models.BooleanField(default=False)
+    send_sms = models.BooleanField(default=False)
 
     class Meta(Entity.Meta):
         indexes = [

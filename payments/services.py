@@ -362,6 +362,14 @@ def create_cash_request(user, data):
     )
     member.membership_status = "pending_payment"
     member.save(update_fields=["membership_status", "updated_at"])
+    req_id = req.pk
+
+    def _push_staff():
+        from notifications.services import notify_staff_cash_request
+
+        notify_staff_cash_request(req_id)
+
+    transaction.on_commit(_push_staff, robust=True)
     return req
 
 

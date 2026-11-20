@@ -28,6 +28,7 @@ def response(body, status=200):
 @pytest.mark.parametrize("body", [{"error": 1}, {"error": "0"}, [], {}])
 def test_sms_rejects_bad_payloads(settings, body):
     settings.SMS_NET_BD_API_KEY = "test-key"
+    settings.OTP_DEV_BYPASS = False
     with patch("accounts.providers.httpx.post", return_value=response(body)):
         with pytest.raises(BadGateway):
             providers.send_sms("+8801712345678", "123456")
@@ -36,14 +37,36 @@ def test_sms_rejects_bad_payloads(settings, body):
 def test_sms_form_and_timeout(settings):
     settings.SMS_NET_BD_API_KEY = "test-key"
     settings.SMS_NET_BD_SENDER_ID = "test-sender"
+    settings.OTP_DEV_BYPASS = False
     with patch("accounts.providers.httpx.post", return_value=response({"error": 0})) as post:
         providers.send_sms("+8801712345678", "123456")
         assert post.call_args.kwargs["data"]["to"] == "8801712345678"
         assert post.call_args.kwargs["data"]["sender_id"] == "test-sender"
         assert post.call_args.kwargs["timeout"] == 10
+        assert "Pure Fitness" in post.call_args.kwargs["data"]["msg"]
+        assert "123456" in post.call_args.kwargs["data"]["msg"]
     with patch("accounts.providers.httpx.post", side_effect=httpx.ReadTimeout("timeout")):
         with pytest.raises(BadGateway):
             providers.send_sms("+8801712345678", "123456")
+
+
+def test_sms_message_custom_body(settings):
+    settings.SMS_NET_BD_API_KEY = "test-key"
+    with patch("accounts.providers.httpx.post", return_value=response({"error": 0})) as post:
+        providers.send_sms_message("+8801712345678", "Hello from Pure Fitness")
+        assert post.call_args.kwargs["data"]["msg"] == "Hello from Pure Fitness"
+        assert post.call_args.kwargs["data"]["to"] == "8801712345678"
+
+
+def test_otp_dev_bypass_skips_otp_sms_only(settings):
+    settings.SMS_NET_BD_API_KEY = "test-key"
+    settings.OTP_DEV_BYPASS = True
+    with patch("accounts.providers.httpx.post", return_value=response({"error": 0})) as post:
+        providers.send_sms("+8801712345678", "123456")
+        assert post.call_count == 0
+        providers.send_sms_message("+8801712345678", "Announcement SMS")
+        assert post.call_count == 1
+        assert post.call_args.kwargs["data"]["msg"] == "Announcement SMS"
 
 
 @pytest.mark.parametrize(

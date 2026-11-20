@@ -3,7 +3,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.api import MemberOnly
+from core.api import MemberOnly, StaffOrMember
 from core.endpoints import endpoint
 from notifications import services
 from notifications.serializers import (
@@ -14,7 +14,12 @@ from notifications.serializers import (
     MemberNotificationSerializer,
     NotificationsReadAllOutput,
 )
-from notifications.views import AnnouncementDetail, AnnouncementList, AnnouncementResendPush
+from notifications.views import (
+    AnnouncementDetail,
+    AnnouncementList,
+    AnnouncementResendPush,
+    AnnouncementResendSms,
+)
 
 
 def _list_notifications(request, data):
@@ -30,9 +35,9 @@ def _mark_all_read(request, data):
 
 
 class FcmDeviceView(APIView):
-    """Register or remove an FCM device token for the signed-in member."""
+    """Register or remove an FCM device token for the signed-in member or staff."""
 
-    permission_classes = [MemberOnly]
+    permission_classes = [StaffOrMember]
 
     @extend_schema(
         request=FcmDeviceInput,
@@ -97,5 +102,9 @@ urlpatterns = [
     path(
         "admin/notifications/<uuid:pk>/resend-push/",
         AnnouncementResendPush.as_view(),
+    ),
+    path(
+        "admin/notifications/<uuid:pk>/resend-sms/",
+        AnnouncementResendSms.as_view(),
     ),
 ]

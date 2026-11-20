@@ -198,12 +198,12 @@ def send_otp(data, actor=None):
         )
         challenge.code_hash = digest(f"{challenge.pk}:{code}")
         challenge.save()
-    if not settings.OTP_DEV_BYPASS:
-        try:
-            providers.send_sms(phone, code)
-        except Exception:
-            Challenge.objects.filter(pk=challenge.pk).update(consumed_at=timezone.now())
-            raise
+    try:
+        # OTP-only: send_sms no-ops under OTP_DEV_BYPASS. Notification SMS uses send_sms_message.
+        providers.send_sms(phone, code)
+    except Exception:
+        Challenge.objects.filter(pk=challenge.pk).update(consumed_at=timezone.now())
+        raise
     return {
         "otp_session_id": str(challenge.pk),
         "phone_e164": phone,

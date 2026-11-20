@@ -287,6 +287,7 @@
         "api_v1_admin_notifications_list",
         "api_v1_admin_notifications_partial_update",
         "api_v1_admin_notifications_resend_push_create",
+        "api_v1_admin_notifications_resend_sms_create",
         "api_v1_admin_notifications_retrieve",
         "member_devices_fcm_register",
         "member_devices_fcm_unregister",

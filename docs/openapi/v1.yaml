@@ -1039,6 +1039,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminAnnouncementResendOutput'
           description: ''
+  /api/v1/admin/notifications/{id}/resend-sms/:
+    post:
+      operationId: api_v1_admin_notifications_resend_sms_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAnnouncementResendSmsOutput'
+          description: ''
   /api/v1/admin/plans/:
     get:
       operationId: api_v1_admin_plans_list
@@ -2825,7 +2847,8 @@ paths:
   /api/v1/member/devices/fcm/:
     post:
       operationId: member_devices_fcm_register
-      description: Register or remove an FCM device token for the signed-in member.
+      description: Register or remove an FCM device token for the signed-in member
+        or staff.
       tags:
       - notifications
       requestBody:
@@ -2852,7 +2875,8 @@ paths:
           description: ''
     delete:
       operationId: member_devices_fcm_unregister
-      description: Register or remove an FCM device token for the signed-in member.
+      description: Register or remove an FCM device token for the signed-in member
+        or staff.
       tags:
       - notifications
       security:
@@ -5533,6 +5557,8 @@ components:
           type: integer
         send_push_requested:
           type: boolean
+        send_sms_requested:
+          type: boolean
         created_at:
           type: string
           format: date-time
@@ -5549,10 +5575,11 @@ components:
       - recipient_count
       - scope
       - send_push_requested
+      - send_sms_requested
       - title
     AdminAnnouncementCreateOutput:
       type: object
-      description: Campaign fields plus push delivery summary and legacy `created`
+      description: Campaign fields plus push/SMS delivery summary and legacy `created`
         alias.
       properties:
         id:
@@ -5571,6 +5598,8 @@ components:
         recipient_count:
           type: integer
         send_push_requested:
+          type: boolean
+        send_sms_requested:
           type: boolean
         created_at:
           type: string
@@ -5591,6 +5620,16 @@ components:
           type: integer
         push_skipped_disabled:
           type: integer
+        sms_requested:
+          type: boolean
+        sms_sent:
+          type: integer
+        sms_failed:
+          type: integer
+        sms_skipped_disabled:
+          type: integer
+        sms_skipped_no_phone:
+          type: integer
       required:
       - body
       - created
@@ -5606,6 +5645,12 @@ components:
       - recipient_count
       - scope
       - send_push_requested
+      - send_sms_requested
+      - sms_failed
+      - sms_requested
+      - sms_sent
+      - sms_skipped_disabled
+      - sms_skipped_no_phone
       - title
     AdminAnnouncementCreatedBy:
       type: object
@@ -5646,6 +5691,9 @@ components:
         send_push:
           type: boolean
           default: true
+        send_sms:
+          type: boolean
+          default: false
       required:
       - body
       - scope
@@ -5666,6 +5714,22 @@ components:
       - push_sent
       - push_skipped_disabled
       - push_skipped_no_device
+    AdminAnnouncementResendSmsOutput:
+      type: object
+      properties:
+        sms_sent:
+          type: integer
+        sms_failed:
+          type: integer
+        sms_skipped_disabled:
+          type: integer
+        sms_skipped_no_phone:
+          type: integer
+      required:
+      - sms_failed
+      - sms_sent
+      - sms_skipped_disabled
+      - sms_skipped_no_phone
     AdminMember:
       type: object
       properties:

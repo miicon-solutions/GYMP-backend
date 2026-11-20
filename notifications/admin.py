@@ -3,12 +3,12 @@ from django.contrib import admin, messages
 from accounts.models import User
 from core.admin import OperatorModelAdmin
 from notifications.models import MemberDeviceToken, MemberNotification
-from notifications.services import send_fcm_for_notification
+from notifications.services import send_fcm_for_notification, send_sms_for_notification
 
 
 @admin.register(MemberNotification)
 class MemberNotificationAdmin(OperatorModelAdmin):
-    """Operator console for in-app rows. Checking send_push on Add also fires FCM."""
+    """Operator console for in-app rows. Checking send_push/send_sms on Add also fires delivery."""
 
     list_display = (
         "id",
@@ -18,9 +18,10 @@ class MemberNotificationAdmin(OperatorModelAdmin):
         "title",
         "is_unread",
         "send_push",
+        "send_sms",
         "created_at",
     )
-    list_filter = ("kind", "code", "is_unread", "send_push")
+    list_filter = ("kind", "code", "is_unread", "send_push", "send_sms")
     search_fields = (
         "user__phone_e164",
         "user__full_name",
@@ -31,7 +32,7 @@ class MemberNotificationAdmin(OperatorModelAdmin):
     )
     autocomplete_fields = ("user",)
     readonly_fields = ("id", "created_at", "updated_at")
-    actions = ("send_fcm_now",)
+    actions = ("send_fcm_now", "send_sms_now")
     fieldsets = (
         (
             "Recipient",
@@ -64,10 +65,16 @@ class MemberNotificationAdmin(OperatorModelAdmin):
         (
             "Flags",
             {
-                "fields": ("is_unread", "send_push", "related_object_id", "dedupe_key"),
+                "fields": (
+                    "is_unread",
+                    "send_push",
+                    "send_sms",
+                    "related_object_id",
+                    "dedupe_key",
+                ),
                 "description": (
-                    "Check Send push on Add to deliver FCM after save. "
-                    "Or use the list action “Send FCM now” on existing rows."
+                    "Check Send push / Send sms on Add to deliver after save. "
+                    "Or use the list actions “Send FCM now” / “Send SMS now”."
                 ),
             },
         ),
@@ -109,24 +116,32 @@ class MemberNotificationAdmin(OperatorModelAdmin):
         initial.setdefault("code", "announcement")
         initial.setdefault("is_unread", True)
         initial.setdefault("send_push", True)
+        initial.setdefault("send_sms", False)
         initial.setdefault("title", "Test notification")
         initial.setdefault("body", "Hello from Pure Fitness admin.")
         return initial
 
     def save_model(self, request, obj, form, change):
         previous_send_push = False
+        previous_send_sms = False
         if change and obj.pk:
-            previous_send_push = (
+            previous = (
                 MemberNotification.objects.filter(pk=obj.pk)
-                .values_list("send_push", flat=True)
+                .values("send_push", "send_sms")
                 .first()
-                or False
+                or {}
             )
+            previous_send_push = bool(previous.get("send_push"))
+            previous_send_sms = bool(previous.get("send_sms"))
         super().save_model(request, obj, form, change)
         should_push = obj.send_push and (not change or not previous_send_push)
-        if not should_push:
-            return
-        result = send_fcm_for_notification(obj.pk)
+        if should_push:
+            self._report_fcm_result(request, send_fcm_for_notification(obj.pk))
+        should_sms = obj.send_sms and (not change or not previous_send_sms)
+        if should_sms:
+            self._report_sms_result(request, send_sms_for_notification(obj.pk))
+
+    def _report_fcm_result(self, request, result: dict) -> None:
         skipped = result.get("skipped")
         if skipped == "no_device":
             messages.warning(
@@ -154,6 +169,20 @@ class MemberNotificationAdmin(OperatorModelAdmin):
                 f"FCM failed for {result['failed']} device(s): {detail}",
             )
 
+    def _report_sms_result(self, request, result: dict) -> None:
+        skipped = result.get("skipped")
+        if skipped == "sms_disabled":
+            messages.warning(request, "In-app saved, but member sms_enabled is off.")
+        elif skipped == "no_phone":
+            messages.warning(request, "In-app saved, but member has no phone.")
+        elif skipped == "missing":
+            messages.error(request, "Notification disappeared before SMS send.")
+        elif result.get("sent", 0) > 0:
+            messages.success(request, "SMS sent.")
+        elif result.get("failed", 0) > 0:
+            detail = "; ".join(result.get("errors") or []) or "Check SMS_NET_BD_*."
+            messages.error(request, f"SMS failed: {detail}")
+
     @admin.action(description="Send FCM now")
     def send_fcm_now(self, request, queryset):
         total_sent = 0
@@ -172,6 +201,31 @@ class MemberNotificationAdmin(OperatorModelAdmin):
             messages.success(request, f"FCM sent to {total_sent} device(s).")
         if total_failed:
             messages.error(request, f"FCM failed for {total_failed} device(s).")
+        if skipped:
+            messages.warning(
+                request,
+                "Skipped: " + "; ".join(skipped[:10])
+                + ("…" if len(skipped) > 10 else ""),
+            )
+
+    @admin.action(description="Send SMS now")
+    def send_sms_now(self, request, queryset):
+        total_sent = 0
+        total_failed = 0
+        skipped = []
+        for notif in queryset:
+            result = send_sms_for_notification(notif.pk)
+            total_sent += result.get("sent", 0)
+            total_failed += result.get("failed", 0)
+            if result.get("skipped"):
+                skipped.append(f"{notif.pk}: {result['skipped']}")
+            if not notif.send_sms:
+                notif.send_sms = True
+                notif.save(update_fields=["send_sms", "updated_at"])
+        if total_sent:
+            messages.success(request, f"SMS sent to {total_sent} recipient(s).")
+        if total_failed:
+            messages.error(request, f"SMS failed for {total_failed} recipient(s).")
         if skipped:
             messages.warning(
                 request,

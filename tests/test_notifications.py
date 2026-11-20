@@ -6,13 +6,18 @@ from django.utils import timezone
 
 from notifications.models import MemberDeviceToken, MemberNotification, StaffAnnouncement
 from notifications.services import (
+    CATALOG,
     create_notification,
+    format_push,
+    format_sms,
     has_unread,
     mark_all_read,
     mark_read,
     notify_membership_expiry_batch,
     notify_payment_received,
     register_device,
+    send_fcm_for_notification,
+    send_sms_for_notification,
 )
 from payments.models import Payment
 
@@ -99,6 +104,69 @@ def test_cash_reject_notifies(client, member, staff, plan):
     assert MemberNotification.objects.filter(
         user=member, code="cash_request_rejected"
     ).exists()
+
+
+@pytest.mark.django_db
+def test_cash_reject_queues_sms(
+    member, staff, plan, django_capture_on_commit_callbacks, settings
+):
+    from payments.models import CashPaymentRequest
+    from payments.services import reject_cash_request
+
+    settings.SMS_NET_BD_API_KEY = "test-key"
+    profile = member.member_profile
+    profile.membership_status = "pending_payment"
+    profile.profile_complete = True
+    profile.save()
+    req = CashPaymentRequest.objects.create(
+        member=profile,
+        plan=plan,
+        kind="first_payment",
+        amount_taka=3000,
+        pricing_snapshot={"amount_taka": 3000, "catalog_id": plan.catalog_id, "line_items": []},
+        status="pending",
+    )
+    with patch("accounts.providers.send_sms_message") as send_sms:
+        with patch("notifications.services.send_fcm_for_notification"):
+            with django_capture_on_commit_callbacks(execute=True):
+                reject_cash_request(staff, req.pk)
+    send_sms.assert_called_once()
+    assert "not approved" in send_sms.call_args.args[1]
+
+
+@pytest.mark.django_db
+def test_cash_request_pushes_staff(
+    member, staff, plan, django_capture_on_commit_callbacks
+):
+    from payments.services import create_cash_request
+
+    profile = member.member_profile
+    profile.membership_status = "none"
+    profile.profile_complete = True
+    profile.save()
+    register_device(staff, "staff-fcm-token", "android")
+    with patch(
+        "notifications.services._send_fcm",
+    ) as send_fcm:
+        with django_capture_on_commit_callbacks(execute=True):
+            create_cash_request(member, {"plan_id": plan.pk})
+    send_fcm.assert_called()
+    kwargs = send_fcm.call_args.kwargs
+    assert kwargs["data"]["type"] == "cash_request"
+    assert kwargs["data"]["member_id"] == str(member.pk)
+    assert "Cash payment request" in kwargs["title"]
+
+
+@pytest.mark.django_db
+def test_staff_can_register_fcm_device(client, staff):
+    client.force_authenticate(staff)
+    reg = client.post(
+        "/api/v1/member/devices/fcm/",
+        {"token": "staff-tok", "platform": "ios"},
+        format="json",
+    )
+    assert reg.status_code == 200
+    assert MemberDeviceToken.objects.filter(user=staff, token="staff-tok").exists()
 
 
 @pytest.mark.django_db
@@ -284,3 +352,246 @@ def test_register_device_moves_token(member, other_member):
     register_device(other_member, "shared-token", "android")
     assert MemberDeviceToken.objects.filter(token="shared-token").count() == 1
     assert MemberDeviceToken.objects.get(token="shared-token").user_id == other_member.pk
+
+
+def test_catalog_critical_sms_defaults():
+    assert CATALOG["payment_received"][4] is True
+    assert CATALOG["cash_request_rejected"][4] is True
+    assert CATALOG["membership_expiring"][4] is True
+    assert CATALOG["membership_expired"][4] is True
+    assert CATALOG["fingerprint_ready"][4] is False
+    assert CATALOG["membership_activated"][4] is False
+    assert CATALOG["announcement"][4] is False
+
+
+@pytest.mark.django_db
+def test_create_notification_queues_sms_for_critical(
+    member, django_capture_on_commit_callbacks
+):
+    with patch("notifications.services.send_sms_for_notification") as send_sms:
+        with patch("notifications.services.send_fcm_for_notification"):
+            with django_capture_on_commit_callbacks(execute=True):
+                notif = create_notification(
+                    member,
+                    code="payment_received",
+                    body_params={"amount": 3000},
+                    related_object_id="pay-1",
+                    push=False,
+                )
+    assert notif is not None
+    assert notif.send_sms is True
+    send_sms.assert_called_once_with(notif.pk)
+
+
+@pytest.mark.django_db
+def test_create_notification_skips_sms_for_fingerprint(
+    member, django_capture_on_commit_callbacks
+):
+    with patch("notifications.services.send_sms_for_notification") as send_sms:
+        with patch("notifications.services.send_fcm_for_notification"):
+            with django_capture_on_commit_callbacks(execute=True):
+                notif = create_notification(
+                    member,
+                    code="fingerprint_ready",
+                    related_object_id="ready",
+                    push=False,
+                )
+    assert notif is not None
+    assert notif.send_sms is False
+    send_sms.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_format_sms_templates(member):
+    payment = create_notification(
+        member,
+        code="payment_received",
+        body_params={"amount": 3000},
+        related_object_id="pay-sms",
+        push=False,
+        sms=False,
+    )
+    assert "৳3000" in format_sms(payment)
+    announce = create_notification(
+        member,
+        code="announcement",
+        title="Closed",
+        body="Friday off",
+        related_object_id="camp-1",
+        push=False,
+        sms=False,
+    )
+    assert format_sms(announce) == "Closed: Friday off"
+
+
+@pytest.mark.django_db
+def test_format_push_never_returns_arb_keys(member):
+    rejected = create_notification(
+        member,
+        code="cash_request_rejected",
+        related_object_id="cash-push",
+        push=False,
+        sms=False,
+    )
+    title, body = format_push(rejected)
+    assert title == "নগদ পেমেন্ট প্রত্যাখ্যান"
+    assert "মেম্বারশিপ থেকে আবার চেষ্টা করুন" in body
+    assert "notifCashRejected" not in title
+    assert "notifCashRejected" not in body
+
+    payment = create_notification(
+        member,
+        code="payment_received",
+        body_params={"amount": 3000},
+        related_object_id="pay-push",
+        push=False,
+        sms=False,
+    )
+    pay_title, pay_body = format_push(payment)
+    assert pay_title == "পেমেন্ট গৃহীত"
+    assert "৳3000" in pay_body
+    assert "notifPaymentReceived" not in pay_title
+
+    announce = create_notification(
+        member,
+        code="announcement",
+        title="Closed",
+        body="Friday off",
+        related_object_id="camp-push",
+        push=False,
+        sms=False,
+    )
+    assert format_push(announce) == ("Closed", "Friday off")
+
+
+@pytest.mark.django_db
+def test_send_fcm_uses_bangla_human_copy(member):
+    register_device(member, "token-push-copy", "android")
+    notif = create_notification(
+        member,
+        code="cash_request_rejected",
+        related_object_id="cash-fcm",
+        push=False,
+        sms=False,
+    )
+    with patch("notifications.services._send_fcm") as send:
+        result = send_fcm_for_notification(notif.pk)
+    assert result["sent"] == 1
+    send.assert_called_once()
+    kwargs = send.call_args.kwargs
+    assert kwargs["title"] == "নগদ পেমেন্ট প্রত্যাখ্যান"
+    assert "notifCashRejectedTitle" not in kwargs["title"]
+    assert "notifCashRejectedBody" not in kwargs["body"]
+    assert kwargs["data"]["title_key"] == "notifCashRejectedTitle"
+    assert kwargs["data"]["body_key"] == "notifCashRejectedBody"
+
+
+@pytest.mark.django_db
+def test_send_sms_for_notification_respects_opt_out(member):
+    profile = member.member_profile
+    profile.sms_enabled = False
+    profile.save(update_fields=["sms_enabled", "updated_at"])
+    notif = create_notification(
+        member,
+        code="cash_request_rejected",
+        related_object_id="cash-1",
+        push=False,
+        sms=False,
+    )
+    with patch("accounts.providers.send_sms_message") as send:
+        result = send_sms_for_notification(notif.pk)
+    assert result["skipped"] == "sms_disabled"
+    send.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_admin_announcement_sms_default_off(client, member, staff, plan):
+    profile = member.member_profile
+    profile.membership_status = "active"
+    profile.plan = plan
+    profile.save()
+    client.force_authenticate(staff)
+    with patch("notifications.services.send_sms_for_notification") as send_sms:
+        result = client.post(
+            "/api/v1/admin/notifications/",
+            {
+                "scope": "member",
+                "member_id": str(member.pk),
+                "title": "Hi",
+                "body": "No SMS",
+                "send_push": False,
+            },
+            format="json",
+        )
+    assert result.status_code == 201
+    assert result.data["sms_requested"] is False
+    assert result.data["sms_sent"] == 0
+    assert result.data["send_sms_requested"] is False
+    send_sms.assert_not_called()
+    fanout = MemberNotification.objects.get(user=member, code="announcement")
+    assert fanout.send_sms is False
+
+
+@pytest.mark.django_db
+def test_admin_announcement_send_sms(client, member, staff, plan):
+    profile = member.member_profile
+    profile.membership_status = "active"
+    profile.plan = plan
+    profile.save()
+    client.force_authenticate(staff)
+    with patch(
+        "notifications.services.send_sms_for_notification",
+        return_value={"sent": 1, "failed": 0, "skipped": None},
+    ) as send_sms:
+        result = client.post(
+            "/api/v1/admin/notifications/",
+            {
+                "scope": "member",
+                "member_id": str(member.pk),
+                "title": "Alert",
+                "body": "Please renew",
+                "send_push": False,
+                "send_sms": True,
+            },
+            format="json",
+        )
+    assert result.status_code == 201
+    assert result.data["sms_requested"] is True
+    assert result.data["sms_sent"] == 1
+    send_sms.assert_called_once()
+    fanout = MemberNotification.objects.get(user=member, code="announcement")
+    assert fanout.send_sms is True
+
+
+@pytest.mark.django_db
+def test_admin_announcement_resend_sms(client, member, staff, plan):
+    profile = member.member_profile
+    profile.membership_status = "active"
+    profile.plan = plan
+    profile.save()
+    client.force_authenticate(staff)
+    created = client.post(
+        "/api/v1/admin/notifications/",
+        {
+            "scope": "member",
+            "member_id": str(member.pk),
+            "title": "Hi",
+            "body": "Again",
+            "send_push": False,
+            "send_sms": False,
+        },
+        format="json",
+    )
+    campaign_id = created.data["id"]
+    with patch(
+        "notifications.services.send_sms_for_notification",
+        return_value={"sent": 1, "failed": 0, "skipped": None},
+    ) as send:
+        resend = client.post(f"/api/v1/admin/notifications/{campaign_id}/resend-sms/")
+    assert resend.status_code == 200
+    assert resend.data["sms_sent"] == 1
+    send.assert_called_once()
+    fanout = MemberNotification.objects.get(
+        code="announcement", related_object_id=str(campaign_id)
+    )
+    assert fanout.send_sms is True

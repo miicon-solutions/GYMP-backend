@@ -9,6 +9,7 @@ from notifications.serializers import (
     AdminAnnouncementCreateOutput,
     AdminAnnouncementInput,
     AdminAnnouncementResendOutput,
+    AdminAnnouncementResendSmsOutput,
     AdminAnnouncementSerializer,
     AdminAnnouncementUpdateInput,
     announcement_payload,
@@ -91,3 +92,12 @@ class AnnouncementResendPush(generics.GenericAPIView):
     @extend_schema(request=None, responses=AdminAnnouncementResendOutput)
     def post(self, request, *args, **kwargs):
         return Response(services.resend_announcement_push(request.user, self.kwargs["pk"]))
+
+
+class AnnouncementResendSms(generics.GenericAPIView):
+    serializer_class = AdminAnnouncementResendSmsOutput
+    permission_classes = [StaffPermission("notifications.create")]
+
+    @extend_schema(request=None, responses=AdminAnnouncementResendSmsOutput)
+    def post(self, request, *args, **kwargs):
+        return Response(services.resend_announcement_sms(request.user, self.kwargs["pk"]))
