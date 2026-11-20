@@ -8255,6 +8255,7 @@ components:
         code:
           enum:
           - payment_received
+          - cash_request
           - cash_request_rejected
           - membership_activated
           - fingerprint_ready
@@ -8263,6 +8264,8 @@ components:
           - announcement
           type: string
           description: '* `payment_received` - payment_received
+
+            * `cash_request` - cash_request
 
             * `cash_request_rejected` - cash_request_rejected
 
@@ -8275,7 +8278,7 @@ components:
             * `membership_expired` - membership_expired
 
             * `announcement` - announcement'
-          x-spec-enum-id: a122480b5caf361e
+          x-spec-enum-id: d94a5af9f3765507
           readOnly: true
         title_key:
           type: string

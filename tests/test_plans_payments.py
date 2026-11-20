@@ -370,6 +370,31 @@ def test_member_cash_request_create_poll_accept(client, staff, member, plan):
     )
 
 
+def test_cash_request_accept_requires_permission(client, member, plan):
+    from accounts.models import StaffProfile, User
+
+    limited = User.objects.create_user("+8801922222222", role="admin", full_name="Viewer")
+    StaffProfile.objects.create(
+        user=limited,
+        short_id="S-VIEW",
+        permissions=["members.view", "cash_requests.view"],
+    )
+    complete(member)
+    client.force_authenticate(member)
+    created = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    ).data
+    client.force_authenticate(limited)
+    listed = client.get("/api/v1/admin/cash-requests/", {"status": "pending"})
+    assert listed.status_code == 200 and len(listed.data) == 1
+    denied = client.post(
+        f"/api/v1/admin/cash-requests/{created['id']}/accept/", {}, format="json"
+    )
+    assert denied.status_code == 403
+
+
 def test_member_cash_request_reject_and_cancel(client, staff, member, plan):
     complete(member)
     client.force_authenticate(member)

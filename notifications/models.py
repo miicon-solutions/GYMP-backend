@@ -12,6 +12,7 @@ NOTIFICATION_KINDS = [
 
 NOTIFICATION_CODES = [
     ("payment_received", "payment_received"),
+    ("cash_request", "cash_request"),
     ("cash_request_rejected", "cash_request_rejected"),
     ("membership_activated", "membership_activated"),
     ("fingerprint_ready", "fingerprint_ready"),

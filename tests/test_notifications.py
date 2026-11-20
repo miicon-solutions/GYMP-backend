@@ -155,6 +155,90 @@ def test_cash_request_pushes_staff(
     assert kwargs["data"]["type"] == "cash_request"
     assert kwargs["data"]["member_id"] == str(member.pk)
     assert "Cash payment request" in kwargs["title"]
+    assert MemberNotification.objects.filter(
+        user=staff, code="cash_request", is_unread=True
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_cash_request_notify_only_permitted_staff(
+    member, staff, plan, django_capture_on_commit_callbacks
+):
+    from accounts.models import StaffProfile, User
+    from payments.services import create_cash_request
+
+    limited = User.objects.create_user("+8801911111111", role="admin", full_name="No Cash")
+    StaffProfile.objects.create(
+        user=limited, short_id="S-NOCASH", permissions=["members.view"]
+    )
+    register_device(staff, "staff-ok-token", "android")
+    register_device(limited, "staff-deny-token", "android")
+
+    profile = member.member_profile
+    profile.membership_status = "none"
+    profile.profile_complete = True
+    profile.save()
+
+    with patch("notifications.services._send_fcm") as send_fcm:
+        with django_capture_on_commit_callbacks(execute=True):
+            create_cash_request(member, {"plan_id": plan.pk})
+
+    assert MemberNotification.objects.filter(user=staff, code="cash_request").exists()
+    assert not MemberNotification.objects.filter(
+        user=limited, code="cash_request"
+    ).exists()
+    tokens = {c.args[0] for c in send_fcm.call_args_list}
+    assert "staff-ok-token" in tokens
+    assert "staff-deny-token" not in tokens
+
+
+@pytest.mark.django_db
+def test_staff_can_list_notifications(client, staff):
+    create_notification(
+        staff,
+        code="cash_request",
+        title="Cash payment request",
+        body="Member · ৳3000 · awaiting reception",
+        push=False,
+    )
+    client.force_authenticate(staff)
+    listed = client.get("/api/v1/member/notifications/")
+    assert listed.status_code == 200
+    assert len(listed.data) == 1
+    assert listed.data[0]["code"] == "cash_request"
+
+
+@pytest.mark.django_db
+def test_cash_request_resolve_marks_staff_notif_read(member, staff, plan):
+    from payments.models import CashPaymentRequest
+    from payments.services import reject_cash_request
+
+    profile = member.member_profile
+    profile.membership_status = "pending_payment"
+    profile.profile_complete = True
+    profile.save()
+    req = CashPaymentRequest.objects.create(
+        member=profile,
+        plan=plan,
+        kind="first_payment",
+        amount_taka=3000,
+        pricing_snapshot={"amount_taka": 3000, "catalog_id": plan.catalog_id, "line_items": []},
+        status="pending",
+    )
+    create_notification(
+        staff,
+        code="cash_request",
+        title="Cash payment request",
+        body="test",
+        related_object_id=str(req.pk),
+        body_params={"member_id": str(member.pk)},
+        push=False,
+    )
+    reject_cash_request(staff, req.pk)
+    notif = MemberNotification.objects.get(user=staff, code="cash_request")
+    assert notif.is_unread is False
+    profile.refresh_from_db()
+    assert profile.membership_status == "none"
 
 
 @pytest.mark.django_db

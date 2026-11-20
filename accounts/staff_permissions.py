@@ -22,6 +22,9 @@ STAFF_PERMISSION_CATALOG: dict[str, tuple[str, ...]] = {
     "staff": ("view",),
     "device_controllers": ("view", "create", "delete"),
     "notifications": ("view", "create", "update", "delete"),
+    # view = inbox/FCM for new cash requests + see pending on member;
+    # update = accept / reject.
+    "cash_requests": ("view", "update"),
 }
 
 def all_permission_codes() -> list[str]:

@@ -607,7 +607,7 @@ api = [
             method="get",
             request=CashRequestStatusFilter,
             response=CashPaymentRequestSerializer(many=True),
-            permission=StaffPermission("members.view"),
+            permission=StaffPermission("cash_requests.view"),
             parameters=query_parameters("status"),
         ),
     ),
@@ -623,7 +623,7 @@ api = [
             ),
             method="get",
             response=CashPaymentRequestSerializer(many=True),
-            permission=StaffPermission("members.view"),
+            permission=StaffPermission("cash_requests.view"),
         ),
     ),
     path(
@@ -639,7 +639,7 @@ api = [
                 },
             ),
             handler=cash_request_accept,
-            permission=StaffPermission("members.update"),
+            permission=StaffPermission("cash_requests.update"),
         ),
     ),
     path(
@@ -650,7 +650,7 @@ api = [
                 CashPaymentRequestSerializer(payment.reject_cash_request(r.user, pk)).data
             ),
             response=CashPaymentRequestSerializer,
-            permission=StaffPermission("members.update"),
+            permission=StaffPermission("cash_requests.update"),
         ),
     ),
     path("admin/plans/", PlanList.as_view()),

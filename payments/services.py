@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from core.api import BadGateway, Conflict, require_admin
+from core.api import BadGateway, Conflict, require_admin, require_staff_permission
 from members.models import MemberProfile
 from members.services import owned_profile
 from operations.services import DHAKA, record
@@ -286,6 +286,8 @@ def _cash_audit(actor, member, plan, payment, kind, previous_plan_name):
 
 
 def _link_pending_cash_request(member, plan, payment, actor):
+    from notifications.services import mark_staff_cash_request_notifications_read
+
     now = timezone.now()
     pending = (
         CashPaymentRequest.objects.select_for_update()
@@ -293,15 +295,23 @@ def _link_pending_cash_request(member, plan, payment, actor):
         .first()
     )
     if pending is None:
+        prior_ids = list(
+            CashPaymentRequest.objects.filter(member=member, status="pending").values_list(
+                "pk", flat=True
+            )
+        )
         CashPaymentRequest.objects.filter(member=member, status="pending").update(
             status="cancelled", resolved_at=now
         )
+        for prior_id in prior_ids:
+            mark_staff_cash_request_notifications_read(prior_id)
         return None
     pending.status = "accepted"
     pending.resolved_at = now
     pending.resolved_by = actor
     pending.payment = payment
     pending.save(update_fields=["status", "resolved_at", "resolved_by", "payment", "updated_at"])
+    mark_staff_cash_request_notifications_read(pending.pk)
     return pending
 
 
@@ -346,6 +356,11 @@ def create_cash_request(user, data):
     if preview["kind"] != "first_payment":
         raise Conflict("Cash requests are only available for first payment.")
     now = timezone.now()
+    prior_pending_ids = list(
+        CashPaymentRequest.objects.filter(member=member, status="pending").values_list(
+            "pk", flat=True
+        )
+    )
     CashPaymentRequest.objects.filter(member=member, status="pending").update(
         status="cancelled", resolved_at=now
     )
@@ -363,6 +378,12 @@ def create_cash_request(user, data):
     member.membership_status = "pending_payment"
     member.save(update_fields=["membership_status", "updated_at"])
     req_id = req.pk
+
+    if prior_pending_ids:
+        from notifications.services import mark_staff_cash_request_notifications_read
+
+        for prior_id in prior_pending_ids:
+            mark_staff_cash_request_notifications_read(prior_id)
 
     def _push_staff():
         from notifications.services import notify_staff_cash_request
@@ -404,11 +425,14 @@ def cancel_cash_request(user, request_id):
     ):
         member.membership_status = "none"
         member.save(update_fields=["membership_status", "updated_at"])
+    from notifications.services import mark_staff_cash_request_notifications_read
+
+    mark_staff_cash_request_notifications_read(req.pk)
     return req
 
 
 def list_admin_cash_requests(actor, status="pending", member_id=None):
-    require_admin(actor)
+    require_staff_permission(actor, "cash_requests.view")
     rows = CashPaymentRequest.objects.select_related(
         "member", "member__user", "plan", "payment", "resolved_by"
     )
@@ -420,7 +444,7 @@ def list_admin_cash_requests(actor, status="pending", member_id=None):
 
 
 def list_member_admin_cash_requests(actor, member):
-    require_admin(actor)
+    require_staff_permission(actor, "cash_requests.view")
     return list(
         CashPaymentRequest.objects.filter(member=member)
         .select_related("plan", "payment", "resolved_by")
@@ -430,7 +454,7 @@ def list_member_admin_cash_requests(actor, member):
 
 @transaction.atomic
 def accept_cash_request(actor, request_id):
-    require_admin(actor)
+    require_staff_permission(actor, "cash_requests.update")
     req = get_object_or_404(CashPaymentRequest.objects.select_for_update(), pk=request_id)
     if req.status == "accepted" and req.payment_id:
         return req, req.payment, req.member
@@ -467,12 +491,15 @@ def accept_cash_request(actor, request_id):
     req.payment = payment
     req.save(update_fields=["status", "resolved_at", "resolved_by", "payment", "updated_at"])
     _notify_payment(member, payment)
+    from notifications.services import mark_staff_cash_request_notifications_read
+
+    mark_staff_cash_request_notifications_read(req.pk)
     return req, payment, member
 
 
 @transaction.atomic
 def reject_cash_request(actor, request_id):
-    require_admin(actor)
+    require_staff_permission(actor, "cash_requests.update")
     req = get_object_or_404(CashPaymentRequest.objects.select_for_update(), pk=request_id)
     if req.status == "rejected":
         return req
@@ -490,7 +517,11 @@ def reject_cash_request(actor, request_id):
     ):
         member.membership_status = "none"
         member.save(update_fields=["membership_status", "updated_at"])
-    from notifications.services import notify_cash_rejected
+    from notifications.services import (
+        mark_staff_cash_request_notifications_read,
+        notify_cash_rejected,
+    )
 
     notify_cash_rejected(member.user, req.pk)
+    mark_staff_cash_request_notifications_read(req.pk)
     return req

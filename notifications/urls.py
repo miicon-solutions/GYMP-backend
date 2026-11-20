@@ -3,7 +3,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.api import MemberOnly, StaffOrMember
+from core.api import StaffOrMember
 from core.endpoints import endpoint
 from notifications import services
 from notifications.serializers import (
@@ -72,7 +72,7 @@ urlpatterns = [
             handler=_list_notifications,
             method="get",
             response=MemberNotificationSerializer(many=True),
-            permission=MemberOnly,
+            permission=StaffOrMember,
             tags=["notifications"],
         ),
     ),
@@ -82,7 +82,7 @@ urlpatterns = [
             "member_notifications_read_all",
             handler=_mark_all_read,
             response=NotificationsReadAllOutput,
-            permission=MemberOnly,
+            permission=StaffOrMember,
             tags=["notifications"],
         ),
     ),
@@ -92,7 +92,7 @@ urlpatterns = [
             "member_notifications_read",
             handler=_mark_read,
             response=MemberNotificationSerializer,
-            permission=MemberOnly,
+            permission=StaffOrMember,
             tags=["notifications"],
         ),
     ),

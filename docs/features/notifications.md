@@ -4,19 +4,19 @@ Member in-app notification feed, FCM device registration, SMS delivery (critical
 
 - **OpenAPI:** `/openapi/v1/notifications.yaml`
 - **Base paths:** `/api/v1/member/notifications/`, `/api/v1/member/devices/fcm/`, `/api/v1/admin/notifications/`
-- **Auth:** Member or staff Bearer for FCM devices; member Bearer for feed; staff with `notifications.*` for campaigns
+- **Auth:** Member or staff Bearer for FCM devices **and** the in-app feed; staff with `notifications.*` for announcement campaigns; staff with `cash_requests.view` receive cash-request inbox + FCM
 
-## Member feed
+## Member / staff feed
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/v1/member/notifications/` | Latest 100; newest first |
+| `GET` | `/api/v1/member/notifications/` | Latest 100; newest first (member **or** staff Bearer) |
 | `POST` | `/api/v1/member/notifications/{id}/read/` | Mark one read |
 | `POST` | `/api/v1/member/notifications/read-all/` | Mark all read |
 
-Resource fields: `id`, `kind` (`membership` \| `payment` \| `attendance` \| `general`), `code`, `title_key` / `body_key` (+ params), optional free-text `title` / `body`, `is_unread`, `created_at`.
+Resource fields: `id`, `kind` (`membership` \| `payment` \| `attendance` \| `general`), `code`, `title_key` / `body_key` (+ params), optional free-text `title` / `body`, `is_unread`, `created_at`, `related_object_id`.
 
-`GET /api/v1/member/dashboard/` → `has_unread_notifications` reflects unread rows.
+`GET /api/v1/member/dashboard/` → `has_unread_notifications` reflects unread rows (members). Staff unread is derived from the same feed list.
 
 ## FCM devices
 
@@ -31,7 +31,7 @@ System FCM title/body are fixed **Bangla** plain text (tray copy; no member loca
 
 Member opt-out: `MemberProfile.push_enabled` (default true). SMS opt-out: `MemberProfile.sms_enabled` (default true).
 
-**Staff cash-request push:** when a member creates `POST …/cash-requests/`, after commit the API FCM-pushes all active staff with a registered device (`type=cash_request`, `member_id`, `cash_request_id`). Tap opens admin member detail in the app.
+**Staff cash-request notify:** when a member creates `POST …/cash-requests/`, after commit the API creates a `MemberNotification` (`code=cash_request`, kind `payment`) for each active staff with `cash_requests.view` (super included) and FCM-pushes those users’ registered devices (`type=cash_request`, `member_id`, `cash_request_id`, `amount_taka`). Tap opens admin member detail. Accept / reject / cancel marks matching staff inbox rows (`related_object_id` = request id) as read. A later re-request creates a new unread row.
 
 ## SMS delivery
 

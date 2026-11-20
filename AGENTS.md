@@ -86,9 +86,11 @@ core/             # shared API helpers, middleware, permissions
   `GET /api/v1/admin/staff/permissions/catalog/`.
   `notifications` actions: `view`, `create`, `update`, `delete` (announcement
   campaigns under `/api/v1/admin/notifications/`; resend-push uses `create`).
-- **Notifications / FCM / SMS:** member feed + device tokens (member **and**
-  staff via `POST/DELETE …/member/devices/fcm/`) + staff announcement
-  campaigns — see `docs/features/notifications.md` and
+  `cash_requests` actions: `view` (inbox + FCM for new cash requests; list
+  pending), `update` (accept / reject).
+- **Notifications / FCM / SMS:** member **and** staff feed + device tokens
+  (`GET/POST …/member/notifications/`, `POST/DELETE …/member/devices/fcm/`)
+  + staff announcement campaigns — see `docs/features/notifications.md` and
   `/openapi/v1/notifications.yaml`. `StaffAnnouncement` fans out
   `MemberNotification` rows (`code=announcement`, `related_object_id=campaign`).
   Channels: in-app always; optional FCM (`send_push`, default on for
@@ -96,8 +98,10 @@ core/             # shared API helpers, middleware, permissions
   `POST …/resend-sms/`). Critical system codes also SMS by catalog:
   `payment_received`, `cash_request_rejected`, `membership_expiring`,
   `membership_expired` (not `fingerprint_ready` / `membership_activated`).
-  Cash request create FCM-pushes active staff (`notify_staff_cash_request`).
-  Member opt-out: `push_enabled` / `sms_enabled` on `MemberProfile`. SMS via
+  Cash request create notifies staff with `cash_requests.view`
+  (`notify_staff_cash_request`: inbox `code=cash_request` + FCM). Accept /
+  reject / cancel marks those staff rows read. Member opt-out:
+  `push_enabled` / `sms_enabled` on `MemberProfile`. SMS via
   `accounts.providers.send_sms_message` (sms.net.bd; needs
   `SMS_NET_BD_API_KEY`). OTP uses `send_sms` only — `OTP_DEV_BYPASS` skips
   OTP texts, never notification/announcement SMS. System SMS bodies are fixed

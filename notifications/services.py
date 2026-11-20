@@ -23,6 +23,13 @@ CATALOG = {
         True,
         True,
     ),
+    "cash_request": (
+        "payment",
+        "notifCashRequestTitle",
+        "notifCashRequestBody",
+        True,
+        False,
+    ),
     "cash_request_rejected": (
         "payment",
         "notifCashRejectedTitle",
@@ -329,9 +336,31 @@ def notify_cash_rejected(user, request_id) -> None:
     )
 
 
-def notify_staff_cash_request(request_id) -> dict:
-    """Push FCM to active staff when a member submits a cash payment request."""
+def _staff_with_cash_request_view():
+    """Active admin users who may receive cash-request inbox + FCM."""
     from accounts.models import User
+    from accounts.staff_permissions import staff_has_permission
+
+    return [
+        u
+        for u in User.objects.filter(role="admin", is_active=True).select_related(
+            "staff_profile"
+        )
+        if staff_has_permission(u, "cash_requests.view")
+    ]
+
+
+def mark_staff_cash_request_notifications_read(request_id) -> int:
+    """Mark staff inbox rows for a resolved cash request as read."""
+    return MemberNotification.objects.filter(
+        code="cash_request",
+        related_object_id=str(request_id),
+        is_unread=True,
+    ).update(is_unread=False)
+
+
+def notify_staff_cash_request(request_id) -> dict:
+    """Persist inbox rows + FCM for staff with cash_requests.view."""
     from payments.models import CashPaymentRequest
 
     try:
@@ -346,38 +375,38 @@ def notify_staff_cash_request(request_id) -> dict:
     name = (user.full_name or "").strip() or member.member_id or "Member"
     title = "Cash payment request"
     body = f"{name} · ৳{req.amount_taka} · awaiting reception"
-    data = {
-        "type": "cash_request",
-        "cash_request_id": str(req.pk),
-        "member_id": str(member.user_id),
-        "amount_taka": str(req.amount_taka),
-    }
-    staff_ids = User.objects.filter(role="admin", is_active=True).values_list(
-        "pk", flat=True
-    )
-    tokens = list(
-        MemberDeviceToken.objects.filter(user_id__in=staff_ids).values_list(
-            "token", flat=True
-        )
-    )
-    if not tokens:
-        logger.info("Staff cash-request push skipped: no staff device tokens")
-        return {"sent": 0, "failed": 0, "skipped": "no_device"}
+    member_id = str(member.user_id)
+    amount = req.amount_taka
+    related = str(req.pk)
+
+    recipients = _staff_with_cash_request_view()
+    if not recipients:
+        logger.info("Staff cash-request notify skipped: no permitted staff")
+        return {"sent": 0, "failed": 0, "skipped": "no_recipients"}
 
     sent = 0
     failed = 0
-    invalid: list[str] = []
-    for token in tokens:
-        try:
-            _send_fcm(token, title=title, body=body, data=data)
-            sent += 1
-        except Exception as exc:  # noqa: BLE001
-            failed += 1
-            logger.warning("Staff FCM send failed for token …%s: %s", token[-8:], exc)
-            if _is_invalid_token(exc):
-                invalid.append(token)
-    if invalid:
-        MemberDeviceToken.objects.filter(token__in=invalid).delete()
+    for staff_user in recipients:
+        notif = create_notification(
+            staff_user,
+            code="cash_request",
+            title=title,
+            body=body,
+            title_params={"memberId": member_id, "memberName": name},
+            body_params={
+                "member_id": member_id,
+                "memberId": member_id,
+                "memberName": name,
+                "amount": amount,
+            },
+            related_object_id=related,
+            push=True,
+            sms=False,
+        )
+        if notif is None:
+            continue
+        # Push is queued via create_notification on_commit; count inbox rows.
+        sent += 1
     return {"sent": sent, "failed": failed, "skipped": None}
 
 
@@ -697,6 +726,16 @@ def send_fcm_for_notification(notification_id) -> dict:
         "title_key": notif.title_key,
         "body_key": notif.body_key,
     }
+    if notif.code == "cash_request":
+        params = dict(notif.body_params or {})
+        data["type"] = "cash_request"
+        data["cash_request_id"] = notif.related_object_id or ""
+        member_id = params.get("member_id") or params.get("memberId") or ""
+        if member_id:
+            data["member_id"] = str(member_id)
+        amount = params.get("amount")
+        if amount is not None and amount != "":
+            data["amount_taka"] = str(amount)
     sent = 0
     failed = 0
     errors: list[str] = []

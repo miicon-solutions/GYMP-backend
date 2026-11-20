@@ -25,4 +25,4 @@ Returns `{ "request", "member", "payment" }` and activates membership using the 
 
 ## Permissions
 
-Non-super staff need grants such as `members.view` / `members.update`. Catalog: `GET /api/v1/admin/staff/permissions/catalog/` (staff feature).
+Non-super staff need grants such as `members.view` / `members.update`. Cash-request list needs `cash_requests.view`; accept/reject need `cash_requests.update`. Catalog: `GET /api/v1/admin/staff/permissions/catalog/` (staff feature).
