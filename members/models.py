@@ -39,6 +39,7 @@ class MemberProfile(Entity):
     device_pin_enc = models.TextField(blank=True)
     device_pin_updated_at = models.DateTimeField(null=True, blank=True)
     recovery_sent_at = models.DateTimeField(null=True, blank=True)
+    push_enabled = models.BooleanField(default=True)
 
     class Meta(Entity.Meta):
         constraints = [

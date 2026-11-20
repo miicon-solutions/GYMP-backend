@@ -882,6 +882,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminMemberOutput'
           description: ''
+  /api/v1/admin/notifications/:
+    post:
+      operationId: admin_notifications_announce
+      tags:
+      - notifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminAnnouncementInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminAnnouncementInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminAnnouncementInput'
+        required: true
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAnnouncementOutput'
+          description: ''
   /api/v1/admin/plans/:
     get:
       operationId: api_v1_admin_plans_list
@@ -2665,6 +2692,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardOutput'
           description: ''
+  /api/v1/member/devices/fcm/:
+    post:
+      operationId: member_devices_fcm_register
+      description: Register or remove an FCM device token for the signed-in member.
+      tags:
+      - notifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FcmDeviceInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FcmDeviceInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FcmDeviceInput'
+        required: true
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FcmDeviceRegisteredOutput'
+          description: ''
+    delete:
+      operationId: member_devices_fcm_unregister
+      description: Register or remove an FCM device token for the signed-in member.
+      tags:
+      - notifications
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FcmDeviceDeletedOutput'
+          description: ''
   /api/v1/member/gym-status/:
     get:
       operationId: member_gym_status
@@ -2679,6 +2749,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GymStatusOutput'
+          description: ''
+  /api/v1/member/notifications/:
+    get:
+      operationId: member_notifications_list
+      tags:
+      - notifications
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberNotification'
+          description: ''
+  /api/v1/member/notifications/{id}/read/:
+    post:
+      operationId: member_notifications_read
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberNotification'
+          description: ''
+  /api/v1/member/notifications/read-all/:
+    post:
+      operationId: member_notifications_read_all
+      tags:
+      - notifications
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationsReadAllOutput'
           description: ''
   /api/v1/member/payments/:
     get:
@@ -5259,6 +5383,45 @@ components:
       - at
       - id
       - summary_key
+    AdminAnnouncementInput:
+      type: object
+      properties:
+        scope:
+          enum:
+          - member
+          - active
+          type: string
+          description: '* `member` - member
+
+            * `active` - active'
+          x-spec-enum-id: 1a37bf515dba1f1f
+        member_id:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+          maxLength: 120
+        body:
+          type: string
+          maxLength: 500
+        send_push:
+          type: boolean
+          default: true
+      required:
+      - body
+      - scope
+      - title
+    AdminAnnouncementOutput:
+      type: object
+      properties:
+        created:
+          type: integer
+        push_requested:
+          type: boolean
+      required:
+      - created
+      - push_requested
     AdminMember:
       type: object
       properties:
@@ -6735,6 +6898,41 @@ components:
       - name
       - slug
       - tracking_type
+    FcmDeviceDeletedOutput:
+      type: object
+      properties:
+        deleted:
+          type: integer
+      required:
+      - deleted
+    FcmDeviceInput:
+      type: object
+      properties:
+        token:
+          type: string
+          maxLength: 512
+        platform:
+          enum:
+          - ios
+          - android
+          type: string
+          description: '* `ios` - ios
+
+            * `android` - android'
+          x-spec-enum-id: 1adac1a0e8d1116f
+      required:
+      - platform
+      - token
+    FcmDeviceRegisteredOutput:
+      type: object
+      properties:
+        id:
+          type: string
+        platform:
+          type: string
+      required:
+      - id
+      - platform
     FingerprintInput:
       type: object
       properties:
@@ -7721,6 +7919,93 @@ components:
       - payment_id
       - plan_id
       - requested_at
+    MemberNotification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          enum:
+          - membership
+          - payment
+          - attendance
+          - general
+          type: string
+          description: '* `membership` - membership
+
+            * `payment` - payment
+
+            * `attendance` - attendance
+
+            * `general` - general'
+          x-spec-enum-id: 58084ba05c43061b
+          readOnly: true
+        code:
+          enum:
+          - payment_received
+          - cash_request_rejected
+          - membership_activated
+          - fingerprint_ready
+          - membership_expiring
+          - membership_expired
+          - announcement
+          type: string
+          description: '* `payment_received` - payment_received
+
+            * `cash_request_rejected` - cash_request_rejected
+
+            * `membership_activated` - membership_activated
+
+            * `fingerprint_ready` - fingerprint_ready
+
+            * `membership_expiring` - membership_expiring
+
+            * `membership_expired` - membership_expired
+
+            * `announcement` - announcement'
+          x-spec-enum-id: a122480b5caf361e
+          readOnly: true
+        title_key:
+          type: string
+          readOnly: true
+        body_key:
+          type: string
+          readOnly: true
+        title_params:
+          readOnly: true
+        body_params:
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        is_unread:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        related_object_id:
+          type: string
+          readOnly: true
+      required:
+      - body
+      - body_key
+      - body_params
+      - code
+      - created_at
+      - id
+      - is_unread
+      - kind
+      - related_object_id
+      - title
+      - title_key
+      - title_params
     MemberOutput:
       type: object
       properties:
@@ -8170,6 +8455,13 @@ components:
           type: integer
           maximum: 10
           minimum: 1
+    NotificationsReadAllOutput:
+      type: object
+      properties:
+        updated:
+          type: integer
+      required:
+      - updated
     OTPInput:
       type: object
       properties:
@@ -11366,5 +11658,7 @@ tags:
   description: Workouts, schedules, nutrition, journal, and feed.
 - name: music
   description: Music queue and catalog.
+- name: notifications
+  description: Member in-app feed, FCM devices, and admin announcements.
 - name: public
   description: Welcome and other unauthenticated public APIs.

@@ -33,6 +33,12 @@ def owned_profile(user):
     return MemberProfile.objects.select_related("user", "plan").get(user=user)
 
 
+def _has_unread_notifications(user) -> bool:
+    from notifications.services import has_unread
+
+    return has_unread(user)
+
+
 def get_member(member_id):
     return get_object_or_404(
         MemberProfile.objects.select_related("user", "plan"), user_id=member_id
@@ -174,6 +180,7 @@ def admin_link_phone(actor, profile, data):
 def set_fingerprint(actor, profile, status):
     require_admin(actor)
     profile = MemberProfile.objects.select_for_update().get(pk=profile.pk)
+    previous = profile.fingerprint_status
     profile.fingerprint_status = status
     profile.save()
     record(
@@ -183,6 +190,10 @@ def set_fingerprint(actor, profile, status):
         "adminActivityMemberFingerprintUpdated",
         {"memberId": profile.member_id, "status": status},
     )
+    if status == "ready" and previous != "ready":
+        from notifications.services import notify_fingerprint_ready
+
+        notify_fingerprint_ready(profile.user)
     return admin_member_data(get_member(profile.user_id))
 
 
@@ -268,7 +279,7 @@ def dashboard(user):
         "payment_preview": PaymentSerializer(
             p.payments.order_by("-created_at")[:5], many=True
         ).data,
-        "has_unread_notifications": False,
+        "has_unread_notifications": _has_unread_notifications(user),
     }
     result.update({k: v for k, v in status.items() if k not in {"status", "today_weekday"}})
     result["gym_status"] = status["status"]

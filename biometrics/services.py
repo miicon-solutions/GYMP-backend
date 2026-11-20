@@ -205,6 +205,9 @@ def pull_templates(actor, member: MemberProfile, *, device_id: str | None = None
     if stored and member.fingerprint_status != "ready":
         member.fingerprint_status = "ready"
         member.save(update_fields=["fingerprint_status", "updated_at"])
+        from notifications.services import notify_fingerprint_ready
+
+        notify_fingerprint_ready(member.user)
     return {"stored": stored, "fingerprint_status": member.fingerprint_status}
 
 

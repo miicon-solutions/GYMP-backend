@@ -32,6 +32,10 @@ FEATURE_TAGS: list[dict[str, str]] = [
     {"name": "reports", "description": "Revenue and reporting."},
     {"name": "fitness", "description": "Workouts, schedules, nutrition, journal, and feed."},
     {"name": "music", "description": "Music queue and catalog."},
+    {
+        "name": "notifications",
+        "description": "Member in-app feed, FCM devices, and admin announcements.",
+    },
     {"name": "public", "description": "Welcome and other unauthenticated public APIs."},
 ]
 
@@ -43,7 +47,10 @@ _PATH_TAG_RULES: list[tuple[str, str]] = [
     ("member/attendance", "attendance"),
     ("member/payments", "payments"),
     ("member/plans", "plans"),
+    ("member/notifications", "notifications"),
+    ("member/devices", "notifications"),
     ("member/", "member"),
+    ("admin/notifications", "notifications"),
     ("admin/members", "admin-members"),
     ("admin/cash-requests", "admin-members"),
     ("admin/device", "device"),

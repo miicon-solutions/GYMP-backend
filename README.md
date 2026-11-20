@@ -162,7 +162,7 @@ The operator console keeps user and financial records read-only. A browser super
 
 In the web staff portal, a signed-in super admin can generate the same token through **Staff → shield icon (Set up / reset MFA)**. Staff mutations otherwise use the APIs and shared services, retaining business validation and activity recording. OTP/session tables and encrypted authenticator secrets are not exposed in the console.
 
-The recovery-email provider, notifications feed, and physical fingerprint-device protocol were incomplete in Go and remain outside the port. Recovery email returns 502 without the explicit development bypass. The dashboard retains its existing `has_unread_notifications: false` behavior.
+The recovery-email provider was incomplete in Go; recovery email returns 502 without the explicit development bypass. Member notifications (in-app feed + FCM) are implemented in the `notifications` app — see `docs/features/notifications.md`.
 
 ## Verification
 

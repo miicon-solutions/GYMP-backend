@@ -145,8 +145,8 @@ enough for a single endpoint. Published schema includes only `/api/v1/` paths.
 
 Feature tags: `auth`, `member`, `admin-members`, `plans`, `payments`,
 `attendance`, `device`, `staff`, `operations`, `reports`, `fitness`, `music`,
-`public`. Assign tags via `endpoint(..., tags=[...])` or path rules in
-`core/api_docs.py`.
+`notifications`, `public`. Assign tags via `endpoint(..., tags=[...])` or path
+rules in `core/api_docs.py`.
 
 ### When adding or changing an API
 

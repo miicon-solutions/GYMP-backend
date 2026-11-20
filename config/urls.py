@@ -145,6 +145,7 @@ api = [
     path("journal/", include("journal.urls")),
     path("feed/", include("fitness.feed_urls")),
     path("music/", include("music.urls")),
+    path("", include("notifications.urls")),
     path(
         "welcome/",
         endpoint(

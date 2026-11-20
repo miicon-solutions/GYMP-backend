@@ -29,7 +29,12 @@ class UserAdmin(OperatorModelAdmin):
     ]
     list_display = ["phone_e164", "full_name", "role", "is_active", "is_staff"]
     list_filter = ["role", "is_active", "is_staff"]
-    search_fields = ["phone_e164", "full_name", "email"]
+    search_fields = [
+        "phone_e164",
+        "full_name",
+        "email",
+        "member_profile__member_id",
+    ]
     readonly_fields = ("id", "created_at", "updated_at")
 
     def has_delete_permission(self, request, obj=None):

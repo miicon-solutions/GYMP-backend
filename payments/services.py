@@ -16,7 +16,6 @@ from payments.models import CashPaymentRequest, Payment, PaymentSession
 from plans.models import Plan
 from plans.services import pricing
 
-
 PACK_DAYS = {1: 30, 3: 90, 6: 180, 9: 270, 12: 365}
 
 
@@ -150,7 +149,7 @@ def settle(session, result):
     price = current.pricing_snapshot
     expiry = new_expiry(member, price["duration_months"], current.kind)
     now = timezone.now()
-    Payment.objects.create(
+    payment = Payment.objects.create(
         member=member,
         plan=current.plan,
         tran_id=current.tran_id,
@@ -166,6 +165,7 @@ def settle(session, result):
     current.status, current.paid_at = "paid", now
     current.val_id, current.bank_tran_id = result["val_id"], result.get("bank_tran_id", "")
     current.save()
+    _notify_payment(member, payment)
     return current
 
 
@@ -174,6 +174,12 @@ def activate(member, plan, expires):
     if member.fingerprint_status == "not_required":
         member.fingerprint_status = "pending"
     member.save()
+
+
+def _notify_payment(member, payment):
+    from notifications.services import notify_payment_received
+
+    notify_payment_received(member.user, payment)
 
 
 def confirm_session(user, tran_id, poll=False):
@@ -320,6 +326,7 @@ def receive_cash(actor, member, plan_id):
     activate(member, plan, preview["new_expires_on"])
     _cash_audit(actor, member, plan, payment, preview["kind"], previous_plan)
     _link_pending_cash_request(member, plan, payment, actor)
+    _notify_payment(member, payment)
     return member, payment
 
 
@@ -451,6 +458,7 @@ def accept_cash_request(actor, request_id):
     req.resolved_by = actor
     req.payment = payment
     req.save(update_fields=["status", "resolved_at", "resolved_by", "payment", "updated_at"])
+    _notify_payment(member, payment)
     return req, payment, member
 
 
@@ -474,4 +482,7 @@ def reject_cash_request(actor, request_id):
     ):
         member.membership_status = "none"
         member.save(update_fields=["membership_status", "updated_at"])
+    from notifications.services import notify_cash_rejected
+
+    notify_cash_rejected(member.user, req.pk)
     return req

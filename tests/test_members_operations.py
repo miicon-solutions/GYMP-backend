@@ -262,7 +262,7 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
     dashboard = client.get("/api/v1/member/dashboard/")
     assert dashboard.status_code == 200
     assert dashboard.data["fingerprint_status"] == "pending"
-    assert dashboard.data["has_unread_notifications"] is False
+    assert dashboard.data["has_unread_notifications"] is True
     assert len(dashboard.data["payment_preview"]) == 1
     assert dashboard.data["status"] == "active"
     assert dashboard.data["visits_this_month"] == 1

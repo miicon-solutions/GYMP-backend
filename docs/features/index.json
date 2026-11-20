@@ -276,6 +276,20 @@
         "api_v1_music_settings_partial_update"
       ]
     },
+    "notifications": {
+      "title": "Notifications",
+      "description": "Member in-app feed, FCM devices, and admin announcements.",
+      "openapi": "/openapi/v1/notifications.yaml",
+      "doc": "/docs/features/notifications/",
+      "operations": [
+        "admin_notifications_announce",
+        "member_devices_fcm_register",
+        "member_devices_fcm_unregister",
+        "member_notifications_list",
+        "member_notifications_read",
+        "member_notifications_read_all"
+      ]
+    },
     "public": {
       "title": "Public",
       "description": "Welcome and other unauthenticated public APIs.",

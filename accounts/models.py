@@ -58,7 +58,9 @@ class User(Entity, AbstractBaseUser, PermissionsMixin):
         ]
 
     def __str__(self):
-        return self.full_name or self.phone_e164
+        if self.full_name and self.phone_e164:
+            return f"{self.full_name} ({self.phone_e164})"
+        return self.full_name or self.phone_e164 or str(self.pk)
 
 
 class StaffProfile(Entity):

@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "nutrition",
     "journal",
     "music",
+    "notifications",
 ]
 MIDDLEWARE = [
     "core.middleware.RequestLogMiddleware",
@@ -270,6 +271,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Workouts, schedules, nutrition, journal, and feed.",
         },
         {"name": "music", "description": "Music queue and catalog."},
+        {
+            "name": "notifications",
+            "description": "Member in-app feed, FCM devices, and admin announcements.",
+        },
         {"name": "public", "description": "Welcome and other unauthenticated public APIs."},
     ],
     "PREPROCESSING_HOOKS": ["core.api_docs.preprocess_versioned_paths"],
