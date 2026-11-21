@@ -50,7 +50,7 @@ from core.api_docs import (
     FeaturesIndexView,
     VersionedSchemaView,
 )
-from core.endpoints import endpoint, query_parameters
+from core.endpoints import ObjectResponse, endpoint, query_parameters
 from members import services as member
 from members.serializers import (
     AdminMemberOutput,
@@ -103,8 +103,23 @@ from plans.views import (
     PlanList,
     PublicPlanList,
 )
-from reporting.serializers import RevenueOutput, RevenueQuery
-from reporting.services import revenue
+from reporting.serializers import (
+    ChannelDateQuery,
+    MembershipStatusQuery,
+    ReportDateQuery,
+    RevenueOutput,
+    RevenueQuery,
+)
+from reporting.services import (
+    admission_report,
+    cash_vs_online,
+    expenses_by_admin,
+    member_collections,
+    membership_status,
+    plan_mix,
+    revenue,
+    revenue_vs_expense,
+)
 
 
 def cash_receive(request, data, pk):
@@ -827,6 +842,90 @@ api = [
             parameters=query_parameters(
                 "range", "date", "from", "to", "dates", "member_id", "channel", "limit"
             ),
+        ),
+    ),
+    path(
+        "admin/reports/cash-vs-online/",
+        endpoint(
+            "admin_report_cash_vs_online",
+            response=ObjectResponse,
+            handler=lambda r, d: cash_vs_online(r.user, d),
+            method="get",
+            request=ReportDateQuery,
+            permission=StaffPermission("reports.view"),
+            parameters=query_parameters("range", "date", "from", "to", "dates"),
+        ),
+    ),
+    path(
+        "admin/reports/member-collections/",
+        endpoint(
+            "admin_report_member_collections",
+            response=ObjectResponse,
+            handler=lambda r, d: member_collections(r.user, d),
+            method="get",
+            request=ChannelDateQuery,
+            permission=StaffPermission("reports.view"),
+            parameters=query_parameters("range", "date", "from", "to", "dates", "channel"),
+        ),
+    ),
+    path(
+        "admin/reports/revenue-vs-expense/",
+        endpoint(
+            "admin_report_revenue_vs_expense",
+            response=ObjectResponse,
+            handler=lambda r, d: revenue_vs_expense(r.user, d),
+            method="get",
+            request=ReportDateQuery,
+            permission=StaffPermission("reports.view"),
+            parameters=query_parameters("range", "date", "from", "to", "dates"),
+        ),
+    ),
+    path(
+        "admin/reports/membership-status/",
+        endpoint(
+            "admin_report_membership_status",
+            response=ObjectResponse,
+            handler=lambda r, d: membership_status(r.user, d),
+            method="get",
+            request=MembershipStatusQuery,
+            permission=StaffPermission("reports.view"),
+            parameters=query_parameters("within_days"),
+        ),
+    ),
+    path(
+        "admin/reports/expenses-by-admin/",
+        endpoint(
+            "admin_report_expenses_by_admin",
+            response=ObjectResponse,
+            handler=lambda r, d: expenses_by_admin(r.user, d),
+            method="get",
+            request=ReportDateQuery,
+            permission=StaffPermission("reports.view"),
+            parameters=query_parameters("range", "date", "from", "to", "dates"),
+        ),
+    ),
+    path(
+        "admin/reports/admission/",
+        endpoint(
+            "admin_report_admission",
+            response=ObjectResponse,
+            handler=lambda r, d: admission_report(r.user, d),
+            method="get",
+            request=ReportDateQuery,
+            permission=StaffPermission("reports.view"),
+            parameters=query_parameters("range", "date", "from", "to", "dates"),
+        ),
+    ),
+    path(
+        "admin/reports/plan-mix/",
+        endpoint(
+            "admin_report_plan_mix",
+            response=ObjectResponse,
+            handler=lambda r, d: plan_mix(r.user, d),
+            method="get",
+            request=ChannelDateQuery,
+            permission=StaffPermission("reports.view"),
+            parameters=query_parameters("range", "date", "from", "to", "dates", "channel"),
         ),
     ),
 ]

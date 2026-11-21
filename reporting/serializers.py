@@ -3,7 +3,9 @@ from rest_framework import serializers
 from payments.serializers import PaymentSerializer
 
 
-class RevenueQuery(serializers.Serializer):
+class ReportDateQuery(serializers.Serializer):
+    """Shared date-window query for admin report endpoints."""
+
     def to_internal_value(self, data):
         if data.get("dates", "").strip():
             data = data.copy()
@@ -17,14 +19,25 @@ class RevenueQuery(serializers.Serializer):
     from_date = serializers.DateField(required=False)
     to = serializers.DateField(required=False)
     dates = serializers.CharField(required=False, allow_blank=True, max_length=2000)
-    member_id = serializers.UUIDField(required=False)
-    channel = serializers.ChoiceField(choices=["all", "cash", "sslcommerz"], default="all")
-    limit = serializers.IntegerField(default=50, min_value=1, max_value=100)
 
     def get_fields(self):
         fields = super().get_fields()
         fields["from"] = fields.pop("from_date")
         return fields
+
+
+class RevenueQuery(ReportDateQuery):
+    member_id = serializers.UUIDField(required=False)
+    channel = serializers.ChoiceField(choices=["all", "cash", "sslcommerz"], default="all")
+    limit = serializers.IntegerField(default=50, min_value=1, max_value=100)
+
+
+class ChannelDateQuery(ReportDateQuery):
+    channel = serializers.ChoiceField(choices=["all", "cash", "sslcommerz"], default="all")
+
+
+class MembershipStatusQuery(serializers.Serializer):
+    within_days = serializers.IntegerField(required=False, default=7, min_value=1, max_value=90)
 
 
 class RevenuePaymentOutput(PaymentSerializer):
@@ -39,7 +52,26 @@ class RevenuePaymentOutput(PaymentSerializer):
 class RevenuePoint(serializers.Serializer):
     bucket = serializers.CharField()
     amount_taka = serializers.IntegerField()
+    list_amount_taka = serializers.IntegerField()
+    discount_taka = serializers.IntegerField()
     count = serializers.IntegerField()
+
+
+class RevenuePrior(serializers.Serializer):
+    from_date = serializers.DateField()
+    to = serializers.DateField()
+    total_taka = serializers.IntegerField()
+    payment_count = serializers.IntegerField()
+    list_taka = serializers.IntegerField()
+    discount_taka = serializers.IntegerField()
+    discount_standing_taka = serializers.IntegerField()
+    discount_offer_taka = serializers.IntegerField()
+    discount_admission_taka = serializers.IntegerField()
+
+    def get_fields(self):
+        fields = super().get_fields()
+        fields["from"] = fields.pop("from_date")
+        return fields
 
 
 class RevenueOutput(serializers.Serializer):
@@ -49,10 +81,16 @@ class RevenueOutput(serializers.Serializer):
     total_taka = serializers.IntegerField()
     payment_count = serializers.IntegerField()
     failed_count = serializers.IntegerField()
+    list_taka = serializers.IntegerField()
+    discount_taka = serializers.IntegerField()
+    discount_standing_taka = serializers.IntegerField()
+    discount_offer_taka = serializers.IntegerField()
+    discount_admission_taka = serializers.IntegerField()
     by_channel = serializers.DictField(child=serializers.IntegerField())
     by_plan = serializers.DictField(child=serializers.IntegerField())
     series = RevenuePoint(many=True)
     payments = RevenuePaymentOutput(many=True)
+    prior = RevenuePrior(allow_null=True)
 
     def get_fields(self):
         fields = super().get_fields()

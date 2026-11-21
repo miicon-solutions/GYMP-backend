@@ -65,6 +65,8 @@ def test_cash_and_online_date_boundaries(member):
 
 
 def test_standing_and_offer_discounts(plan):
+    from payments.services import snapshot
+
     plan.discount_type = "percent"
     plan.discount_value = 15
     plan.save()
@@ -78,8 +80,28 @@ def test_standing_and_offer_discounts(plan):
         extra_discount_type="amount",
         extra_discount_value=200,
     )
-    assert pricing(plan)["effective_renewal_taka"] == 1075
-    assert pricing(plan)["effective_first_payment_taka"] == 1075
+    priced = pricing(plan)
+    assert priced["effective_renewal_taka"] == 1075
+    assert priced["effective_first_payment_taka"] == 1075
+    assert priced["standing_discount_taka"] == 225
+    assert priced["offer_discount_taka"] == 200
+    first = snapshot(plan, "first_purchase")
+    assert first["list_amount_taka"] == 1500 + plan.admission_fee_taka
+    assert first["amount_taka"] == 1075
+    assert first["standing_discount_taka"] == 225
+    assert first["offer_discount_taka"] == 200
+    assert first["admission_waived_taka"] == plan.admission_fee_taka
+    assert (
+        first["standing_discount_taka"]
+        + first["offer_discount_taka"]
+        + first["admission_waived_taka"]
+        == first["list_amount_taka"] - first["amount_taka"]
+    )
+    renew = snapshot(plan, "renew")
+    assert renew["list_amount_taka"] == 1500
+    assert renew["amount_taka"] == 1075
+    assert renew["admission_waived_taka"] == 0
+    assert renew["offer_id"] == str(offer.pk)
     offer.extra_discount_value = 9999
     offer.save()
     assert pricing(plan)["effective_renewal_taka"] == 0
@@ -535,7 +557,10 @@ def test_first_n_offer_scope_exhausts_on_paid_only(client, staff, member, other_
     )
     assert renew.status_code == 201
     assert renew.data["payment"]["kind"] == "renewal"
-    assert Payment.objects.filter(offer=offer).count() == 1
+    # Renewals also attribute the live offer for discount reporting; seats
+    # still count only first payments (see redeemed_count).
+    assert Payment.objects.filter(offer=offer).count() == 2
+    assert Payment.objects.filter(offer=offer, is_first_payment=True).count() == 1
     assert pricing(plan)["effective_first_payment_taka"] == 2500
 
 

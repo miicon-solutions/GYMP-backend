@@ -14,7 +14,7 @@ from operations.services import DHAKA, record
 from payments import gateway
 from payments.models import CashPaymentRequest, Payment, PaymentSession
 from plans.models import Plan
-from plans.services import active_offer, offer_admission_waived, pricing
+from plans.services import active_offer, pricing
 
 PACK_DAYS = {1: 30, 3: 90, 6: 180, 9: 270, 12: 365}
 
@@ -50,16 +50,28 @@ def snapshot(plan, kind):
     amounts = pricing(plan)
     first = kind in {"first_purchase", "first_payment"}
     renewal = amounts["effective_renewal_taka"]
-    total = amounts["effective_first_payment_taka"] if first else renewal
-    admission = total - renewal if first else 0
-    lines = [{"label": "Admission fee", "amount_taka": admission}] if admission else []
+    standing = amounts["standing_discount_taka"]
+    offer_discount = amounts["offer_discount_taka"]
+    admission_list = amounts["admission_fee_taka"]
+    # Waive only affects first payments; renewals keep full list = period.
+    waived = bool(first and amounts["admission_waived"])
+    admission_charged = 0 if (not first or waived) else admission_list
+    waived_taka = admission_list if waived else 0
+    total = renewal + admission_charged
+    list_amount = amounts["period_coverage_taka"] + (admission_list if first else 0)
+    lines = (
+        [{"label": "Admission fee", "amount_taka": admission_charged}] if admission_charged else []
+    )
     lines.append(
         {"label": plan.name + (" period" if first else " renewal"), "amount_taka": renewal}
     )
-    offer = active_offer(plan) if first else None
-    waived = bool(first and offer_admission_waived(offer))
+    offer = active_offer(plan)
     result = {
         "amount_taka": total,
+        "list_amount_taka": list_amount,
+        "standing_discount_taka": standing,
+        "offer_discount_taka": offer_discount,
+        "admission_waived_taka": waived_taka,
         "line_items": lines,
         "duration_months": plan.duration_months,
         "catalog_id": plan.catalog_id,
@@ -71,11 +83,10 @@ def snapshot(plan, kind):
     return result
 
 
-def offer_id_from_snapshot(price, *, first_payment):
-    """Link a paid first payment to an offer when admission was waived under that offer."""
-    if not first_payment or not price:
-        return None
-    if not price.get("admission_waived"):
+def offer_id_from_snapshot(price, *, first_payment=False):
+    """Link a paid payment to the offer recorded on its pricing snapshot."""
+    del first_payment  # kept for call-site compatibility
+    if not price:
         return None
     raw = price.get("offer_id")
     if not raw:
@@ -83,6 +94,16 @@ def offer_id_from_snapshot(price, *, first_payment):
     from plans.models import Offer
 
     return Offer.objects.filter(pk=raw).first()
+
+
+def payment_pricing_fields(price):
+    """Map a pricing snapshot onto Payment discount columns."""
+    return {
+        "list_amount_taka": price.get("list_amount_taka"),
+        "standing_discount_taka": price.get("standing_discount_taka"),
+        "offer_discount_taka": price.get("offer_discount_taka"),
+        "admission_waived_taka": price.get("admission_waived_taka"),
+    }
 
 
 def check_kind(member, kind):
@@ -183,6 +204,7 @@ def settle(session, result):
         paid_at=now,
         line_items=price.get("line_items") or [],
         offer=offer_id_from_snapshot(price, first_payment=is_first),
+        **payment_pricing_fields(price),
     )
     activate(member, current.plan, expiry)
     current.status, current.paid_at = "paid", now
@@ -357,6 +379,7 @@ def receive_cash(actor, member, plan_id):
         line_items=price.get("line_items") or [],
         paid_at=timezone.now(),
         offer=offer_id_from_snapshot(price, first_payment=is_first),
+        **payment_pricing_fields(price),
     )
     activate(member, plan, preview["new_expires_on"])
     _cash_audit(actor, member, plan, payment, preview["kind"], previous_plan)
@@ -508,6 +531,7 @@ def accept_cash_request(actor, request_id):
         line_items=lines or [],
         paid_at=timezone.now(),
         offer=offer_id_from_snapshot(price, first_payment=is_first),
+        **payment_pricing_fields(price),
     )
     activate(member, plan, expiry)
     _cash_audit(actor, member, plan, payment, req.kind, previous_plan)

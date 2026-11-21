@@ -75,17 +75,27 @@ def serialize_offer(offer):
 def pricing(plan, day=None):
     period = plan.monthly_rate_taka * plan.duration_months
     offer = active_offer(plan, day)
-    reduction = discount(period, plan.discount_type, plan.discount_value)
-    if offer:
-        reduction += discount(period, offer.extra_discount_type, offer.extra_discount_value)
-    renewal = max(0, period - reduction)
-    admission = 0 if offer_admission_waived(offer) else plan.admission_fee_taka
+    standing = discount(period, plan.discount_type, plan.discount_value)
+    offer_extra = (
+        discount(period, offer.extra_discount_type, offer.extra_discount_value) if offer else 0
+    )
+    # Standing first, then offer against remainder so components sum to list − net.
+    standing_applied = min(standing, period)
+    offer_applied = min(offer_extra, period - standing_applied)
+    renewal = period - standing_applied - offer_applied
+    admission_list = plan.admission_fee_taka
+    waived = bool(offer_admission_waived(offer))
+    admission = 0 if waived else admission_list
     return {
         "period_coverage_taka": period,
         "renewal_taka": period,
         "effective_renewal_taka": renewal,
         "effective_first_payment_taka": renewal + admission,
         "first_payment_taka": renewal + admission,
+        "standing_discount_taka": standing_applied,
+        "offer_discount_taka": offer_applied,
+        "admission_fee_taka": admission_list,
+        "admission_waived": waived,
     }
 
 

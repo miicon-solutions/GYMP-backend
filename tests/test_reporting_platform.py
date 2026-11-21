@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,13 +16,33 @@ from payments.models import Payment
 pytestmark = pytest.mark.django_db
 
 
-def add_payment(member, plan, at, channel="cash", amount=100, status="paid"):
+def add_payment(
+    member,
+    plan,
+    at,
+    channel="cash",
+    amount=100,
+    status="paid",
+    *,
+    list_amount=None,
+    standing=None,
+    offer=None,
+    admission_waived=None,
+    is_first=False,
+    line_items=None,
+):
     return Payment.objects.create(
         member=member.member_profile,
         plan=plan,
         channel=channel,
-        kind="renewal",
+        kind="first_purchase" if is_first else "renewal",
+        is_first_payment=is_first,
         amount_taka=amount,
+        list_amount_taka=list_amount,
+        standing_discount_taka=standing,
+        offer_discount_taka=offer,
+        admission_waived_taka=admission_waived,
+        line_items=line_items or [],
         paid_at=at,
         status=status,
     )
@@ -40,15 +60,22 @@ def test_revenue_ranges_sparse_dates_channels_and_full_aggregates(client, staff,
     month = client.get(url, {"range": "month", "date": "2026-11-15", "limit": 1})
     assert month.status_code == 200
     assert month.data["total_taka"] == 700
+    assert month.data["list_taka"] == 700
+    assert month.data["discount_taka"] == 0
     assert month.data["payment_count"] == 3 and month.data["failed_count"] == 1
     assert len(month.data["payments"]) == 1
     assert month.data["by_channel"] == {"cash": 500, "sslcommerz": 200}
     assert len(month.data["series"]) == 3
+    assert month.data["series"][0]["list_amount_taka"] == month.data["series"][0]["amount_taka"]
+    assert month.data["prior"] is not None
+    assert str(month.data["prior"]["from"])[:10] == "2026-10-01"
     sparse = client.get(url, {"range": "bad", "dates": "2026-11-01,2026-11-03,2026-11-01"})
     # Dates take precedence, including the range selector.
     assert sparse.status_code == 200
     assert sparse.data["range"] == "dates" and sparse.data["total_taka"] == 500
+    assert sparse.data["prior"] is None
     assert client.get(url, {"range": "overall", "channel": "sslcommerz"}).data["total_taka"] == 200
+    assert client.get(url, {"range": "overall"}).data["prior"] is None
     assert len(client.get(url, {"range": "week", "date": "2026-11-03"}).data["series"]) == 7
     assert (
         len(
@@ -65,6 +92,124 @@ def test_revenue_ranges_sparse_dates_channels_and_full_aggregates(client, staff,
     )
     assert client.get(url, {"range": "dates"}).status_code == 400
     assert client.get(url, {"dates": "bad"}).status_code == 400
+
+
+def test_phase1_report_endpoints(client, staff, member, plan):
+    add_payment(
+        member,
+        plan,
+        datetime(2026, 11, 10, 10, tzinfo=UTC),
+        amount=800,
+        list_amount=1500,
+        standing=200,
+        offer=100,
+        admission_waived=400,
+        is_first=True,
+    )
+    add_payment(
+        member,
+        plan,
+        datetime(2026, 11, 10, 12, tzinfo=UTC),
+        channel="sslcommerz",
+        amount=500,
+        list_amount=500,
+        line_items=[{"label": "Admission fee", "amount_taka": 1000}],
+        is_first=True,
+    )
+    from operations.models import Cost
+
+    Cost.objects.create(
+        title="Rent",
+        category="rent",
+        amount_taka=300,
+        date=date(2026, 11, 10),
+        created_by=staff,
+    )
+    client.force_authenticate(staff)
+    cash = client.get(
+        "/api/v1/admin/reports/cash-vs-online/",
+        {"range": "week", "date": "2026-11-10"},
+    )
+    assert cash.status_code == 200
+    assert cash.data["cash_taka"] == 800
+    assert cash.data["online_taka"] == 500
+    members = client.get(
+        "/api/v1/admin/reports/member-collections/",
+        {"range": "week", "date": "2026-11-10"},
+    )
+    assert members.status_code == 200
+    assert members.data["total_taka"] == 1300
+    assert len(members.data["members"]) == 1
+    mix = client.get(
+        "/api/v1/admin/reports/plan-mix/",
+        {"range": "week", "date": "2026-11-10"},
+    )
+    assert mix.status_code == 200
+    assert mix.data["total_taka"] == 1300
+    rev_exp = client.get(
+        "/api/v1/admin/reports/revenue-vs-expense/",
+        {"range": "week", "date": "2026-11-10"},
+    )
+    assert rev_exp.status_code == 200
+    assert rev_exp.data["revenue_taka"] == 1300
+    assert rev_exp.data["expense_taka"] == 300
+    assert rev_exp.data["net_taka"] == 1000
+    expenses = client.get(
+        "/api/v1/admin/reports/expenses-by-admin/",
+        {"range": "week", "date": "2026-11-10"},
+    )
+    assert expenses.status_code == 200
+    assert expenses.data["total_taka"] == 300
+    assert expenses.data["by_admin"][0]["amount_taka"] == 300
+    status = client.get("/api/v1/admin/reports/membership-status/")
+    assert status.status_code == 200
+    assert "expired" in status.data and "expiring_soon" in status.data
+    admission = client.get(
+        "/api/v1/admin/reports/admission/",
+        {"range": "week", "date": "2026-11-10"},
+    )
+    assert admission.status_code == 200
+
+
+def test_revenue_discount_breakdown_and_prior_week(client, staff, member, plan):
+    add_payment(
+        member,
+        plan,
+        datetime(2026, 11, 10, 10, tzinfo=UTC),
+        amount=800,
+        list_amount=1500,
+        standing=200,
+        offer=100,
+        admission_waived=400,
+    )
+    add_payment(
+        member,
+        plan,
+        datetime(2026, 11, 2, 10, tzinfo=UTC),
+        amount=500,
+        list_amount=500,
+    )
+    client.force_authenticate(staff)
+    week = client.get(
+        "/api/v1/admin/revenue/",
+        {"range": "week", "date": "2026-11-10"},
+    )
+    assert week.status_code == 200
+    assert week.data["total_taka"] == 800
+    assert week.data["list_taka"] == 1500
+    assert week.data["discount_taka"] == 700
+    assert week.data["discount_standing_taka"] == 200
+    assert week.data["discount_offer_taka"] == 100
+    assert week.data["discount_admission_taka"] == 400
+    prior_from = week.data["prior"]["from"]
+    prior_to = week.data["prior"]["to"]
+    assert str(prior_from)[:10] == "2026-10-28"
+    assert str(prior_to)[:10] == "2026-11-03"
+    assert week.data["prior"]["total_taka"] == 500
+    discounted = [p for p in week.data["series"] if p["bucket"] == "2026-11-10"][0]
+    assert discounted["amount_taka"] == 800
+    assert discounted["list_amount_taka"] == 1500
+    assert discounted["discount_taka"] == 700
 
 
 def test_cursor_pagination_limits_and_stability(client, member):

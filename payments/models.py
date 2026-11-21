@@ -53,6 +53,11 @@ class Payment(Entity):
     kind = models.CharField(max_length=20)
     is_first_payment = models.BooleanField(default=False)
     amount_taka = models.PositiveIntegerField()
+    # Frozen at settle time for discount comparison reports (null = pre-migration).
+    list_amount_taka = models.PositiveIntegerField(null=True, blank=True)
+    standing_discount_taka = models.PositiveIntegerField(null=True, blank=True)
+    offer_discount_taka = models.PositiveIntegerField(null=True, blank=True)
+    admission_waived_taka = models.PositiveIntegerField(null=True, blank=True)
     status = models.CharField(max_length=12, default="paid")
     paid_at = models.DateTimeField(null=True, db_index=True)
     line_items = models.JSONField(default=list)
