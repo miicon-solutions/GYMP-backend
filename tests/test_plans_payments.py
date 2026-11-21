@@ -477,3 +477,146 @@ def test_cash_request_requires_profile_and_ownership(client, member, other_membe
         client.get(f"/api/v1/member/payments/cash-requests/{created.data['id']}/").status_code
         == 404
     )
+
+
+def _limited_offer(plan, *, scope="offer", max_redemptions=1, waive=True):
+    today = timezone.localdate()
+    return Offer.objects.create(
+        plan=plan,
+        name="First-N",
+        starts_on=today,
+        ends_on=today.replace(year=today.year + 1),
+        waive_admission=waive,
+        max_redemptions=max_redemptions,
+        limit_scope=scope,
+    )
+
+
+def test_first_n_offer_scope_exhausts_on_paid_only(client, staff, member, other_member, plan):
+    complete(member)
+    complete(other_member)
+    offer = _limited_offer(plan, scope="offer", max_redemptions=1)
+    assert pricing(plan)["effective_first_payment_taka"] == 1500
+
+    # Pending session does not consume a seat.
+    session = create_session(
+        member, {"kind": "first_purchase", "plan_id": plan.pk, "checkout": "sdk"}
+    )
+    assert session.pricing_snapshot["admission_waived"] is True
+    assert session.pricing_snapshot["offer_id"] == str(offer.pk)
+    assert pricing(plan)["effective_first_payment_taka"] == 1500
+    client.force_authenticate(member)
+    row = client.get("/api/v1/member/plans/").data["results"][0]
+    assert row["active_offer"]["remaining"] == 1
+    assert row["active_offer"]["admission_waived"] is True
+
+    with patch("payments.gateway.validate", return_value=valid(session)):
+        handle_ipn({"tran_id": session.tran_id, "val_id": "v", "status": "VALID"})
+    payment = Payment.objects.get()
+    assert payment.offer_id == offer.pk
+    assert payment.is_first_payment
+    assert pricing(plan)["effective_first_payment_taka"] == 2500
+    client.force_authenticate(other_member)
+    row = client.get("/api/v1/member/plans/").data["results"][0]
+    assert row["active_offer"]["remaining"] == 0
+    assert row["active_offer"]["admission_waived"] is False
+    assert row["effective_first_payment_taka"] == 2500
+
+    # Renew does not claim another seat / change remaining.
+    member.member_profile.membership_status = "active"
+    member.member_profile.expires_on = timezone.localdate()
+    member.member_profile.plan = plan
+    member.member_profile.save()
+    client.force_authenticate(staff)
+    renew = client.post(
+        f"/api/v1/admin/members/{member.pk}/cash-payments/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    )
+    assert renew.status_code == 201
+    assert renew.data["payment"]["kind"] == "renewal"
+    assert Payment.objects.filter(offer=offer).count() == 1
+    assert pricing(plan)["effective_first_payment_taka"] == 2500
+
+
+def test_first_n_plan_and_gym_scopes(staff, member, other_member, plan):
+    from accounts.services import new_member
+
+    complete(member)
+    complete(other_member)
+    third = new_member("+8801711111111")
+    complete(third)
+    other_plan = Plan.objects.create(
+        name="Quarterly", duration_months=3, monthly_rate_taka=1500, admission_fee_taka=1000
+    )
+
+    plan_offer = _limited_offer(plan, scope="plan", max_redemptions=1)
+    receive_cash(staff, member.member_profile, plan.pk)
+    assert Payment.objects.get(member=member.member_profile).offer_id == plan_offer.pk
+    assert pricing(plan)["effective_first_payment_taka"] == 2500
+    # Other plan has no offer yet — full quarterly first price.
+    assert pricing(other_plan)["effective_first_payment_taka"] == 5500
+
+    gym_offer = _limited_offer(other_plan, scope="gym", max_redemptions=1)
+    from plans.services import remaining_redemptions
+
+    # One gym-wide first payment already exists (member), so gym seat is gone.
+    assert remaining_redemptions(gym_offer) == 0
+    assert pricing(other_plan)["effective_first_payment_taka"] == 5500
+
+    # Higher gym cap still has a seat after one prior payment.
+    gym_offer.max_redemptions = 2
+    gym_offer.save()
+    assert remaining_redemptions(gym_offer) == 1
+    assert pricing(other_plan)["effective_first_payment_taka"] == 4500
+    receive_cash(staff, other_member.member_profile, other_plan.pk)
+    assert remaining_redemptions(gym_offer) == 0
+    assert pricing(other_plan)["effective_first_payment_taka"] == 5500
+
+
+def test_first_n_frozen_session_keeps_waived_amount_after_exhaustion(
+    client, staff, member, other_member, plan
+):
+    complete(member)
+    complete(other_member)
+    _limited_offer(plan, scope="offer", max_redemptions=1)
+    session = create_session(
+        member, {"kind": "first_purchase", "plan_id": plan.pk, "checkout": "sdk"}
+    )
+    assert session.amount_taka == 1500
+    # Exhaust seats via cash for the other member while session is still pending.
+    receive_cash(staff, other_member.member_profile, plan.pk)
+    assert pricing(plan)["effective_first_payment_taka"] == 2500
+    with patch("payments.gateway.validate", return_value=valid(session)):
+        handle_ipn({"tran_id": session.tran_id, "val_id": "v", "status": "VALID"})
+    payment = Payment.objects.get(member=member.member_profile)
+    assert payment.amount_taka == 1500
+    assert payment.offer_id is not None
+
+
+def test_admin_offer_accepts_max_redemptions_and_limit_scope(client, staff, plan):
+    client.force_authenticate(staff)
+    today = timezone.localdate().isoformat()
+    created = client.post(
+        f"/api/v1/admin/plans/{plan.pk}/offers/",
+        {
+            "name": "Opening",
+            "starts_on": today,
+            "ends_on": "2030-01-01",
+            "waive_admission": True,
+            "max_redemptions": 50,
+            "limit_scope": "gym",
+        },
+        format="json",
+    )
+    assert created.status_code == 201
+    assert created.data["max_redemptions"] == 50
+    assert created.data["limit_scope"] == "gym"
+    assert created.data["remaining"] == 50
+    assert created.data["admission_waived"] is True
+    bad = client.patch(
+        f"/api/v1/admin/plans/{plan.pk}/offers/{created.data['id']}/",
+        {"max_redemptions": 0},
+        format="json",
+    )
+    assert bad.status_code == 400

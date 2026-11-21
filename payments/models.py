@@ -56,6 +56,13 @@ class Payment(Entity):
     status = models.CharField(max_length=12, default="paid")
     paid_at = models.DateTimeField(null=True, db_index=True)
     line_items = models.JSONField(default=list)
+    offer = models.ForeignKey(
+        "plans.Offer",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="redemptions",
+    )
 
     class Meta(Entity.Meta):
         constraints = [

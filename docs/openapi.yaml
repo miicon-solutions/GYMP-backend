@@ -8869,13 +8869,44 @@ components:
           type: integer
           maximum: 2147483647
           minimum: 0
+        max_redemptions:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        limit_scope:
+          enum:
+          - offer
+          - plan
+          - gym
+          type: string
+          description: '* `offer` - offer
+
+            * `plan` - plan
+
+            * `gym` - gym'
+          x-spec-enum-id: 4033ce37acf34a8d
         is_active:
           type: boolean
+        redeemed_count:
+          type: integer
+          readOnly: true
+          nullable: true
+        remaining:
+          type: integer
+          readOnly: true
+          nullable: true
+        admission_waived:
+          type: boolean
+          readOnly: true
       required:
+      - admission_waived
       - ends_on
       - id
       - name
       - plan_id
+      - redeemed_count
+      - remaining
       - starts_on
     PRPoint:
       type: object
@@ -9793,8 +9824,36 @@ components:
           type: integer
           maximum: 2147483647
           minimum: 0
+        max_redemptions:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        limit_scope:
+          enum:
+          - offer
+          - plan
+          - gym
+          type: string
+          description: '* `offer` - offer
+
+            * `plan` - plan
+
+            * `gym` - gym'
+          x-spec-enum-id: 4033ce37acf34a8d
         is_active:
           type: boolean
+        redeemed_count:
+          type: integer
+          readOnly: true
+          nullable: true
+        remaining:
+          type: integer
+          readOnly: true
+          nullable: true
+        admission_waived:
+          type: boolean
+          readOnly: true
     PatchedPlanInput:
       type: object
       description: Writable plan fields; computed values cannot be supplied by clients.

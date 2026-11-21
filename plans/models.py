@@ -3,6 +3,7 @@ from django.db import models
 from core.models import Entity
 
 DISCOUNTS = [(v, v) for v in ("none", "amount", "percent")]
+LIMIT_SCOPES = [(v, v) for v in ("offer", "plan", "gym")]
 
 
 class Plan(Entity):
@@ -50,6 +51,8 @@ class Offer(Entity):
     waive_admission = models.BooleanField(default=False)
     extra_discount_type = models.CharField(max_length=8, choices=DISCOUNTS, default="none")
     extra_discount_value = models.PositiveIntegerField(default=0)
+    max_redemptions = models.PositiveIntegerField(null=True, blank=True)
+    limit_scope = models.CharField(max_length=8, choices=LIMIT_SCOPES, default="offer")
     is_active = models.BooleanField(default=True)
 
     class Meta(Entity.Meta):
@@ -65,6 +68,15 @@ class Offer(Entity):
             ),
             models.CheckConstraint(
                 condition=models.Q(ends_on__gte=models.F("starts_on")), name="offer_date_order"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(limit_scope__in=["offer", "plan", "gym"]),
+                name="offer_valid_limit_scope",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(max_redemptions__isnull=True)
+                | models.Q(max_redemptions__gte=1),
+                name="offer_max_redemptions_positive",
             ),
         ]
         indexes = [models.Index(fields=["plan", "is_active", "starts_on", "ends_on"])]

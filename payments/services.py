@@ -14,7 +14,7 @@ from operations.services import DHAKA, record
 from payments import gateway
 from payments.models import CashPaymentRequest, Payment, PaymentSession
 from plans.models import Plan
-from plans.services import pricing
+from plans.services import active_offer, offer_admission_waived, pricing
 
 PACK_DAYS = {1: 30, 3: 90, 6: 180, 9: 270, 12: 365}
 
@@ -56,12 +56,33 @@ def snapshot(plan, kind):
     lines.append(
         {"label": plan.name + (" period" if first else " renewal"), "amount_taka": renewal}
     )
-    return {
+    offer = active_offer(plan) if first else None
+    waived = bool(first and offer_admission_waived(offer))
+    result = {
         "amount_taka": total,
         "line_items": lines,
         "duration_months": plan.duration_months,
         "catalog_id": plan.catalog_id,
+        "admission_waived": waived,
     }
+    if offer is not None:
+        result["offer_id"] = str(offer.pk)
+        result["offer_name"] = offer.name
+    return result
+
+
+def offer_id_from_snapshot(price, *, first_payment):
+    """Link a paid first payment to an offer when admission was waived under that offer."""
+    if not first_payment or not price:
+        return None
+    if not price.get("admission_waived"):
+        return None
+    raw = price.get("offer_id")
+    if not raw:
+        return None
+    from plans.models import Offer
+
+    return Offer.objects.filter(pk=raw).first()
 
 
 def check_kind(member, kind):
@@ -149,6 +170,7 @@ def settle(session, result):
     price = current.pricing_snapshot
     expiry = new_expiry(member, price["duration_months"], current.kind)
     now = timezone.now()
+    is_first = current.kind == "first_purchase"
     payment = Payment.objects.create(
         member=member,
         plan=current.plan,
@@ -156,10 +178,11 @@ def settle(session, result):
         catalog_id=price["catalog_id"],
         channel="sslcommerz",
         kind=current.kind,
-        is_first_payment=current.kind == "first_purchase",
+        is_first_payment=is_first,
         amount_taka=current.amount_taka,
         paid_at=now,
-        line_items=price["line_items"],
+        line_items=price.get("line_items") or [],
+        offer=offer_id_from_snapshot(price, first_payment=is_first),
     )
     activate(member, current.plan, expiry)
     current.status, current.paid_at = "paid", now
@@ -322,16 +345,18 @@ def receive_cash(actor, member, plan_id):
     plan = get_object_or_404(Plan.objects.select_for_update(), pk=plan_id, is_active=True)
     preview, price = cash_details(member, plan)
     previous_plan = member.plan.name if member.plan_id else plan.name
+    is_first = preview["kind"] == "first_payment"
     payment = Payment.objects.create(
         member=member,
         plan=plan,
         catalog_id=plan.catalog_id,
         channel="cash",
         kind=preview["kind"],
-        is_first_payment=preview["kind"] == "first_payment",
+        is_first_payment=is_first,
         amount_taka=price["amount_taka"],
-        line_items=price["line_items"],
+        line_items=price.get("line_items") or [],
         paid_at=timezone.now(),
+        offer=offer_id_from_snapshot(price, first_payment=is_first),
     )
     activate(member, plan, preview["new_expires_on"])
     _cash_audit(actor, member, plan, payment, preview["kind"], previous_plan)
@@ -471,16 +496,18 @@ def accept_cash_request(actor, request_id):
     lines = price.get("line_items", live_price["line_items"])
     previous_plan = member.plan.name if member.plan_id else plan.name
     expiry = preview["new_expires_on"]
+    is_first = req.kind == "first_payment"
     payment = Payment.objects.create(
         member=member,
         plan=plan,
         catalog_id=price.get("catalog_id", plan.catalog_id),
         channel="cash",
         kind=req.kind,
-        is_first_payment=req.kind == "first_payment",
+        is_first_payment=is_first,
         amount_taka=amount,
-        line_items=lines,
+        line_items=lines or [],
         paid_at=timezone.now(),
+        offer=offer_id_from_snapshot(price, first_payment=is_first),
     )
     activate(member, plan, expiry)
     _cash_audit(actor, member, plan, payment, req.kind, previous_plan)

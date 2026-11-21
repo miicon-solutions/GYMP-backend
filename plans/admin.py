@@ -13,6 +13,15 @@ class PlanAdmin(OperatorModelAdmin):
 
 @admin.register(Offer)
 class OfferAdmin(OperatorModelAdmin):
-    list_display = ["name", "plan", "starts_on", "ends_on", "is_active"]
+    list_display = [
+        "name",
+        "plan",
+        "starts_on",
+        "ends_on",
+        "waive_admission",
+        "max_redemptions",
+        "limit_scope",
+        "is_active",
+    ]
     search_fields = ["name"]
-    list_filter = ["is_active"]
+    list_filter = ["is_active", "limit_scope", "waive_admission"]

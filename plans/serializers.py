@@ -1,11 +1,14 @@
 from rest_framework import serializers
 
 from plans.models import Offer, Plan
-from plans.services import active_offer, pricing
+from plans.services import active_offer, pricing, serialize_offer
 
 
 class OfferSerializer(serializers.ModelSerializer):
     plan_id = serializers.UUIDField(read_only=True)
+    redeemed_count = serializers.IntegerField(read_only=True, allow_null=True, required=False)
+    remaining = serializers.IntegerField(read_only=True, allow_null=True, required=False)
+    admission_waived = serializers.BooleanField(read_only=True, required=False)
 
     class Meta:
         model = Offer
@@ -18,8 +21,16 @@ class OfferSerializer(serializers.ModelSerializer):
             "waive_admission",
             "extra_discount_type",
             "extra_discount_value",
+            "max_redemptions",
+            "limit_scope",
             "is_active",
+            "redeemed_count",
+            "remaining",
+            "admission_waived",
         ]
+
+    def to_representation(self, instance):
+        return serialize_offer(instance)
 
 
 class PlanSerializer(serializers.ModelSerializer):
@@ -53,8 +64,7 @@ class PlanSerializer(serializers.ModelSerializer):
         ]
 
     def get_active_offer(self, obj) -> dict | None:
-        offer = active_offer(obj)
-        return OfferSerializer(offer).data if offer else None
+        return serialize_offer(active_offer(obj))
 
     def to_representation(self, instance):
         result = super().to_representation(instance)
@@ -89,6 +99,8 @@ class OfferInput(OfferSerializer):
                 "extra_discount_value": 0,
                 "waive_admission": False,
                 "is_active": True,
+                "limit_scope": "offer",
+                "max_redemptions": None,
             }.items():
                 attrs.setdefault(key, value)
         return attrs
