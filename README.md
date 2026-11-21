@@ -48,9 +48,13 @@ For a populated demo, use the seed super (or a bootstrapped super), then run:
 docker compose exec api python manage.py seed_demo --admin-phone +8801700000000
 # Local Python alternative (after seed_dev or bootstrap_admin):
 uv run python manage.py seed_demo --admin-phone +8801700000000 --members 30
+# Dense October 2026 pack for admin Reports UI / share PNG testing:
+uv run python manage.py seed_demo --admin-phone +8801700000000 --report-month 2026-10
 ```
 
 `seed_demo` requires that existing active super admin and runs only outside production. By default it creates 30 completed member profiles (10 unpaid, 15 active, 5 expired), two staff, catalogue plans, offers on demo-created plans, synthetic cash/online payments, attendance, expenses, holidays, and activity over the preceding 90 days. It never contacts SMS, Firebase, payments, or media providers. Sample staff have no password/browser access or enrolled authenticator; generate their enrollment token through your super admin interface. Demo member phone numbers are printed for login using the configured OTP provider or local development bypass.
+
+`--report-month YYYY-MM` (for example `2026-10`) adds an idempotent dense month pack: ~50 paid payments with list/discount/admission freeze fields, cash vs online mix, plan variety, multi-admin costs, and membership expiry tweaks for the expiring/expired report. In the app, open Reports and filter to that month (or custom `YYYY-MM-01`–month end).
 
 The command reuses existing catalogue durations without changing their settings. Repeated runs preserve existing demo records; a larger `--members` count adds members (maximum 1000). Deterministic identifiers prevent duplicates, and conflicting phone numbers abort the whole transaction without changing data. It does not delete or reset records.
 

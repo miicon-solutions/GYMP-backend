@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from io import StringIO
 from unittest.mock import patch
 
@@ -111,6 +112,40 @@ def test_demo_seed_does_not_reset_edited_demo_data(super_admin):
     seed(super_admin, members=1)
     user.refresh_from_db()
     assert user.full_name == "Updated demo member"
+
+
+def test_demo_seed_report_month_oct_2026_idempotent(super_admin):
+    seed(super_admin, report_month="2026-10")
+    oct_start = date(2026, 10, 1)
+    oct_end = date(2026, 10, 31)
+    oct_payments = Payment.objects.filter(
+        paid_at__date__gte=oct_start, paid_at__date__lte=oct_end
+    )
+    assert oct_payments.count() >= 40
+    frozen = oct_payments.filter(list_amount_taka__isnull=False)
+    assert frozen.count() >= 40
+    assert frozen.filter(is_first_payment=True, admission_waived_taka__gt=0).exists()
+    assert frozen.filter(channel="cash").exists()
+    assert frozen.filter(channel="sslcommerz").exists()
+    report_costs = Cost.objects.filter(title__startswith="Demo report")
+    assert report_costs.count() >= 12
+    assert report_costs.values("created_by").distinct().count() >= 2
+    assert MemberProfile.objects.filter(membership_status="expired").count() >= 5
+    soon = MemberProfile.objects.filter(
+        membership_status="active",
+        expires_on__gte=timezone.localdate(),
+        expires_on__lte=timezone.localdate() + timedelta(days=7),
+    )
+    assert soon.count() >= 5
+    models = [Payment, PaymentSession, Cost, MemberProfile, User]
+    counts = [model.objects.count() for model in models]
+    seed(super_admin, report_month="2026-10")
+    assert counts == [model.objects.count() for model in models]
+
+
+def test_demo_seed_report_month_invalid(super_admin):
+    with pytest.raises(CommandError, match="YYYY-MM"):
+        seed(super_admin, report_month="2026/10")
 
 
 def test_public_registration_remains_unpaid_until_cash(client, staff, plan, profile_payload):

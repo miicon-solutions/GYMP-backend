@@ -1,5 +1,7 @@
+import calendar
+import re
 from collections import Counter
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from uuid import NAMESPACE_URL, uuid5
 
 from django.conf import settings
@@ -26,18 +28,37 @@ def demo_id(kind, key):
     return uuid5(NAMESPACE_URL, f"https://puregym.fit/demo/v1/{kind}/{key}")
 
 
+def parse_report_month(value):
+    match = re.fullmatch(r"(\d{4})-(\d{2})", value or "")
+    if not match:
+        raise CommandError("--report-month must be YYYY-MM (for example 2026-10).")
+    year = int(match.group(1))
+    month = int(match.group(2))
+    if not 1 <= month <= 12:
+        raise CommandError("--report-month month must be between 01 and 12.")
+    return year, month
+
+
 class Command(BaseCommand):
     help = "Create repeatable local/development demo data using an existing super admin."
 
     def add_arguments(self, parser):
         parser.add_argument("--admin-phone", required=True)
         parser.add_argument("--members", type=int, default=30)
+        parser.add_argument(
+            "--report-month",
+            default=None,
+            help="Optional YYYY-MM dense report pack (e.g. 2026-10) with freeze fields.",
+        )
 
     def handle(self, *args, **options):
         if settings.APP_ENV == "prod":
             raise CommandError("Demo seed data is disabled in production.")
         if not 1 <= options["members"] <= 1000:
             raise CommandError("--members must be between 1 and 1000.")
+        report_month = None
+        if options.get("report_month"):
+            report_month = parse_report_month(options["report_month"])
         try:
             phone = normalize_phone(options["admin_phone"])
         except ValidationError as exc:
@@ -55,6 +76,8 @@ class Command(BaseCommand):
                 if not self.actor or not StaffProfile.objects.filter(user=self.actor).exists():
                     raise CommandError("Bootstrap an active super admin before running seed_demo.")
                 self.seed(options["members"])
+                if report_month:
+                    self.seed_report_month(*report_month)
         except IntegrityError as exc:
             raise CommandError(
                 "Demo data conflicts with existing records; nothing was changed."
@@ -72,6 +95,12 @@ class Command(BaseCommand):
         self.stdout.write(
             "Sample staff have no password or MFA enrollment. Use admin MFA setup to enroll."
         )
+        if report_month:
+            year, month = report_month
+            self.stdout.write(
+                f"Report pack ready for {year:04d}-{month:02d}: "
+                "filter admin Reports to that month (or custom from/to)."
+            )
 
     def put(self, model, key, **values):
         row, created = model.objects.get_or_create(
@@ -330,3 +359,186 @@ class Command(BaseCommand):
             },
             day,
         )
+
+    def seed_report_month(self, year, month):
+        """Dense idempotent pack for Phase 1 report UI testing (one calendar month)."""
+        prefix = f"report-{year:04d}-{month:02d}"
+        plans_by_catalog = {}
+        for catalog, months in [("monthly", 1), ("quarterly", 3), ("annual", 12)]:
+            plan = Plan.objects.filter(duration_months=months).first()
+            if not plan:
+                raise CommandError(
+                    f"Catalogue plan for {catalog} is missing; run seed_dev/seed_demo first."
+                )
+            plans_by_catalog[catalog] = plan
+
+        members = list(
+            MemberProfile.objects.filter(membership_status__in=["active", "expired"])
+            .select_related("user", "plan")
+            .order_by("member_id")[:18]
+        )
+        if len(members) < 12:
+            raise CommandError(
+                "Need at least 12 paid demo members for --report-month; "
+                "raise --members (default 30) and re-run."
+            )
+
+        weekdays = [
+            date(year, month, day)
+            for day in range(1, calendar.monthrange(year, month)[1] + 1)
+            if date(year, month, day).weekday() < 6
+        ]
+        # ~2 payments per weekday → ~50–54 rows for charts / share PNGs.
+        payment_slots = []
+        for slot, day in enumerate(weekdays):
+            payment_slots.append((day, slot * 2))
+            payment_slots.append((day, slot * 2 + 1))
+
+        for n, (day, _) in enumerate(payment_slots):
+            member = members[n % len(members)]
+            catalog = (
+                "monthly"
+                if n % 10 < 6
+                else "quarterly"
+                if n % 10 < 9
+                else "annual"
+            )
+            plan = plans_by_catalog[catalog]
+            self.seed_report_payment(prefix, n, member, plan, day)
+
+        staff_creators = [self.actor]
+        for index in (1, 2):
+            staff = User.objects.filter(pk=demo_id("user", f"staff-{index}")).first()
+            if staff:
+                staff_creators.append(staff)
+
+        categories = ["rent", "utilities", "salary", "equipment", "other"]
+        cost_days = weekdays[::2][:14] or weekdays[:1]
+        for index, day in enumerate(cost_days):
+            category = categories[index % len(categories)]
+            creator = staff_creators[index % len(staff_creators)]
+            title = f"Demo report {category} {year}-{month:02d}-{index + 1}"
+            key = f"{prefix}-cost-{index}"
+            _, created = self.put(
+                Cost,
+                key,
+                title=title,
+                category=category,
+                amount_taka=2000 + index * 350,
+                date=day,
+                note=f"Synthetic {prefix} expense",
+                created_by=creator,
+            )
+            if created:
+                self.activity(
+                    f"{prefix}-cost-{index}",
+                    "cost",
+                    "create",
+                    "adminActivityCostCreated",
+                    {"title": title},
+                    day,
+                )
+
+        self.seed_report_membership_status(members)
+
+    def seed_report_payment(self, prefix, n, member, plan, day):
+        first = n % 5 == 0
+        channel = "cash" if n % 20 < 11 else "sslcommerz"
+        kind = (
+            ("first_payment" if first else "renewal")
+            if channel == "cash"
+            else ("first_purchase" if first else "renew")
+        )
+        amounts = pricing(plan, day)
+        period = amounts["period_coverage_taka"]
+        standing = amounts["standing_discount_taka"]
+        offer = 200 if n % 4 == 0 else 0
+        offer = min(offer, max(period - standing, 0))
+        renewal = period - standing - offer
+        admission_list = plan.admission_fee_taka
+        waive = first and n % 3 == 0
+        admission_charged = 0 if (not first or waive) else admission_list
+        admission_waived = admission_list if waive else 0
+        total = renewal + admission_charged
+        list_amount = period + (admission_list if first else 0)
+        lines = [{"label": "Period coverage", "amount_taka": renewal}]
+        if admission_charged:
+            lines.insert(0, {"label": "Admission fee", "amount_taka": admission_charged})
+        key = f"{prefix}-{n}"
+        tran_id = (
+            "RPT" + demo_id("transaction", key).hex[:27] if channel == "sslcommerz" else None
+        )
+        payment, created = self.put(
+            Payment,
+            key,
+            member=member,
+            plan=plan,
+            catalog_id=plan.catalog_id,
+            channel=channel,
+            kind=kind,
+            is_first_payment=first,
+            amount_taka=total,
+            list_amount_taka=list_amount,
+            standing_discount_taka=standing,
+            offer_discount_taka=offer,
+            admission_waived_taka=admission_waived,
+            status="paid",
+            paid_at=self.at(day),
+            line_items=lines,
+            tran_id=tran_id,
+        )
+        if created:
+            Payment.objects.filter(pk=payment.pk).update(created_at=self.at(day))
+        if tran_id:
+            session, session_created = self.put(
+                PaymentSession,
+                key,
+                member=member,
+                plan=plan,
+                kind=kind,
+                tran_id=tran_id,
+                amount_taka=total,
+                status="paid",
+                paid_at=self.at(day),
+                pricing_snapshot={
+                    "amount_taka": total,
+                    "line_items": lines,
+                    "duration_months": plan.duration_months,
+                    "catalog_id": plan.catalog_id,
+                    "list_amount_taka": list_amount,
+                    "standing_discount_taka": standing,
+                    "offer_discount_taka": offer,
+                    "admission_waived_taka": admission_waived,
+                },
+            )
+            if session_created:
+                PaymentSession.objects.filter(pk=session.pk).update(created_at=self.at(day))
+        self.activity(
+            f"payment-{key}",
+            "member",
+            "activate" if first else "update",
+            ("adminActivityMemberCashActivated" if first else "adminActivityMemberCashRenewed")
+            if channel == "cash"
+            else "adminActivityMemberDemoPaid",
+            {
+                "member_id": member.member_id,
+                "name": member.user.full_name,
+                "amount": format_taka(total),
+                "plan": plan.name,
+            },
+            day,
+        )
+
+    def seed_report_membership_status(self, members):
+        """Ensure enough expired + expiring-soon rows for the membership-status report."""
+        active = [m for m in members if m.membership_status == "active"]
+        expired = [m for m in members if m.membership_status == "expired"]
+        for offset, profile in enumerate(active[:5]):
+            profile.expires_on = self.today + timedelta(days=offset + 1)
+            profile.save(update_fields=["expires_on"])
+        # Keep existing expired rows; if short, demote trailing actives.
+        need = max(0, 5 - len(expired))
+        for profile in active[5 : 5 + need]:
+            profile.membership_status = "expired"
+            profile.expires_on = self.today - timedelta(days=3)
+            profile.save(update_fields=["membership_status", "expires_on"])
