@@ -238,3 +238,33 @@ def delete_fingerprint(
             return resp.json()
     except httpx.HTTPError as exc:
         raise BridgeUnavailable(str(exc)) from exc
+
+
+def list_attendance(
+    *,
+    user_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    device_id: str | None = None,
+) -> list[dict]:
+    """Live attendance rows from the bridge (device log, newest-first on bridge)."""
+    require_configured()
+    params = _device_params(device_id)
+    if user_id:
+        params["user_id"] = user_id
+    if date_from:
+        params["date_from"] = date_from
+    if date_to:
+        params["date_to"] = date_to
+    try:
+        with _client(timeout=45.0) as client:
+            resp = client.get("/internal/attendance/", params=params)
+            if resp.status_code >= 400:
+                raise BridgeUnavailable(_bridge_error_detail(resp))
+            body = resp.json()
+            rows = body.get("attendance") if isinstance(body, dict) else None
+            if not isinstance(rows, list):
+                raise BridgeUnavailable("Bridge returned invalid attendance payload.")
+            return [row for row in rows if isinstance(row, dict)]
+    except httpx.HTTPError as exc:
+        raise BridgeUnavailable(str(exc)) from exc

@@ -69,7 +69,7 @@ INSTALLED_APPS = [
     "plans",
     "payments",
     "operations",
-    "attendance",
+    "attendance.apps.AttendanceConfig",
     "reporting",
     "biometrics",
     "django_filters",
@@ -302,6 +302,11 @@ SSLCOMMERZ_SANDBOX = not PRODUCTION and env.bool("SSLCOMMERZ_SANDBOX", default=T
 ATTENDANCE_DEVICE_KEY = env("ATTENDANCE_DEVICE_KEY", default="")
 ZKTECO_BRIDGE_URL = env("ZKTECO_BRIDGE_URL", default="").rstrip("/")
 ZKTECO_BRIDGE_KEY = env("ZKTECO_BRIDGE_KEY", default="")
+# When the bridge poller's API_BASE_URL does not point at this API (common for a
+# remote gym bridge + local `make run`), pull punches from ZKTECO_BRIDGE_URL.
+ATTENDANCE_BRIDGE_PULL = env.bool("ATTENDANCE_BRIDGE_PULL", default=bool(ZKTECO_BRIDGE_URL))
+ATTENDANCE_BRIDGE_PULL_INTERVAL_SEC = env.int("ATTENDANCE_BRIDGE_PULL_INTERVAL_SEC", default=20)
+ATTENDANCE_BRIDGE_PULL_LOOKBACK_DAYS = env.int("ATTENDANCE_BRIDGE_PULL_LOOKBACK_DAYS", default=14)
 BIOMETRIC_ENCRYPTION_KEY = env("BIOMETRIC_ENCRYPTION_KEY", default="") or TOTP_ENCRYPTION_KEY
 LOGGING = {
     "version": 1,

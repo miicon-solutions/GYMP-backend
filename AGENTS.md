@@ -113,6 +113,11 @@ core/             # shared API helpers, middleware, permissions
   dropped on send; APNs/project misconfig must not delete tokens.
 - Device check-in: `X-Device-Key` == `ATTENDANCE_DEVICE_KEY` on
   `POST /api/v1/internal/attendance/check-in/`.
+- Remote bridge + local API: bridge push uses its own `API_BASE_URL` (often
+  production). Set `ZKTECO_BRIDGE_URL` and leave `ATTENDANCE_BRIDGE_PULL=true`
+  (default when URL is set) so this API polls
+  `GET {bridge}/internal/attendance/` and ingests punches. One-shot:
+  `manage.py pull_bridge_attendance`.
 - SSLCommerz: session → gateway → IPN/confirm; return pages never activate alone;
   IPN idempotent. Same architectural flow as the Go API.
 - Member cash request (first purchase): `POST /api/v1/member/payments/cash-requests/`
