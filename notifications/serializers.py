@@ -120,6 +120,28 @@ class AdminAnnouncementResendSmsOutput(serializers.Serializer):
     sms_skipped_no_phone = serializers.IntegerField()
 
 
+class OpsAlertRecipientSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    short_id = serializers.CharField(allow_blank=True)
+    phone = serializers.CharField(allow_blank=True)
+
+
+class OpsAlertSettingsSerializer(serializers.Serializer):
+    enrollment_live_enabled = serializers.BooleanField()
+    daily_digest_enabled = serializers.BooleanField()
+    recipients = OpsAlertRecipientSerializer(many=True)
+
+
+class OpsAlertSettingsUpdateInput(serializers.Serializer):
+    enrollment_live_enabled = serializers.BooleanField(required=False)
+    daily_digest_enabled = serializers.BooleanField(required=False)
+    recipient_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+    )
+
+
 def announcement_payload(campaign: StaffAnnouncement, *, recipient_count: int | None = None) -> dict:
     if recipient_count is None:
         recipient_count = MemberNotification.objects.filter(

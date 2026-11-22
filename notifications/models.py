@@ -19,6 +19,8 @@ NOTIFICATION_CODES = [
     ("membership_expiring", "membership_expiring"),
     ("membership_expired", "membership_expired"),
     ("announcement", "announcement"),
+    ("admin_enrollment", "admin_enrollment"),
+    ("admin_daily_enrollments", "admin_daily_enrollments"),
 ]
 
 ANNOUNCEMENT_SCOPES = [
@@ -106,4 +108,33 @@ class MemberDeviceToken(Entity):
     class Meta(Entity.Meta):
         indexes = [
             models.Index(fields=["user"], name="notif_device_user_idx"),
+        ]
+
+
+class AdminOpsAlertSettings(Entity):
+    """Singleton toggles for cron-driven admin ops alerts."""
+
+    enrollment_live_enabled = models.BooleanField(default=True)
+    daily_digest_enabled = models.BooleanField(default=True)
+
+    @classmethod
+    def load(cls) -> "AdminOpsAlertSettings":
+        obj = cls.objects.order_by("created_at").first()
+        if obj is None:
+            obj = cls.objects.create()
+        return obj
+
+
+class AdminOpsAlertRecipient(Entity):
+    """Staff user selected to receive ops-alert fan-out (super configures)."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ops_alert_recipient",
+    )
+
+    class Meta(Entity.Meta):
+        indexes = [
+            models.Index(fields=["user"], name="ops_alert_recipient_user_idx"),
         ]

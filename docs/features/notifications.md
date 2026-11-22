@@ -52,6 +52,27 @@ System SMS bodies are fixed **English** plain text (no member locale on the API)
 
 Run expiry batch: `python manage.py notify_membership_expiry` (daily cron, Asia/Dhaka).
 
+## Admin ops alerts (cron)
+
+Super-only settings: selected staff recipients + toggles for near-live enrollment and end-of-day digest. Cash-request fan-out stays on `cash_requests.view` and is independent.
+
+| Method | Path | Permission |
+|---|---|---|
+| `GET` | `/api/v1/admin/ops-alerts/settings/` | `SuperOnly` |
+| `PUT` | `/api/v1/admin/ops-alerts/settings/` | `SuperOnly` |
+
+PUT body: `{ enrollment_live_enabled?, daily_digest_enabled?, recipient_ids: uuid[] }` (full replace of recipient set when `recipient_ids` is sent).
+
+| Code | Command | Cron |
+|---|---|---|
+| `admin_enrollment` | `python manage.py notify_admin_enrollments` | every 5–15 min Asia/Dhaka (recommended `*/10`) |
+| `admin_daily_enrollments` | `python manage.py notify_admin_daily_enrollments --timezone Asia/Dhaka` | ~23:55 Asia/Dhaka |
+| `admin_daily_enrollments` | `python manage.py notify_admin_daily_enrollments --timezone Europe/London` | ~23:55 Europe/London |
+
+Or run both digests in one shot: `python manage.py notify_admin_daily_enrollments` / `--all` (uses “today” in each zone).
+
+Both create staff inbox rows + FCM (no SMS). First-payment enrollments only. Poll is idempotent per payment id; digest is idempotent per `timezone:YYYY-MM-DD` (Dhaka and London digests both deliver).
+
 ## Admin announcement campaigns
 
 `StaffAnnouncement` is the staff-facing campaign. Create fans out one `MemberNotification` (`code=announcement`) per recipient with `related_object_id = campaign id`.

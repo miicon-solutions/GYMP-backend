@@ -196,8 +196,44 @@ class Command(BaseCommand):
                 )
         for index in range(1, count + 1):
             self.seed_member(index, plans)
-        for index in range(12):
-            category = ["rent", "utilities", "salary", "equipment", "other"][index % 5]
+        # One of each category in the current month so home "costs by category"
+        # always has rent/utilities/salary/equipment/other slices. Update existing
+        # demo rows so re-seeds fix stale dates that fell outside this month.
+        categories = ["rent", "utilities", "salary", "equipment", "other"]
+        for index, category in enumerate(categories):
+            day = self.today - timedelta(days=index)
+            title = f"Demo {category} {index + 1}"
+            amount = 1500 + index * 500
+            row, created = self.put(
+                Cost,
+                index,
+                title=title,
+                category=category,
+                amount_taka=amount,
+                date=day,
+                note="Synthetic demo expense",
+                created_by=self.actor,
+            )
+            if not created:
+                Cost.objects.filter(pk=row.pk).update(
+                    title=title,
+                    category=category,
+                    amount_taka=amount,
+                    date=day,
+                    note="Synthetic demo expense",
+                    is_archived=False,
+                )
+            if created:
+                self.activity(
+                    f"cost-{index}",
+                    "cost",
+                    "create",
+                    "adminActivityCostCreated",
+                    {"title": title},
+                    day,
+                )
+        for index in range(5, 12):
+            category = categories[index % 5]
             day = self.today - timedelta(days=index * 7)
             title = f"Demo {category} {index + 1}"
             _, created = self.put(

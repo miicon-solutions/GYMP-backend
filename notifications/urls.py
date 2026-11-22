@@ -19,6 +19,7 @@ from notifications.views import (
     AnnouncementList,
     AnnouncementResendPush,
     AnnouncementResendSms,
+    OpsAlertSettingsView,
 )
 
 
@@ -107,4 +108,5 @@ urlpatterns = [
         "admin/notifications/<uuid:pk>/resend-sms/",
         AnnouncementResendSms.as_view(),
     ),
+    path("admin/ops-alerts/settings/", OpsAlertSettingsView.as_view()),
 ]

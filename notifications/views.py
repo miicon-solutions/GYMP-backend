@@ -1,8 +1,9 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from core.api import StaffPermission
+from core.api import StaffPermission, SuperOnly
 from notifications import services
 from notifications.models import StaffAnnouncement
 from notifications.serializers import (
@@ -12,6 +13,8 @@ from notifications.serializers import (
     AdminAnnouncementResendSmsOutput,
     AdminAnnouncementSerializer,
     AdminAnnouncementUpdateInput,
+    OpsAlertSettingsSerializer,
+    OpsAlertSettingsUpdateInput,
     announcement_payload,
 )
 
@@ -101,3 +104,30 @@ class AnnouncementResendSms(generics.GenericAPIView):
     @extend_schema(request=None, responses=AdminAnnouncementResendSmsOutput)
     def post(self, request, *args, **kwargs):
         return Response(services.resend_announcement_sms(request.user, self.kwargs["pk"]))
+
+
+class OpsAlertSettingsView(APIView):
+    """Super-only shared ops-alert recipient list + event toggles."""
+
+    permission_classes = [SuperOnly]
+
+    @extend_schema(
+        responses=OpsAlertSettingsSerializer,
+        tags=["notifications"],
+        operation_id="admin_ops_alerts_settings_get",
+    )
+    def get(self, request):
+        return Response(services.get_ops_alert_settings())
+
+    @extend_schema(
+        request=OpsAlertSettingsUpdateInput,
+        responses=OpsAlertSettingsSerializer,
+        tags=["notifications"],
+        operation_id="admin_ops_alerts_settings_put",
+    )
+    def put(self, request):
+        serializer = OpsAlertSettingsUpdateInput(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(
+            services.update_ops_alert_settings(request.user, serializer.validated_data)
+        )

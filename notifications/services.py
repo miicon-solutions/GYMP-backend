@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
@@ -13,6 +14,13 @@ from notifications.models import MemberDeviceToken, MemberNotification, StaffAnn
 from notifications.serializers import announcement_payload
 
 logger = logging.getLogger(__name__)
+
+# End-of-day digests run per calendar day in each of these zones.
+OPS_ALERT_DIGEST_TIMEZONES = ("Asia/Dhaka", "Europe/London")
+OPS_ALERT_DIGEST_TZ_LABELS = {
+    "Asia/Dhaka": "Dhaka",
+    "Europe/London": "London",
+}
 
 # code → (kind, title_key, body_key, default_push, default_sms)
 CATALOG = {
@@ -66,6 +74,20 @@ CATALOG = {
         True,
     ),
     "announcement": ("general", "", "", True, False),
+    "admin_enrollment": (
+        "payment",
+        "notifAdminEnrollmentTitle",
+        "notifAdminEnrollmentBody",
+        True,
+        False,
+    ),
+    "admin_daily_enrollments": (
+        "payment",
+        "notifAdminDailyEnrollmentsTitle",
+        "notifAdminDailyEnrollmentsBody",
+        True,
+        False,
+    ),
 }
 
 # English plain-text SMS bodies (always EN; no member locale on API).
@@ -128,6 +150,14 @@ PUSH_TEMPLATES = {
     "membership_expired_fallback": (
         "মেম্বারশিপের মেয়াদ শেষ",
         "আপনার মেম্বারশিপের মেয়াদ শেষ। চালিয়ে যেতে নবায়ন করুন।",
+    ),
+    "admin_enrollment": (
+        "নতুন মেম্বার",
+        "{plan} — ৳{amount}। আজ {count} জন নতুন।",
+    ),
+    "admin_daily_enrollments": (
+        "আজকের এনরোলমেন্ট",
+        "আজ ({tz}) {count} জন মেম্বার এনরোল, মোট ৳{amount}।",
     ),
 }
 
@@ -310,6 +340,20 @@ def format_push(notif: MemberNotification) -> tuple[str, str]:
             title, body = PUSH_TEMPLATES["membership_expired"]
             return title, body.format(expiresOn=expires_on)
         return PUSH_TEMPLATES["membership_expired_fallback"]
+    if code == "admin_enrollment":
+        title, body = PUSH_TEMPLATES["admin_enrollment"]
+        return title, body.format(
+            plan=params.get("plan") or "Plan",
+            amount=params.get("amount") or "—",
+            count=params.get("count") or "0",
+        )
+    if code == "admin_daily_enrollments":
+        title, body = PUSH_TEMPLATES["admin_daily_enrollments"]
+        return title, body.format(
+            tz=params.get("tz") or params.get("tzLabel") or "Dhaka",
+            count=params.get("count") or "0",
+            amount=params.get("amount") or "0",
+        )
     return "Pure Fitness", ""
 
 
@@ -416,6 +460,274 @@ def notify_fingerprint_ready(user, *, related_object_id: str = "") -> None:
         code="fingerprint_ready",
         related_object_id=related_object_id or "ready",
     )
+
+
+def ops_alert_recipients():
+    """Active admin users on the shared ops-alert recipient list."""
+    from accounts.models import User
+    from notifications.models import AdminOpsAlertRecipient
+
+    ids = AdminOpsAlertRecipient.objects.values_list("user_id", flat=True)
+    if not ids:
+        return []
+    return list(
+        User.objects.filter(
+            pk__in=ids, role="admin", is_active=True
+        ).select_related("staff_profile")
+    )
+
+
+def get_ops_alert_settings() -> dict:
+    from notifications.models import AdminOpsAlertRecipient, AdminOpsAlertSettings
+
+    settings_row = AdminOpsAlertSettings.load()
+    recipients = []
+    for link in AdminOpsAlertRecipient.objects.select_related(
+        "user__staff_profile"
+    ).order_by("created_at"):
+        user = link.user
+        profile = getattr(user, "staff_profile", None)
+        recipients.append(
+            {
+                "id": user.pk,
+                "name": user.full_name or "",
+                "short_id": getattr(profile, "short_id", "") or "",
+                "phone": user.phone_e164 or "",
+            }
+        )
+    return {
+        "enrollment_live_enabled": settings_row.enrollment_live_enabled,
+        "daily_digest_enabled": settings_row.daily_digest_enabled,
+        "recipients": recipients,
+    }
+
+
+def update_ops_alert_settings(actor, data: dict) -> dict:
+    from accounts.models import User
+    from notifications.models import AdminOpsAlertRecipient, AdminOpsAlertSettings
+
+    require_admin(actor, True)
+    settings_row = AdminOpsAlertSettings.load()
+    update_fields = []
+    if "enrollment_live_enabled" in data and data["enrollment_live_enabled"] is not None:
+        settings_row.enrollment_live_enabled = bool(data["enrollment_live_enabled"])
+        update_fields.append("enrollment_live_enabled")
+    if "daily_digest_enabled" in data and data["daily_digest_enabled"] is not None:
+        settings_row.daily_digest_enabled = bool(data["daily_digest_enabled"])
+        update_fields.append("daily_digest_enabled")
+    if update_fields:
+        settings_row.save(update_fields=[*update_fields, "updated_at"])
+
+    if "recipient_ids" in data:
+        raw_ids = data["recipient_ids"] or []
+        users = list(
+            User.objects.filter(pk__in=raw_ids, role="admin").select_related(
+                "staff_profile"
+            )
+        )
+        found = {u.pk for u in users}
+        missing = [str(i) for i in raw_ids if i not in found]
+        if missing:
+            raise ValidationError(
+                {"recipient_ids": f"Unknown or non-admin user ids: {', '.join(missing)}"}
+            )
+        with transaction.atomic():
+            AdminOpsAlertRecipient.objects.exclude(user_id__in=found).delete()
+            existing = set(
+                AdminOpsAlertRecipient.objects.filter(user_id__in=found).values_list(
+                    "user_id", flat=True
+                )
+            )
+            AdminOpsAlertRecipient.objects.bulk_create(
+                [
+                    AdminOpsAlertRecipient(user=u)
+                    for u in users
+                    if u.pk not in existing
+                ]
+            )
+    return get_ops_alert_settings()
+
+
+def _local_day_bounds(day: date) -> tuple[datetime, datetime]:
+    """Day bounds in Django TIME_ZONE (Asia/Dhaka)."""
+    start = timezone.make_aware(datetime.combine(day, time.min))
+    end = start + timedelta(days=1)
+    return start, end
+
+
+def _day_bounds_in_tz(day: date, tz_name: str) -> tuple[datetime, datetime]:
+    """Inclusive start / exclusive end of ``day`` in ``tz_name`` (UTC-aware)."""
+    tz = ZoneInfo(tz_name)
+    start = datetime.combine(day, time.min, tzinfo=tz)
+    end = start + timedelta(days=1)
+    return start, end
+
+
+def _first_payment_queryset(*, since=None, until=None, on_date=None, tz_name=None):
+    """Paid first-enrollment payments in a time window.
+
+    When ``on_date`` is set, ``tz_name`` selects the calendar day
+    (default Django local / Asia/Dhaka).
+    """
+    from django.db.models import Q
+    from payments.models import Payment
+
+    qs = Payment.objects.filter(status="paid", is_first_payment=True).select_related(
+        "member__user", "plan"
+    )
+    # Prefer paid_at; fall back to created_at for legacy rows.
+    if on_date is not None:
+        if tz_name:
+            start, end = _day_bounds_in_tz(on_date, tz_name)
+        else:
+            start, end = _local_day_bounds(on_date)
+        qs = qs.filter(
+            Q(paid_at__gte=start, paid_at__lt=end)
+            | Q(paid_at__isnull=True, created_at__gte=start, created_at__lt=end)
+        )
+    else:
+        if since is not None:
+            qs = qs.filter(
+                Q(paid_at__gte=since) | Q(paid_at__isnull=True, created_at__gte=since)
+            )
+        if until is not None:
+            qs = qs.filter(
+                Q(paid_at__lt=until) | Q(paid_at__isnull=True, created_at__lt=until)
+            )
+    return qs.order_by("paid_at", "created_at")
+
+
+def notify_admin_enrollments_batch() -> dict:
+    """Cron: fan out admin_enrollment for new first payments not yet notified."""
+    from notifications.models import AdminOpsAlertSettings, MemberNotification
+
+    settings_row = AdminOpsAlertSettings.load()
+    if not settings_row.enrollment_live_enabled:
+        return {"sent": 0, "skipped": "disabled"}
+
+    recipients = ops_alert_recipients()
+    if not recipients:
+        return {"sent": 0, "skipped": "no_recipients"}
+
+    today = timezone.localdate()
+    lookback_start, _ = _local_day_bounds(today - timedelta(days=1))
+    payments = list(_first_payment_queryset(since=lookback_start))
+    if not payments:
+        return {"sent": 0, "skipped": "none"}
+
+    already = set(
+        MemberNotification.objects.filter(
+            code="admin_enrollment",
+            related_object_id__in=[str(p.pk) for p in payments],
+        ).values_list("related_object_id", flat=True)
+    )
+
+    today_count = (
+        _first_payment_queryset(on_date=today).count()
+    )
+    # Running count includes payments already notified today; for each new one
+    # we report today's total at send time (stable within a batch pass).
+    sent = 0
+    for payment in payments:
+        related = str(payment.pk)
+        if related in already:
+            continue
+        member = payment.member
+        user = member.user
+        name = (user.full_name or "").strip() or member.member_id or "Member"
+        plan_name = payment.plan.name if payment.plan_id else "Plan"
+        amount = payment.amount_taka
+        member_id = str(member.user_id)
+        body_params = {
+            "plan": plan_name,
+            "amount": amount,
+            "count": today_count,
+            "member": name,
+            "memberName": name,
+            "member_id": member_id,
+            "memberId": member_id,
+        }
+        for staff_user in recipients:
+            notif = create_notification(
+                staff_user,
+                code="admin_enrollment",
+                title_params={"memberId": member_id, "memberName": name},
+                body_params=body_params,
+                related_object_id=related,
+                push=True,
+                sms=False,
+            )
+            if notif is not None:
+                sent += 1
+        already.add(related)
+    return {"sent": sent, "skipped": None}
+
+
+def notify_admin_daily_enrollments(*, for_date=None, tz_name: str = "Asia/Dhaka") -> dict:
+    """Cron: end-of-day enrollment digest for one timezone calendar day."""
+    from django.db.models import Sum
+    from notifications.models import AdminOpsAlertSettings
+
+    if tz_name not in OPS_ALERT_DIGEST_TIMEZONES:
+        raise ValueError(
+            f"Unsupported timezone {tz_name!r}. Use one of: {', '.join(OPS_ALERT_DIGEST_TIMEZONES)}"
+        )
+
+    settings_row = AdminOpsAlertSettings.load()
+    if not settings_row.daily_digest_enabled:
+        return {"sent": 0, "skipped": "disabled", "timezone": tz_name}
+
+    recipients = ops_alert_recipients()
+    if not recipients:
+        return {"sent": 0, "skipped": "no_recipients", "timezone": tz_name}
+
+    tz = ZoneInfo(tz_name)
+    day = for_date or datetime.now(tz).date()
+    qs = _first_payment_queryset(on_date=day, tz_name=tz_name)
+    count = qs.count()
+    if count == 0:
+        return {"sent": 0, "skipped": "empty", "timezone": tz_name}
+
+    total = qs.aggregate(total=Sum("amount_taka"))["total"] or 0
+    tz_label = OPS_ALERT_DIGEST_TZ_LABELS.get(tz_name, tz_name)
+    # Per-timezone dedupe so Dhaka and London digests both deliver.
+    dedupe = f"{tz_name}:{day.isoformat()}"
+    body_params = {
+        "count": count,
+        "amount": total,
+        "date": day.isoformat(),
+        "timezone": tz_name,
+        "tz": tz_label,
+        "tzLabel": tz_label,
+    }
+    sent = 0
+    for staff_user in recipients:
+        notif = create_notification(
+            staff_user,
+            code="admin_daily_enrollments",
+            body_params=body_params,
+            dedupe_key=dedupe,
+            push=True,
+            sms=False,
+        )
+        if notif is not None:
+            sent += 1
+    return {
+        "sent": sent,
+        "skipped": None,
+        "count": count,
+        "amount": total,
+        "timezone": tz_name,
+        "date": day.isoformat(),
+    }
+
+
+def notify_admin_daily_enrollments_all(*, for_date=None) -> list[dict]:
+    """Run end-of-day digests for Asia/Dhaka and Europe/London."""
+    return [
+        notify_admin_daily_enrollments(for_date=for_date, tz_name=tz)
+        for tz in OPS_ALERT_DIGEST_TIMEZONES
+    ]
 
 
 def register_device(user, token: str, platform: str) -> MemberDeviceToken:
@@ -736,6 +1048,17 @@ def send_fcm_for_notification(notification_id) -> dict:
         amount = params.get("amount")
         if amount is not None and amount != "":
             data["amount_taka"] = str(amount)
+    elif notif.code == "admin_enrollment":
+        params = dict(notif.body_params or {})
+        data["type"] = "admin_enrollment"
+        member_id = params.get("member_id") or params.get("memberId") or ""
+        if member_id:
+            data["member_id"] = str(member_id)
+        amount = params.get("amount")
+        if amount is not None and amount != "":
+            data["amount_taka"] = str(amount)
+    elif notif.code == "admin_daily_enrollments":
+        data["type"] = "admin_daily_enrollments"
     sent = 0
     failed = 0
     errors: list[str] = []

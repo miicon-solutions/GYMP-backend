@@ -679,3 +679,204 @@ def test_admin_announcement_resend_sms(client, member, staff, plan):
         code="announcement", related_object_id=str(campaign_id)
     )
     assert fanout.send_sms is True
+
+
+@pytest.mark.django_db
+def test_ops_alerts_settings_super_only(client, staff, super_admin):
+    client.force_authenticate(staff)
+    denied = client.get("/api/v1/admin/ops-alerts/settings/")
+    assert denied.status_code == 403
+
+    client.force_authenticate(super_admin)
+    ok = client.get("/api/v1/admin/ops-alerts/settings/")
+    assert ok.status_code == 200
+    assert ok.data["enrollment_live_enabled"] is True
+    assert ok.data["daily_digest_enabled"] is True
+    assert ok.data["recipients"] == []
+
+
+@pytest.mark.django_db
+def test_ops_alerts_settings_put_recipients(client, staff, super_admin):
+    client.force_authenticate(super_admin)
+    put = client.put(
+        "/api/v1/admin/ops-alerts/settings/",
+        {
+            "enrollment_live_enabled": True,
+            "daily_digest_enabled": False,
+            "recipient_ids": [str(staff.pk), str(super_admin.pk)],
+        },
+        format="json",
+    )
+    assert put.status_code == 200
+    assert put.data["daily_digest_enabled"] is False
+    ids = {str(r["id"]) for r in put.data["recipients"]}
+    assert ids == {str(staff.pk), str(super_admin.pk)}
+
+    put2 = client.put(
+        "/api/v1/admin/ops-alerts/settings/",
+        {"recipient_ids": [str(staff.pk)]},
+        format="json",
+    )
+    assert put2.status_code == 200
+    assert [str(r["id"]) for r in put2.data["recipients"]] == [str(staff.pk)]
+
+
+@pytest.mark.django_db
+def test_notify_admin_enrollments_batch_fanout_and_dedupe(
+    member, staff, plan, super_admin, django_capture_on_commit_callbacks
+):
+    from notifications.models import AdminOpsAlertRecipient, AdminOpsAlertSettings
+    from notifications.services import notify_admin_enrollments_batch
+
+    AdminOpsAlertSettings.load()
+    AdminOpsAlertRecipient.objects.create(user=staff)
+    AdminOpsAlertRecipient.objects.create(user=super_admin)
+
+    payment = Payment.objects.create(
+        member=member.member_profile,
+        plan=plan,
+        catalog_id=plan.catalog_id,
+        channel="cash",
+        kind="first_payment",
+        is_first_payment=True,
+        amount_taka=3000,
+        paid_at=timezone.now(),
+    )
+    register_device(staff, "ops-staff-token", "android")
+
+    with patch("notifications.services._send_fcm") as send_fcm:
+        with django_capture_on_commit_callbacks(execute=True):
+            first = notify_admin_enrollments_batch()
+    assert first["sent"] == 2
+    assert (
+        MemberNotification.objects.filter(code="admin_enrollment", user=staff).count()
+        == 1
+    )
+    assert (
+        MemberNotification.objects.filter(
+            code="admin_enrollment", user=super_admin
+        ).count()
+        == 1
+    )
+    assert send_fcm.called
+    assert send_fcm.call_args.kwargs["data"]["type"] == "admin_enrollment"
+    assert send_fcm.call_args.kwargs["data"]["member_id"] == str(member.pk)
+
+    second = notify_admin_enrollments_batch()
+    assert second["sent"] == 0
+    assert (
+        MemberNotification.objects.filter(
+            code="admin_enrollment", related_object_id=str(payment.pk)
+        ).count()
+        == 2
+    )
+
+
+@pytest.mark.django_db
+def test_notify_admin_enrollments_respects_toggle(member, staff, plan):
+    from notifications.models import AdminOpsAlertRecipient, AdminOpsAlertSettings
+    from notifications.services import notify_admin_enrollments_batch
+
+    settings_row = AdminOpsAlertSettings.load()
+    settings_row.enrollment_live_enabled = False
+    settings_row.save(update_fields=["enrollment_live_enabled", "updated_at"])
+    AdminOpsAlertRecipient.objects.create(user=staff)
+    Payment.objects.create(
+        member=member.member_profile,
+        plan=plan,
+        catalog_id=plan.catalog_id,
+        channel="cash",
+        kind="first_payment",
+        is_first_payment=True,
+        amount_taka=2500,
+        paid_at=timezone.now(),
+    )
+    result = notify_admin_enrollments_batch()
+    assert result["skipped"] == "disabled"
+    assert not MemberNotification.objects.filter(code="admin_enrollment").exists()
+
+
+@pytest.mark.django_db
+def test_notify_admin_daily_enrollments_digest_and_dedupe(member, staff, plan):
+    from notifications.models import AdminOpsAlertRecipient, AdminOpsAlertSettings
+    from notifications.services import notify_admin_daily_enrollments
+
+    AdminOpsAlertSettings.load()
+    AdminOpsAlertRecipient.objects.create(user=staff)
+    Payment.objects.create(
+        member=member.member_profile,
+        plan=plan,
+        catalog_id=plan.catalog_id,
+        channel="cash",
+        kind="first_payment",
+        is_first_payment=True,
+        amount_taka=3000,
+        paid_at=timezone.now(),
+    )
+    day = timezone.localdate()
+    first = notify_admin_daily_enrollments(for_date=day, tz_name="Asia/Dhaka")
+    assert first["sent"] == 1
+    assert first["count"] == 1
+    assert first["amount"] == 3000
+    assert first["timezone"] == "Asia/Dhaka"
+    notif = MemberNotification.objects.get(user=staff, code="admin_daily_enrollments")
+    assert notif.dedupe_key == f"Asia/Dhaka:{day.isoformat()}"
+    assert notif.body_params["tz"] == "Dhaka"
+
+    second = notify_admin_daily_enrollments(for_date=day, tz_name="Asia/Dhaka")
+    assert second["sent"] == 0
+    assert (
+        MemberNotification.objects.filter(
+            user=staff, code="admin_daily_enrollments"
+        ).count()
+        == 1
+    )
+
+
+@pytest.mark.django_db
+def test_notify_admin_daily_enrollments_london_separate_dedupe(member, staff, plan):
+    from notifications.models import AdminOpsAlertRecipient, AdminOpsAlertSettings
+    from notifications.services import notify_admin_daily_enrollments
+
+    AdminOpsAlertSettings.load()
+    AdminOpsAlertRecipient.objects.create(user=staff)
+    Payment.objects.create(
+        member=member.member_profile,
+        plan=plan,
+        catalog_id=plan.catalog_id,
+        channel="cash",
+        kind="first_payment",
+        is_first_payment=True,
+        amount_taka=3000,
+        paid_at=timezone.now(),
+    )
+    day = timezone.localdate()
+    dhaka = notify_admin_daily_enrollments(for_date=day, tz_name="Asia/Dhaka")
+    london = notify_admin_daily_enrollments(for_date=day, tz_name="Europe/London")
+    assert dhaka["sent"] == 1
+    assert london["sent"] == 1
+    assert london["timezone"] == "Europe/London"
+    keys = set(
+        MemberNotification.objects.filter(
+            user=staff, code="admin_daily_enrollments"
+        ).values_list("dedupe_key", flat=True)
+    )
+    assert keys == {
+        f"Asia/Dhaka:{day.isoformat()}",
+        f"Europe/London:{day.isoformat()}",
+    }
+
+
+@pytest.mark.django_db
+def test_notify_admin_daily_enrollments_empty_day(staff):
+    from notifications.models import AdminOpsAlertRecipient, AdminOpsAlertSettings
+    from notifications.services import notify_admin_daily_enrollments
+
+    AdminOpsAlertSettings.load()
+    AdminOpsAlertRecipient.objects.create(user=staff)
+    result = notify_admin_daily_enrollments(
+        for_date=timezone.localdate(), tz_name="Europe/London"
+    )
+    assert result["skipped"] == "empty"
+    assert result["timezone"] == "Europe/London"
+    assert not MemberNotification.objects.filter(code="admin_daily_enrollments").exists()
