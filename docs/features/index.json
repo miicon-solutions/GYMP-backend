@@ -177,6 +177,13 @@
       "openapi": "/openapi/v1/reports.yaml",
       "doc": "/docs/features/reports/",
       "operations": [
+        "admin_report_admission",
+        "admin_report_cash_vs_online",
+        "admin_report_expenses_by_admin",
+        "admin_report_member_collections",
+        "admin_report_membership_status",
+        "admin_report_plan_mix",
+        "admin_report_revenue_vs_expense",
         "admin_revenue"
       ]
     },
@@ -302,6 +309,8 @@
       "openapi": "/openapi/v1/public.yaml",
       "doc": "/docs/features/public/",
       "operations": [
+        "admin_ops_alerts_settings_get",
+        "admin_ops_alerts_settings_put",
         "public_welcome"
       ]
     }

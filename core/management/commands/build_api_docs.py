@@ -1,4 +1,4 @@
-"""Generate committed OpenAPI + feature index for GYMA API docs."""
+"""Generate committed OpenAPI + feature index for GYMP API docs."""
 
 from __future__ import annotations
 

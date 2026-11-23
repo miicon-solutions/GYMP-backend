@@ -60,6 +60,7 @@ _PATH_TAG_RULES: list[tuple[str, str]] = [
     ("admin/activity", "operations"),
     ("admin/gym-hours", "operations"),
     ("admin/revenue", "reports"),
+    ("admin/reports", "reports"),
     ("internal/attendance", "attendance"),
     ("internal/biometrics", "device"),
     ("webhooks/", "payments"),
@@ -115,10 +116,10 @@ def postprocess_feature_tags(result, generator, request, public):
             operation["tags"] = [derived]
     result["tags"] = FEATURE_TAGS
     info = result.setdefault("info", {})
-    info.setdefault("title", "GYMA API")
+    info.setdefault("title", "GYMP API")
     info["version"] = getattr(settings, "API_DOC_VERSION_LABEL", "1.0.0")
     info["description"] = (
-        "GYMA membership platform API. Use feature packs at `/docs/features/{feature}/` "
+        "GYMP membership platform API. Use feature packs at `/docs/features/{feature}/` "
         "or filtered OpenAPI at `/openapi/v1/{feature}.yaml` to wire one feature at a time."
     )
     return result
@@ -188,7 +189,7 @@ def filter_schema_by_feature(schema: dict, feature: str) -> dict:
 
     info = filtered.setdefault("info", {})
     title = next((t["description"] for t in FEATURE_TAGS if t["name"] == feature), feature)
-    info["title"] = f"GYMA API — {feature}"
+    info["title"] = f"GYMP API — {feature}"
     info["description"] = (
         f"Feature pack `{feature}`: {title} "
         f"Full schema: `/openapi/v1.yaml`. Narrative: `/docs/features/{feature}/`."
@@ -240,7 +241,7 @@ def resolve_schema(request=None) -> dict:
     committed = load_committed_schema()
     if committed:
         return committed
-    return {"openapi": "3.0.3", "info": {"title": "GYMA API", "version": "1.0.0"}, "paths": {}}
+    return {"openapi": "3.0.3", "info": {"title": "GYMP API", "version": "1.0.0"}, "paths": {}}
 
 
 def build_features_index(schema: dict | None = None) -> dict:
@@ -334,7 +335,7 @@ class FeatureSchemaView(APIView):
 
 
 class DocsUIView(View):
-    """Docs chrome with feature packs + versioned Swagger reference iframe."""
+    """Docs chrome with in-page Scalar (no iframe — clipboard/Copy as Markdown works)."""
 
     def get(self, request, version=None):
         default = getattr(settings, "DEFAULT_API_DOC_VERSION", "v1")
@@ -347,17 +348,17 @@ class DocsUIView(View):
                 "version": version,
                 "versions": versions,
                 "schema_yaml_url": f"/openapi/{version}.yaml",
+                "schema_json_url": f"/openapi/{version}.json",
                 "features": FEATURE_TAGS,
                 "features_index_url": "/docs/features/",
-                "swagger_frame_url": "/docs/swagger/frame/",
-                "scalar_url": f"/docs/{version}/reference/",
+                "swagger_url": "/docs/swagger/",
             },
         )
 
 
 @method_decorator(xframe_options_sameorigin, name="dispatch")
 class DocsScalarFrameView(View):
-    """Minimal Scalar host page (loaded in an iframe so chrome CSS cannot collapse it)."""
+    """Fullscreen Scalar host (also embeddable; primary docs mount Scalar in-page)."""
 
     def get(self, request, version="v1"):
         version = _validate_version(version)

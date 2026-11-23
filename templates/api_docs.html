@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GYMA API {{ version }}</title>
+  <meta http-equiv="Permissions-Policy" content="clipboard-write=(self), clipboard-read=(self)">
+  <title>GYMP API {{ version }}</title>
   <style>
     html, body {
       margin: 0;
@@ -85,11 +86,12 @@
     .docs-features a:hover {
       background: #dcefe5;
     }
-    .docs-frame {
+    /* Mount Scalar in-page (not iframe) so Copy as Markdown can use the Clipboard API. */
+    #scalar-app {
       flex: 1 1 0;
       min-height: 0;
       width: 100%;
-      border: 0;
+      overflow: auto;
       background: #fff;
     }
   </style>
@@ -97,7 +99,7 @@
 <body>
   <header class="docs-chrome">
     <div class="docs-chrome-top">
-      <div class="docs-brand">GYMA API</div>
+      <div class="docs-brand">GYMP API</div>
       <nav>
         <label>
           Version
@@ -109,7 +111,7 @@
         </label>
         <a href="{{ schema_yaml_url }}">OpenAPI</a>
         <a href="{{ features_index_url }}">Feature packs</a>
-        <a href="{{ scalar_url }}">Scalar</a>
+        <a href="{{ swagger_url }}">Swagger</a>
       </nav>
     </div>
     <div class="docs-features" aria-label="Feature packs">
@@ -119,14 +121,20 @@
       {% endfor %}
     </div>
   </header>
-  <iframe
-    class="docs-frame"
-    title="GYMA API reference"
-    src="{{ swagger_frame_url }}"
-  ></iframe>
+  <div id="scalar-app" role="main" aria-label="GYMP API reference"></div>
+  {% include "partials/clipboard_fallback.html" %}
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.83.0"></script>
   <script>
     document.getElementById("version-select").addEventListener("change", (event) => {
       window.location.href = "/docs/" + event.target.value + "/";
+    });
+    Scalar.createApiReference("#scalar-app", {
+      url: "{{ schema_json_url }}",
+      layout: "modern",
+      theme: "default",
+      hideModels: false,
+      showSidebar: true,
+      hideDarkModeToggle: true,
     });
   </script>
 </body>

@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: GYMA API
+  title: GYMP API
   version: 1.0.0
-  description: GYMA membership platform API. Use feature packs at `/docs/features/{feature}/`
+  description: GYMP membership platform API. Use feature packs at `/docs/features/{feature}/`
     or filtered OpenAPI at `/openapi/v1/{feature}.yaml` to wire one feature at a time.
 paths:
   /api/v1/admin/activity/:
@@ -1061,6 +1061,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminAnnouncementResendSmsOutput'
           description: ''
+  /api/v1/admin/ops-alerts/settings/:
+    get:
+      operationId: admin_ops_alerts_settings_get
+      description: Super-only shared ops-alert recipient list + event toggles.
+      tags:
+      - public
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsAlertSettings'
+          description: ''
+    put:
+      operationId: admin_ops_alerts_settings_put
+      description: Super-only shared ops-alert recipient list + event toggles.
+      tags:
+      - public
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsAlertSettingsUpdateInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsAlertSettingsUpdateInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsAlertSettingsUpdateInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsAlertSettings'
+          description: ''
   /api/v1/admin/plans/:
     get:
       operationId: api_v1_admin_plans_list
@@ -1317,6 +1359,222 @@ paths:
       - jwtAuth: []
       responses:
         '204':
+          description: No response body
+  /api/v1/admin/reports/admission/:
+    get:
+      operationId: admin_report_admission
+      parameters:
+      - in: query
+        name: date
+        schema:
+          type: string
+      - in: query
+        name: dates
+        schema:
+          type: string
+      - in: query
+        name: from
+        schema:
+          type: string
+      - in: query
+        name: range
+        schema:
+          type: string
+      - in: query
+        name: to
+        schema:
+          type: string
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/reports/cash-vs-online/:
+    get:
+      operationId: admin_report_cash_vs_online
+      parameters:
+      - in: query
+        name: date
+        schema:
+          type: string
+      - in: query
+        name: dates
+        schema:
+          type: string
+      - in: query
+        name: from
+        schema:
+          type: string
+      - in: query
+        name: range
+        schema:
+          type: string
+      - in: query
+        name: to
+        schema:
+          type: string
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/reports/expenses-by-admin/:
+    get:
+      operationId: admin_report_expenses_by_admin
+      parameters:
+      - in: query
+        name: date
+        schema:
+          type: string
+      - in: query
+        name: dates
+        schema:
+          type: string
+      - in: query
+        name: from
+        schema:
+          type: string
+      - in: query
+        name: range
+        schema:
+          type: string
+      - in: query
+        name: to
+        schema:
+          type: string
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/reports/member-collections/:
+    get:
+      operationId: admin_report_member_collections
+      parameters:
+      - in: query
+        name: channel
+        schema:
+          type: string
+      - in: query
+        name: date
+        schema:
+          type: string
+      - in: query
+        name: dates
+        schema:
+          type: string
+      - in: query
+        name: from
+        schema:
+          type: string
+      - in: query
+        name: range
+        schema:
+          type: string
+      - in: query
+        name: to
+        schema:
+          type: string
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/reports/membership-status/:
+    get:
+      operationId: admin_report_membership_status
+      parameters:
+      - in: query
+        name: within_days
+        schema:
+          type: string
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/reports/plan-mix/:
+    get:
+      operationId: admin_report_plan_mix
+      parameters:
+      - in: query
+        name: channel
+        schema:
+          type: string
+      - in: query
+        name: date
+        schema:
+          type: string
+      - in: query
+        name: dates
+        schema:
+          type: string
+      - in: query
+        name: from
+        schema:
+          type: string
+      - in: query
+        name: range
+        schema:
+          type: string
+      - in: query
+        name: to
+        schema:
+          type: string
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/admin/reports/revenue-vs-expense/:
+    get:
+      operationId: admin_report_revenue_vs_expense
+      parameters:
+      - in: query
+        name: date
+        schema:
+          type: string
+      - in: query
+        name: dates
+        schema:
+          type: string
+      - in: query
+        name: from
+        schema:
+          type: string
+      - in: query
+        name: range
+        schema:
+          type: string
+      - in: query
+        name: to
+        schema:
+          type: string
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
           description: No response body
   /api/v1/admin/revenue/:
     get:
@@ -8260,6 +8518,8 @@ components:
           - membership_expiring
           - membership_expired
           - announcement
+          - admin_enrollment
+          - admin_daily_enrollments
           type: string
           description: '* `payment_received` - payment_received
 
@@ -8275,8 +8535,12 @@ components:
 
             * `membership_expired` - membership_expired
 
-            * `announcement` - announcement'
-          x-spec-enum-id: d94a5af9f3765507
+            * `announcement` - announcement
+
+            * `admin_enrollment` - admin_enrollment
+
+            * `admin_daily_enrollments` - admin_daily_enrollments'
+          x-spec-enum-id: 74bca9db1511ab26
           readOnly: true
         title_key:
           type: string
@@ -8906,6 +9170,50 @@ components:
       - redeemed_count
       - remaining
       - starts_on
+    OpsAlertRecipient:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        short_id:
+          type: string
+        phone:
+          type: string
+      required:
+      - id
+      - name
+      - phone
+      - short_id
+    OpsAlertSettings:
+      type: object
+      properties:
+        enrollment_live_enabled:
+          type: boolean
+        daily_digest_enabled:
+          type: boolean
+        recipients:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsAlertRecipient'
+      required:
+      - daily_digest_enabled
+      - enrollment_live_enabled
+      - recipients
+    OpsAlertSettingsUpdateInput:
+      type: object
+      properties:
+        enrollment_live_enabled:
+          type: boolean
+        daily_digest_enabled:
+          type: boolean
+        recipient_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
     PRPoint:
       type: object
       properties:
@@ -10638,6 +10946,16 @@ components:
           type: integer
         failed_count:
           type: integer
+        list_taka:
+          type: integer
+        discount_taka:
+          type: integer
+        discount_standing_taka:
+          type: integer
+        discount_offer_taka:
+          type: integer
+        discount_admission_taka:
+          type: integer
         by_channel:
           type: object
           additionalProperties:
@@ -10654,6 +10972,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RevenuePaymentOutput'
+        prior:
+          allOf:
+          - $ref: '#/components/schemas/RevenuePrior'
+          nullable: true
         from:
           type: string
           format: date
@@ -10661,10 +10983,16 @@ components:
       required:
       - by_channel
       - by_plan
+      - discount_admission_taka
+      - discount_offer_taka
+      - discount_standing_taka
+      - discount_taka
       - failed_count
       - from
+      - list_taka
       - payment_count
       - payments
+      - prior
       - range
       - series
       - to
@@ -10737,12 +11065,51 @@ components:
           type: string
         amount_taka:
           type: integer
+        list_amount_taka:
+          type: integer
+        discount_taka:
+          type: integer
         count:
           type: integer
       required:
       - amount_taka
       - bucket
       - count
+      - discount_taka
+      - list_amount_taka
+    RevenuePrior:
+      type: object
+      properties:
+        to:
+          type: string
+          format: date
+        total_taka:
+          type: integer
+        payment_count:
+          type: integer
+        list_taka:
+          type: integer
+        discount_taka:
+          type: integer
+        discount_standing_taka:
+          type: integer
+        discount_offer_taka:
+          type: integer
+        discount_admission_taka:
+          type: integer
+        from:
+          type: string
+          format: date
+      required:
+      - discount_admission_taka
+      - discount_offer_taka
+      - discount_standing_taka
+      - discount_taka
+      - from
+      - list_taka
+      - payment_count
+      - to
+      - total_taka
     Routine:
       type: object
       properties:

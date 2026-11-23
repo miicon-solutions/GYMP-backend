@@ -34,7 +34,7 @@ Agent notes: see [AGENTS.md](AGENTS.md). ZK control center lives in sibling `zkt
 
 **Production:** use `bootstrap_admin --phone …` with a real number. It prompts for an operator password only with `--browser-access`, prints a **one-time setup token**, and refuses to replace an existing super admin. Production does not use the fixed seed phone.
 
-The API listens at `http://localhost:8080`. Open `/docs/` for the feature-wise API docs UI (Swagger tag groups; version-pinned at `/docs/v1/`), `/openapi/v1.yaml` for the full schema, `/openapi/v1/{feature}.yaml` for one feature (e.g. `auth`), `/docs/features/` for agent/human feature packs, `/docs/v1/reference/` for Scalar, `/admin/` for the operator console, `/health/` for database readiness, and `/health/live/` for liveness. Migrations run before Gunicorn starts. The initial migration installs default gym hours: Saturday–Thursday 06:00–22:00, Friday closed.
+The API listens at `http://localhost:8080`. Open `/docs/` for the feature-wise API docs UI (**Scalar** reference; version-pinned at `/docs/v1/`), `/openapi/v1.yaml` for the full schema, `/openapi/v1/{feature}.yaml` for one feature (e.g. `auth`), `/docs/features/` for agent/human feature packs, `/docs/swagger/` for legacy Swagger UI, `/admin/` for the operator console, `/health/` for database readiness, and `/health/live/` for liveness. Migrations run before Gunicorn starts. The initial migration installs default gym hours: Saturday–Thursday 06:00–22:00, Friday closed.
 
 Compose runs the API; PostgreSQL and MinIO/S3 are managed separately. Create a dedicated empty PostgreSQL database for this backend and set `DATABASE_URL` to its connection URL. Do not point it at the Go database: startup runs Django migrations against the configured database. Set `HTTP_PORT` if port 8080 is already occupied. Stopping Compose leaves the external database and bucket untouched.
 
@@ -115,7 +115,9 @@ Leaving `S3_SUB_FOLDER` unset or empty preserves the previous `AWS_LOCATION` pat
 
 | URL / path | Purpose |
 |---|---|
-| `/docs/` · `/docs/v1/` | Developer UI with feature menu (auth, payments, …) |
+| `/docs/` · `/docs/v1/` | Developer UI (Scalar) with feature pack menu |
+| `/docs/v1/reference/` | Fullscreen Scalar (no chrome) |
+| `/docs/swagger/` | Legacy Swagger UI |
 | `/openapi/v1.yaml` | Full v1 OpenAPI (alias: `/openapi.yaml`) |
 | `/openapi/v1/{feature}.yaml` | Filtered OpenAPI for one feature |
 | `/docs/features/` | Feature pack index (`Accept: application/json` or `?format=json`) |
@@ -125,8 +127,8 @@ Leaving `S3_SUB_FOLDER` unset or empty preserves the previous `AWS_LOCATION` pat
 
 **Agent-friendly refs:** point an agent at `/openapi/v1/auth.yaml` or
 `/docs/features/auth/` to connect the whole auth API; use a single operationId
-with the full schema for one endpoint. Regenerate with `make schema` after route
-changes. See [AGENTS.md](AGENTS.md) for the maintenance checklist.
+with the full schema for one endpoint. After any CRUD/route change, update docs
+management (tags, `make schema`, feature pack) — mandatory per [AGENTS.md](AGENTS.md).
 
 ## API and authentication
 

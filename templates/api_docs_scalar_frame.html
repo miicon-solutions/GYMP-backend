@@ -3,14 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GYMA API {{ version }} reference</title>
+  <meta http-equiv="Permissions-Policy" content="clipboard-write=(self), clipboard-read=(self)">
+  <title>GYMP API {{ version }} reference</title>
   <style>
     html, body, #app { margin: 0; height: 100%; }
   </style>
 </head>
 <body>
   <div id="app"></div>
-  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  {% include "partials/clipboard_fallback.html" %}
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.83.0"></script>
   <script>
     Scalar.createApiReference("#app", {
       url: "{{ schema_url }}",

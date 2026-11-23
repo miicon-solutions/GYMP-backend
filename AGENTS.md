@@ -14,7 +14,7 @@ product flows that diverge from the Go-era architecture already ported here.
 | Stack | Python 3.14, Django 5.2 LTS, DRF, PostgreSQL |
 | HTTP | `:8080` (local compose / runserver) |
 | Contract | `/api/v1/…` trailing slashes, snake_case |
-| Docs | `/docs/` (Scalar), `/openapi/v1.yaml`, `docs/features/`, `docs/API_MIGRATION.md` |
+| Docs | `/docs/` (Scalar primary), `/docs/swagger/` (legacy), `/openapi/v1.yaml`, `docs/features/` |
 
 ## First: understand this project
 
@@ -161,9 +161,15 @@ core/             # shared API helpers, middleware, permissions
 
 ## API docs (humans + AI agents)
 
+Docs management lives in `core/api_docs.py`, `core/management/commands/build_api_docs.py`,
+`templates/api_docs*.html`, and committed files under `docs/`. Humans browse Scalar;
+agents use OpenAPI + feature packs.
+
 | Ref | Use |
 |---|---|
-| `/docs/` or `/docs/v1/` | Feature-wise Swagger UI (tags = menu) + feature pack links |
+| `/docs/` or `/docs/v1/` | Chrome + **Scalar** in-page (feature tags = sidebar) + pack links |
+| `/docs/v1/reference/` | Fullscreen Scalar (same schema; no chrome) |
+| `/docs/swagger/` | Legacy Swagger UI (optional; not the default) |
 | `/openapi/v1.yaml` | Full v1 OpenAPI (also `/openapi.yaml`) |
 | `/openapi/v1/{feature}.yaml` | One feature only (e.g. `auth`, `payments`) |
 | `/docs/features/` | Feature pack index (`?format=json` for machines) |
@@ -180,25 +186,36 @@ Feature tags: `auth`, `member`, `admin-members`, `plans`, `payments`,
 `notifications`, `public`. Assign tags via `endpoint(..., tags=[...])` or path
 rules in `core/api_docs.py`.
 
-### When adding or changing an API
+### When adding or changing an API (CRUD / routes) — docs update is mandatory
 
-1. Set the correct feature `tags` (and `examples` for high-traffic flows) on the
+**Must:** every create/read/update/delete surface change (new model endpoints,
+serializers, path renames, field changes, permission gates) updates docs
+management before the task is done. Treat this as a blocking TODO — do not ship
+code-only CRUD.
+
+1. **TODO (required):** Update docs management — tags, schema, feature pack,
+   Scalar/OpenAPI visibility.
+2. Set the correct feature `tags` (and `examples` for high-traffic flows) on the
    view / `endpoint()`.
-2. Run `make schema` (writes `docs/openapi/v1.yaml` + `docs/features/index.json`).
-3. Update `docs/features/{feature}.md` samples/flow if behavior changed.
-4. Add a new `docs/features/{feature}.md` entry when introducing a **new** feature
-   tag (also extend `FEATURE_TAGS` in `core/api_docs.py`).
-5. Keep `docs/API_MIGRATION.md` for Go→Django history only; do not grow it for
+3. Extend `FEATURE_TAGS` + `_PATH_TAG_RULES` in `core/api_docs.py` when adding a
+   **new** feature tag or path prefix.
+4. Run `make schema` (writes `docs/openapi/v1.yaml` + `docs/features/index.json`).
+5. Update `docs/features/{feature}.md` samples/flow if behavior changed; add a
+   new `{feature}.md` when introducing a new tag.
+6. Spot-check `/docs/` (Scalar) and `/openapi/v1/{feature}.yaml` so the
+   operation appears under the right tag.
+7. Keep `docs/API_MIGRATION.md` for Go→Django history only; do not grow it for
    new product work.
 
 `make check` runs `build_api_docs --check` so stale schema/index fails CI-style
-checks.
+checks. Incomplete docs = incomplete CRUD work.
 
 ## Testing and quality
 
 - `make test`, `make check`, `make lint`, `make schema` as appropriate.
 - Prefer pytest coverage for new services; mock external SMS/SSLCommerz/bridge HTTP.
-- Keep OpenAPI, feature packs, and (when relevant) `docs/API_MIGRATION.md` current.
+- Keep OpenAPI, feature packs, and Scalar (`/docs/`) current — required for any
+  CRUD/API change (see checklist above).
 
 ## Keeping this file current
 

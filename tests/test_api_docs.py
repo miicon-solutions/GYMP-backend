@@ -8,14 +8,25 @@ def test_feature_tag_for_path():
     assert feature_tag_for_path("/api/v1/auth/otp/send/") == "auth"
     assert feature_tag_for_path("/api/v1/admin/members/") == "admin-members"
     assert feature_tag_for_path("/api/v1/admin/revenue/") == "reports"
+    assert feature_tag_for_path("/api/v1/admin/reports/cash-vs-online/") == "reports"
+    assert feature_tag_for_path("/api/v1/admin/reports/plan-mix/") == "reports"
     assert feature_tag_for_path("/api/v1/workouts/sessions/") == "fitness"
 
 
 def test_docs_and_feature_schema_endpoints():
     client = Client()
-    assert client.get("/docs/").status_code == 200
+    docs = client.get("/docs/")
+    assert docs.status_code == 200
+    # Scalar is mounted in-page; clipboard fallback covers LAN HTTP / Safari.
+    assert b'id="scalar-app"' in docs.content
+    assert b"@scalar/api-reference" in docs.content
+    assert b"copyViaExecCommand" in docs.content
+    assert b"<iframe" not in docs.content
     assert client.get("/docs/v1/").status_code == 200
-    assert client.get("/docs/v1/reference/").status_code == 200
+    scalar = client.get("/docs/v1/reference/")
+    assert scalar.status_code == 200
+    assert b"@scalar/api-reference" in scalar.content
+    assert client.get("/docs/swagger/").status_code == 200
     assert client.get("/docs/features/").status_code == 200
     assert client.get("/docs/features/?format=json").status_code == 200
     assert client.get("/docs/features/auth/").status_code == 200
