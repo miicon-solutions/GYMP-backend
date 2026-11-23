@@ -17,6 +17,8 @@ class Plan(Entity):
     is_active = models.BooleanField(default=True)
 
     class Meta(Entity.Meta):
+        # Longest packs first (yearly → … → monthly) for catalog/admin lists.
+        ordering = ["-duration_months", "name"]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(discount_type__in=["none", "amount", "percent"]),

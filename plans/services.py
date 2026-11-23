@@ -22,7 +22,14 @@ def active_offer(plan, day=None):
 
 
 def redeemed_count(offer):
-    """Paid first payments that count toward this offer's first-N limit."""
+    """Paid true first joins that count toward this offer's first-N limit.
+
+    Seats are reserved only when online payment settles or cash is accepted —
+    not when the member picks a plan or creates a pending checkout. Browse and
+    pending sessions/cash requests do not consume seats. Re-admission payments
+    (is_first_payment=False) never count, even when admission is charged/waived.
+    Checkout still freezes waived amounts in pricing_snapshot until settle.
+    """
     from payments.models import Payment
 
     paid_first = Payment.objects.filter(status="paid", is_first_payment=True)

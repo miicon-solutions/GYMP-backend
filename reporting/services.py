@@ -482,20 +482,35 @@ def expenses_by_admin(actor, data):
     }
 
 
+def _payment_has_admission_activity(payment):
+    """True when admission was charged or waived (first join or re-admission after lapse)."""
+    if (payment.admission_waived_taka or 0) > 0:
+        return True
+    for item in payment.line_items or []:
+        if isinstance(item, dict) and item.get("label") == "Admission fee":
+            if int(item.get("amount_taka") or 0) > 0:
+                return True
+    return False
+
+
 def admission_report(actor, data):
     require_admin(actor)
     kind, start, end, dates = _resolve_window(data)
-    paid = _filter_paid(
-        _payment_base(), start=start, end=end, dates=dates
-    ).filter(status="paid", is_first_payment=True)
+    # Include re-admission after 180-day lapse (is_first_payment=False but admission
+    # line / waived columns set). Seat math still uses is_first_payment only.
+    paid = _filter_paid(_payment_base(), start=start, end=end, dates=dates).filter(status="paid")
     waived_total = 0
     collected_total = 0
     waived_count = 0
+    admission_payment_count = 0
     buckets = {}
     monthly = kind == "overall" or (
         kind == "custom" and start and end and (end - start).days + 1 > 90
     )
     for payment in paid:
+        if not _payment_has_admission_activity(payment):
+            continue
+        admission_payment_count += 1
         waived = payment.admission_waived_taka or 0
         collected = 0
         for item in payment.line_items or []:
@@ -522,7 +537,7 @@ def admission_report(actor, data):
         "to": end,
         "admission_collected_taka": collected_total,
         "admission_waived_taka": waived_total,
-        "first_payment_count": paid.count(),
+        "first_payment_count": admission_payment_count,
         "waived_count": waived_count,
         "series": series,
     }

@@ -24,8 +24,11 @@ Computed on read (list/detail/`active_offer`): `redeemed_count`, `remaining`, `a
 
 - Admission waiver applies only while `waive_admission` is true **and** seats remain (`remaining` is null or &gt; 0).
 - Extra period discount still applies when seats are exhausted.
-- Seat counts use **paid** first payments only (pending sessions/cash requests do not reserve).
-- `limit_scope=offer`: payments that redeemed this offer (linked when admission was waived).
+- Seat counts reserve only when payment succeeds (online IPN settle or admin cash accept) — **not** when browsing plans or creating a pending session/cash request.
+  - **Paid** true first joins (`is_first_payment=True`) count permanently.
+  - Pending checkouts do not reduce `remaining`; choosing a plan / payment method alone does not consume a seat.
+  - Re-admission after a 180-day lapse (`is_first_payment=False`) never burns first-N seats, even when admission is charged or waived.
+- `limit_scope=offer`: paid redemptions linked to this offer.
 - `limit_scope=plan`: paid first payments on this plan with `paid_at` on/after `starts_on`.
 - `limit_scope=gym`: all paid first payments gym-wide with `paid_at` on/after `starts_on`.
 - Checkout freezes amounts in `pricing_snapshot` (includes `offer_id`, `admission_waived`); settlement honors the freeze even if seats later exhaust.

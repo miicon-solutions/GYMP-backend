@@ -17,6 +17,7 @@ from plans.models import Plan
 from plans.services import active_offer, pricing
 
 PACK_DAYS = {1: 30, 3: 90, 6: 180, 9: 270, 12: 365}
+READMISSION_LAPSE_DAYS = 180
 
 
 def pack_days(months):
@@ -33,9 +34,30 @@ def add_pack_days(base, months, *, extend=False):
     return base + timedelta(days=days if extend else days - 1)
 
 
+def business_today(*, cash=False, now=None):
+    now = now or timezone.now()
+    return now.astimezone(DHAKA if cash else UTC).date()
+
+
+def requires_admission_fee(member, *, today=None, cash=False, now=None):
+    """True for never-paid members or after READMISSION_LAPSE_DAYS past payment-backed expires_on.
+
+    Membership clocks start only when cash is confirmed or online payment settles
+    (those paths write expires_on). Registration / profile-complete alone never
+    starts the 180-day grace. Prefer expires_on; paid-but-null expires_on requires
+    admission as a safe default — never fall back to registration date.
+    """
+    today = today or business_today(cash=cash, now=now)
+    if not member.payments.filter(status="paid").exists():
+        return True
+    if not member.expires_on:
+        return True
+    return (today - member.expires_on).days >= READMISSION_LAPSE_DAYS
+
+
 def new_expiry(member, months, kind, now=None, cash=False):
     now = now or timezone.now()
-    today = now.astimezone(DHAKA if cash else UTC).date()
+    today = business_today(cash=cash, now=now)
     if member.expires_on and member.expires_on >= today:
         if member.membership_status == "active" or (not cash and kind in {"renew", "change_plan"}):
             return add_pack_days(member.expires_on, months, extend=True)
@@ -46,24 +68,32 @@ def get_plan(plan_id):
     return get_object_or_404(Plan, pk=plan_id, is_active=True)
 
 
-def snapshot(plan, kind):
+def snapshot(plan, kind, member=None, *, today=None, cash=False, now=None):
     amounts = pricing(plan)
-    first = kind in {"first_purchase", "first_payment"}
+    if member is not None:
+        charge = requires_admission_fee(member, today=today, cash=cash, now=now)
+    else:
+        charge = kind in {"first_purchase", "first_payment"}
+    first_join_kind = kind in {"first_purchase", "first_payment"}
     renewal = amounts["effective_renewal_taka"]
     standing = amounts["standing_discount_taka"]
     offer_discount = amounts["offer_discount_taka"]
     admission_list = amounts["admission_fee_taka"]
-    # Waive only affects first payments; renewals keep full list = period.
-    waived = bool(first and amounts["admission_waived"])
-    admission_charged = 0 if (not first or waived) else admission_list
+    # Waive only when admission would otherwise be charged; renewals without
+    # re-admission keep full list = period.
+    waived = bool(charge and amounts["admission_waived"])
+    admission_charged = 0 if (not charge or waived) else admission_list
     waived_taka = admission_list if waived else 0
     total = renewal + admission_charged
-    list_amount = amounts["period_coverage_taka"] + (admission_list if first else 0)
+    list_amount = amounts["period_coverage_taka"] + (admission_list if charge else 0)
     lines = (
         [{"label": "Admission fee", "amount_taka": admission_charged}] if admission_charged else []
     )
     lines.append(
-        {"label": plan.name + (" period" if first else " renewal"), "amount_taka": renewal}
+        {
+            "label": plan.name + (" period" if first_join_kind else " renewal"),
+            "amount_taka": renewal,
+        }
     )
     offer = active_offer(plan)
     result = {
@@ -76,6 +106,7 @@ def snapshot(plan, kind):
         "duration_months": plan.duration_months,
         "catalog_id": plan.catalog_id,
         "admission_waived": waived,
+        "requires_admission": charge,
     }
     if offer is not None:
         result["offer_id"] = str(offer.pk)
@@ -130,7 +161,7 @@ def create_session(user, data):
             Plan.objects.select_for_update(), pk=data["plan_id"], is_active=True
         )
         check_kind(member, data["kind"])
-        price = snapshot(plan, data["kind"])
+        price = snapshot(plan, data["kind"], member, cash=False)
         if price["amount_taka"] < 10:
             raise ValidationError({"amount_taka": "Amount is too low for online payment."})
         PaymentSession.objects.filter(member=member, kind=data["kind"], status="pending").update(
@@ -191,7 +222,9 @@ def settle(session, result):
     price = current.pricing_snapshot
     expiry = new_expiry(member, price["duration_months"], current.kind)
     now = timezone.now()
-    is_first = current.kind == "first_purchase"
+    # True first join only — re-admission after lapse must not set is_first_payment
+    # (keeps first-N offer seat math separate from admission reports).
+    is_first = not member.payments.filter(status="paid").exists()
     payment = Payment.objects.create(
         member=member,
         plan=current.plan,
@@ -280,13 +313,14 @@ def cash_details(member, plan):
     kind = (
         "first_payment" if not paid else ("renewal" if member.plan_id == plan.pk else "plan_change")
     )
-    price = snapshot(plan, kind)
+    price = snapshot(plan, kind, member, cash=True)
     preview = {
         "kind": kind,
         "amount_taka": price["amount_taka"],
         "new_expires_on": new_expiry(member, plan.duration_months, kind, cash=True),
         "plan_id": str(plan.pk),
         "catalog_id": plan.catalog_id,
+        "requires_admission": price.get("requires_admission", False),
     }
     return preview, price
 
@@ -367,7 +401,7 @@ def receive_cash(actor, member, plan_id):
     plan = get_object_or_404(Plan.objects.select_for_update(), pk=plan_id, is_active=True)
     preview, price = cash_details(member, plan)
     previous_plan = member.plan.name if member.plan_id else plan.name
-    is_first = preview["kind"] == "first_payment"
+    is_first = not member.payments.filter(status="paid").exists()
     payment = Payment.objects.create(
         member=member,
         plan=plan,
@@ -510,7 +544,7 @@ def accept_cash_request(actor, request_id):
         raise Conflict("Only pending cash requests can be accepted.")
     member = MemberProfile.objects.select_for_update().get(pk=req.member_id)
     plan = get_object_or_404(Plan.objects.select_for_update(), pk=req.plan_id)
-    price = req.pricing_snapshot or snapshot(plan, req.kind)
+    price = req.pricing_snapshot or snapshot(plan, req.kind, member, cash=True)
     # Re-validate kind against current membership; prefer frozen amount.
     preview, live_price = cash_details(member, plan)
     if preview["kind"] != req.kind:
@@ -519,7 +553,7 @@ def accept_cash_request(actor, request_id):
     lines = price.get("line_items", live_price["line_items"])
     previous_plan = member.plan.name if member.plan_id else plan.name
     expiry = preview["new_expires_on"]
-    is_first = req.kind == "first_payment"
+    is_first = not member.payments.filter(status="paid").exists()
     payment = Payment.objects.create(
         member=member,
         plan=plan,

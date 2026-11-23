@@ -6563,7 +6563,11 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        admission_waived:
+          type: boolean
+          readOnly: true
       required:
+      - admission_waived
       - amount_taka
       - catalog_id
       - id
@@ -6591,6 +6595,8 @@ components:
         catalog_id:
           type: string
           nullable: true
+        requires_admission:
+          type: boolean
       required:
       - amount_taka
       - catalog_id
@@ -8478,7 +8484,11 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        admission_waived:
+          type: boolean
+          readOnly: true
       required:
+      - admission_waived
       - amount_taka
       - catalog_id
       - id
@@ -11541,7 +11551,11 @@ components:
           type: string
           format: date-time
           nullable: true
+        admission_waived:
+          type: boolean
+          readOnly: true
       required:
+      - admission_waived
       - amount_taka
       - kind
       - plan_id

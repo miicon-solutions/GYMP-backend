@@ -514,13 +514,13 @@ def _limited_offer(plan, *, scope="offer", max_redemptions=1, waive=True):
     )
 
 
-def test_first_n_offer_scope_exhausts_on_paid_only(client, staff, member, other_member, plan):
+def test_first_n_offer_reserves_only_after_paid(client, staff, member, other_member, plan):
     complete(member)
     complete(other_member)
     offer = _limited_offer(plan, scope="offer", max_redemptions=1)
     assert pricing(plan)["effective_first_payment_taka"] == 1500
 
-    # Pending session does not consume a seat.
+    # Pending waived session freezes price but does not consume a seat yet.
     session = create_session(
         member, {"kind": "first_purchase", "plan_id": plan.pk, "checkout": "sdk"}
     )
@@ -531,6 +531,7 @@ def test_first_n_offer_scope_exhausts_on_paid_only(client, staff, member, other_
     row = client.get("/api/v1/member/plans/").data["results"][0]
     assert row["active_offer"]["remaining"] == 1
     assert row["active_offer"]["admission_waived"] is True
+    assert session  # session exposes admission_waived via serializer in API tests below
 
     with patch("payments.gateway.validate", return_value=valid(session)):
         handle_ipn({"tran_id": session.tran_id, "val_id": "v", "status": "VALID"})
@@ -558,10 +559,23 @@ def test_first_n_offer_scope_exhausts_on_paid_only(client, staff, member, other_
     assert renew.status_code == 201
     assert renew.data["payment"]["kind"] == "renewal"
     # Renewals also attribute the live offer for discount reporting; seats
-    # still count only first payments (see redeemed_count).
+    # still count only true first joins (see redeemed_count).
     assert Payment.objects.filter(offer=offer).count() == 2
     assert Payment.objects.filter(offer=offer, is_first_payment=True).count() == 1
     assert pricing(plan)["effective_first_payment_taka"] == 2500
+
+
+def test_first_n_pending_does_not_consume_seat(member, other_member, plan):
+    from payments.services import create_cash_request, cancel_cash_request
+
+    complete(member)
+    complete(other_member)
+    _limited_offer(plan, scope="offer", max_redemptions=1)
+    req = create_cash_request(member, {"plan_id": plan.pk})
+    assert req.pricing_snapshot["admission_waived"] is True
+    assert pricing(plan)["effective_first_payment_taka"] == 1500
+    cancel_cash_request(member, req.pk)
+    assert pricing(plan)["effective_first_payment_taka"] == 1500
 
 
 def test_first_n_plan_and_gym_scopes(staff, member, other_member, plan):
@@ -609,14 +623,106 @@ def test_first_n_frozen_session_keeps_waived_amount_after_exhaustion(
         member, {"kind": "first_purchase", "plan_id": plan.pk, "checkout": "sdk"}
     )
     assert session.amount_taka == 1500
-    # Exhaust seats via cash for the other member while session is still pending.
+    # Other member can still take the last seat while first session is pending;
+    # frozen session keeps waived amount even after seats exhaust.
     receive_cash(staff, other_member.member_profile, plan.pk)
+    other_pay = Payment.objects.get(member=other_member.member_profile)
+    assert other_pay.is_first_payment
+    assert other_pay.amount_taka == 1500
     assert pricing(plan)["effective_first_payment_taka"] == 2500
     with patch("payments.gateway.validate", return_value=valid(session)):
         handle_ipn({"tran_id": session.tran_id, "val_id": "v", "status": "VALID"})
     payment = Payment.objects.get(member=member.member_profile)
     assert payment.amount_taka == 1500
     assert payment.offer_id is not None
+
+
+def test_readmission_after_180_day_lapse(staff, member, plan):
+    from datetime import timedelta
+
+    from payments.services import READMISSION_LAPSE_DAYS, requires_admission_fee, snapshot
+
+    profile = complete(member)
+    receive_cash(staff, profile, plan.pk)
+    profile.refresh_from_db()
+    first = Payment.objects.get(member=profile)
+    assert first.is_first_payment
+    assert first.amount_taka == plan.admission_fee_taka + pricing(plan)["effective_renewal_taka"]
+
+    # Active / timely renew: no admission.
+    profile.membership_status = "active"
+    profile.expires_on = timezone.localdate() + timedelta(days=10)
+    profile.plan = plan
+    profile.save()
+    assert requires_admission_fee(profile, cash=True) is False
+    renew = snapshot(plan, "renewal", profile, cash=True)
+    assert renew["requires_admission"] is False
+    assert renew["amount_taka"] == pricing(plan)["effective_renewal_taka"]
+    assert not any(i.get("label") == "Admission fee" for i in renew["line_items"])
+
+    # Expired but within 180 days of payment-backed expires_on.
+    profile.membership_status = "expired"
+    profile.expires_on = timezone.localdate() - timedelta(days=READMISSION_LAPSE_DAYS - 1)
+    profile.save()
+    assert requires_admission_fee(profile, cash=True) is False
+    within = snapshot(plan, "renewal", profile, cash=True)
+    assert within["requires_admission"] is False
+    assert within["amount_taka"] == pricing(plan)["effective_renewal_taka"]
+
+    # At 180 days past expires_on: re-admission.
+    profile.expires_on = timezone.localdate() - timedelta(days=READMISSION_LAPSE_DAYS)
+    profile.save()
+    assert requires_admission_fee(profile, cash=True) is True
+    lapsed = snapshot(plan, "renewal", profile, cash=True)
+    assert lapsed["requires_admission"] is True
+    assert lapsed["amount_taka"] == pricing(plan)["effective_first_payment_taka"]
+    assert any(
+        i.get("label") == "Admission fee" and i.get("amount_taka") == plan.admission_fee_taka
+        for i in lapsed["line_items"]
+    )
+
+    # Cash renew after lapse charges admission but is not a first-join seat.
+    receive_cash(staff, profile, plan.pk)
+    second = Payment.objects.filter(member=profile).order_by("paid_at").last()
+    assert second.is_first_payment is False
+    assert second.kind == "renewal"
+    assert second.amount_taka == pricing(plan)["effective_first_payment_taka"]
+
+
+def test_readmission_does_not_burn_first_n_seats(staff, member, other_member, plan):
+    from datetime import timedelta
+
+    from payments.services import READMISSION_LAPSE_DAYS
+    from plans.services import remaining_redemptions
+
+    profile = complete(member)
+    complete(other_member)
+    offer = _limited_offer(plan, scope="offer", max_redemptions=2)
+    receive_cash(staff, profile, plan.pk)
+    assert remaining_redemptions(offer) == 1
+
+    profile.membership_status = "expired"
+    profile.expires_on = timezone.localdate() - timedelta(days=READMISSION_LAPSE_DAYS)
+    profile.plan = plan
+    profile.save()
+    # Live offer still waives re-admission pricing when seats remain.
+    receive_cash(staff, profile, plan.pk)
+    rejoin = Payment.objects.filter(member=profile).order_by("paid_at").last()
+    assert rejoin.is_first_payment is False
+    assert (rejoin.admission_waived_taka or 0) == plan.admission_fee_taka
+    # Seat count unchanged by re-admission (still one true first join).
+    assert remaining_redemptions(offer) == 1
+    assert Payment.objects.filter(offer=offer, is_first_payment=True).count() == 1
+
+
+def test_registration_alone_requires_admission(member, plan):
+    from payments.services import requires_admission_fee, snapshot
+
+    profile = complete(member)
+    assert requires_admission_fee(profile, cash=True) is True
+    price = snapshot(plan, "first_payment", profile, cash=True)
+    assert price["requires_admission"] is True
+    assert price["amount_taka"] == pricing(plan)["effective_first_payment_taka"]
 
 
 def test_admin_offer_accepts_max_redemptions_and_limit_scope(client, staff, plan):

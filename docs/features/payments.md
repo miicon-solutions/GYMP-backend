@@ -5,6 +5,24 @@ SSLCommerz checkout sessions, IPN webhook, member cash requests, and receipts.
 - **OpenAPI:** `/openapi/v1/payments.yaml`
 - **Auth:** Bearer member for sessions/cash/receipts; IPN is unauthenticated provider callback
 
+## Admission & re-admission
+
+Pricing snapshots charge an admission fee when `requires_admission_fee` is true:
+
+1. **Never paid** (registration / profile complete only) → first purchase / first payment includes admission (unless a live offer waives it).
+2. **Active renew or plan change** → no admission.
+3. **Expired within 180 days** of payment-backed `expires_on` → no admission on renew / change plan.
+4. **Expired ≥ 180 calendar days** after that `expires_on` → re-admission on the next pay.
+
+Membership validity and `expires_on` are written only when payment succeeds (admin cash confirm / cash-request accept, or online IPN settle). The 180-day grace starts at that payment-backed expiry — never at registration, OTP, or profile-complete.
+
+- Online kinds stay `first_purchase` | `renew` | `change_plan`; cash kinds stay `first_payment` | `renewal` | `plan_change`.
+- `is_first_payment=True` only for the member’s first ever paid payment (true join). Re-admission after lapse keeps `is_first_payment=False` so first-N offer seats are not burned; admission reports still count charged/waived admission via line items / `admission_waived_taka`.
+- Live special-offer `waive_admission` applies whenever admission would be charged and seats remain (including re-admission).
+- Session and cash-request APIs expose `admission_waived` from the frozen `pricing_snapshot` so the payment-success UI can congratulate waived admission after settle/accept.
+
+Constant: `READMISSION_LAPSE_DAYS = 180` in `payments/services.py`.
+
 ## Online checkout flow
 
 1. `POST /api/v1/member/payments/sessions/` with `kind`, `plan_id`, optional `checkout`
