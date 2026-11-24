@@ -441,15 +441,20 @@ def create_cash_request(user, data):
     member = MemberProfile.objects.select_for_update().get(pk=member.pk)
     if not member.profile_complete:
         raise ValidationError({"profile": "Complete your profile first."})
-    if (
-        member.membership_status == "active"
-        or member.payments.filter(status="paid", is_first_payment=True).exists()
-    ):
-        raise Conflict("First purchase is not available.")
     plan = get_object_or_404(Plan.objects.select_for_update(), pk=data["plan_id"], is_active=True)
     preview, price = cash_details(member, plan)
-    if preview["kind"] != "first_payment":
-        raise Conflict("Cash requests are only available for first payment.")
+    kind = preview["kind"]
+    has_paid = member.payments.filter(status="paid").exists()
+
+    if kind == "first_payment":
+        if member.membership_status == "active" or has_paid:
+            raise Conflict("First purchase is not available.")
+    elif kind in {"renewal", "plan_change"}:
+        if not has_paid or member.membership_status not in {"active", "expired"}:
+            raise Conflict("Renewal or plan change is not available.")
+    else:
+        raise Conflict("Cash requests are not available for this membership.")
+
     now = timezone.now()
     prior_pending_ids = list(
         CashPaymentRequest.objects.filter(member=member, status="pending").values_list(
@@ -459,19 +464,25 @@ def create_cash_request(user, data):
     CashPaymentRequest.objects.filter(member=member, status="pending").update(
         status="cancelled", resolved_at=now
     )
-    PaymentSession.objects.filter(member=member, kind="first_purchase", status="pending").update(
-        status="cancelled"
-    )
+    if kind == "first_payment":
+        PaymentSession.objects.filter(
+            member=member, kind="first_purchase", status="pending"
+        ).update(status="cancelled")
+    else:
+        PaymentSession.objects.filter(
+            member=member, kind__in=("renew", "change_plan"), status="pending"
+        ).update(status="cancelled")
     req = CashPaymentRequest.objects.create(
         member=member,
         plan=plan,
-        kind=preview["kind"],
+        kind=kind,
         amount_taka=price["amount_taka"],
         pricing_snapshot=price,
         status="pending",
     )
-    member.membership_status = "pending_payment"
-    member.save(update_fields=["membership_status", "updated_at"])
+    if kind == "first_payment":
+        member.membership_status = "pending_payment"
+        member.save(update_fields=["membership_status", "updated_at"])
     req_id = req.pk
 
     if prior_pending_ids:

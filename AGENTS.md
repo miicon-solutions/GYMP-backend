@@ -124,10 +124,13 @@ core/             # shared API helpers, middleware, permissions
   (legacy inbound pull; needs deprecated `ZKTECO_BRIDGE_URL`).
 - SSLCommerz: session → gateway → IPN/confirm; return pages never activate alone;
   IPN idempotent. Same architectural flow as the Go API.
-- Member cash request (first purchase): `POST /api/v1/member/payments/cash-requests/`
-  freezes price + sets `pending_payment`; poll `GET …/cash-requests/{id}/`; cancel
-  while pending. Staff `GET /api/v1/admin/cash-requests/`, per-member list, then
-  accept (cash payment + activate, frozen amount) or reject. Legacy
+- Member cash request (first purchase / renewal / plan change):
+  `POST /api/v1/member/payments/cash-requests/` `{ "plan_id" }` — kind inferred
+  via `cash_details`. First payment freezes price + sets `pending_payment`;
+  renew/change keep status and cancel pending `renew`/`change_plan` sessions.
+  Poll `GET …/cash-requests/{id}/`; cancel while pending. Staff
+  `GET /api/v1/admin/cash-requests/`, per-member list, then accept (cash
+  payment + activate/extend, frozen amount) or reject. Legacy
   `POST …/cash-payments/` auto-accepts a matching pending request.
 - Local: `OTP_DEV_BYPASS` / master code only outside `APP_ENV=prod`.
 

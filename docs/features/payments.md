@@ -51,6 +51,12 @@ Content-Type: application/json
 3. Cancel while pending: `POST …/cancel/`
 4. Staff accept/reject under `admin-members`
 
+Kind is server-inferred from the member + `plan_id` via `cash_details`:
+`first_payment` (never paid) | `renewal` (same plan) | `plan_change` (different plan).
+
+- **First payment:** sets `membership_status=pending_payment`; cancels prior pending cash + pending `first_purchase` online sessions. Cancel/reject returns unpaid members to `none`.
+- **Renewal / plan change:** requires a prior paid payment and status `active` or `expired`; does **not** change membership status on create; cancels prior pending cash + pending `renew` / `change_plan` online sessions. Cancel/reject leave `active`/`expired` alone.
+
 ## Receipts
 
 `GET /api/v1/member/payments/{id}/receipt/` returns a private URL; HTML variant available. Requires member Bearer.

@@ -501,6 +501,135 @@ def test_cash_request_requires_profile_and_ownership(client, member, other_membe
     )
 
 
+def _activate_with_cash(staff, member, plan):
+    complete(member)
+    receive_cash(staff, member.member_profile, plan.pk)
+    profile = member.member_profile
+    profile.refresh_from_db()
+    assert profile.membership_status == "active"
+    return profile
+
+
+def test_member_cash_request_renewal(client, staff, member, plan):
+    _activate_with_cash(staff, member, plan)
+    client.force_authenticate(member)
+    created = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    )
+    assert created.status_code == 201
+    assert created.data["kind"] == "renewal"
+    assert created.data["status"] == "pending"
+    member.member_profile.refresh_from_db()
+    assert member.member_profile.membership_status == "active"
+
+    client.force_authenticate(staff)
+    accepted = client.post(
+        f"/api/v1/admin/cash-requests/{created.data['id']}/accept/", {}, format="json"
+    )
+    assert accepted.status_code == 200
+    assert accepted.data["payment"]["kind"] == "renewal"
+    assert accepted.data["member"]["membership_status"] == "active"
+    assert Payment.objects.filter(status="paid").count() == 2
+
+
+def test_member_cash_request_plan_change(client, staff, member, plan):
+    _activate_with_cash(staff, member, plan)
+    other_plan = Plan.objects.create(
+        name="Quarterly",
+        duration_months=3,
+        monthly_rate_taka=1500,
+        admission_fee_taka=1000,
+        catalog_id="quarterly",
+    )
+    client.force_authenticate(member)
+    created = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(other_plan.pk)},
+        format="json",
+    )
+    assert created.status_code == 201
+    assert created.data["kind"] == "plan_change"
+    member.member_profile.refresh_from_db()
+    assert member.member_profile.membership_status == "active"
+
+    client.force_authenticate(staff)
+    accepted = client.post(
+        f"/api/v1/admin/cash-requests/{created.data['id']}/accept/", {}, format="json"
+    )
+    assert accepted.status_code == 200
+    assert accepted.data["payment"]["kind"] == "plan_change"
+    member.member_profile.refresh_from_db()
+    assert member.member_profile.plan_id == other_plan.pk
+    assert member.member_profile.membership_status == "active"
+
+
+def test_member_cash_request_renewal_cancel_keeps_active(client, staff, member, plan):
+    _activate_with_cash(staff, member, plan)
+    client.force_authenticate(member)
+    created = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    ).data
+    cancelled = client.post(
+        f"/api/v1/member/payments/cash-requests/{created['id']}/cancel/", {}, format="json"
+    )
+    assert cancelled.status_code == 200 and cancelled.data["status"] == "cancelled"
+    member.member_profile.refresh_from_db()
+    assert member.member_profile.membership_status == "active"
+
+
+def test_member_cash_request_renewal_reject_keeps_active(client, staff, member, plan):
+    _activate_with_cash(staff, member, plan)
+    client.force_authenticate(member)
+    created = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    ).data
+    client.force_authenticate(staff)
+    rejected = client.post(
+        f"/api/v1/admin/cash-requests/{created['id']}/reject/", {}, format="json"
+    )
+    assert rejected.status_code == 200 and rejected.data["status"] == "rejected"
+    member.member_profile.refresh_from_db()
+    assert member.member_profile.membership_status == "active"
+
+
+def test_member_cash_request_renewal_cancels_pending_online_sessions(
+    client, staff, member, plan
+):
+    _activate_with_cash(staff, member, plan)
+    session = create_session(
+        member, {"kind": "renew", "plan_id": plan.pk, "checkout": "sdk"}
+    )
+    assert session.status == "pending"
+    client.force_authenticate(member)
+    created = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    )
+    assert created.status_code == 201
+    session.refresh_from_db()
+    assert session.status == "cancelled"
+
+
+def test_first_purchase_cash_blocked_after_paid(client, staff, member, plan):
+    _activate_with_cash(staff, member, plan)
+    # Same as renewal path — first_payment is no longer inferred once paid.
+    client.force_authenticate(member)
+    created = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    )
+    assert created.status_code == 201
+    assert created.data["kind"] == "renewal"
+
+
 def _limited_offer(plan, *, scope="offer", max_redemptions=1, waive=True):
     today = timezone.localdate()
     return Offer.objects.create(
