@@ -175,6 +175,7 @@ def _bridge_claim_jobs(_request, data):
     claimed = bridge_jobs.claim_next(
         bridge_device_id=data.get("bridge_device_id") or None,
         limit=int(data.get("limit") or 1),
+        wait_sec=float(data.get("wait") or 0),
     )
     return {
         "count": len(claimed),
@@ -629,7 +630,7 @@ api = [
             authentication=[DeviceAuthentication],
             throttle_public=False,
             tags=["device"],
-            parameters=query_parameters("bridge_device_id", "limit"),
+            parameters=query_parameters("bridge_device_id", "limit", "wait"),
         ),
     ),
     path(

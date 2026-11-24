@@ -121,6 +121,7 @@ class BridgeDeviceJob(Entity):
     KIND_DEVICE_STATUS = "device_status"
     KIND_ENSURE_USER = "ensure_user"
     KIND_ENROLL = "enroll"
+    KIND_ENROLL_SESSION = "enroll_session"
     KIND_GET_TEMPLATES = "get_templates"
     KIND_PUSH_USER = "push_user"
     KIND_DELETE_FINGERPRINT = "delete_fingerprint"
@@ -128,6 +129,7 @@ class BridgeDeviceJob(Entity):
         (KIND_DEVICE_STATUS, KIND_DEVICE_STATUS),
         (KIND_ENSURE_USER, KIND_ENSURE_USER),
         (KIND_ENROLL, KIND_ENROLL),
+        (KIND_ENROLL_SESSION, KIND_ENROLL_SESSION),
         (KIND_GET_TEMPLATES, KIND_GET_TEMPLATES),
         (KIND_PUSH_USER, KIND_PUSH_USER),
         (KIND_DELETE_FINGERPRINT, KIND_DELETE_FINGERPRINT),

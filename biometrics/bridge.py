@@ -196,12 +196,42 @@ def enroll_fingerprint(
     *,
     device_id: str | None = None,
 ) -> dict:
-    """Interactive capture on the scanner; waits until bridge completes (~1–2 min)."""
+    """Interactive capture only (prefer enroll_session for admin enroll)."""
     payload: dict = {"user_id": user_id, "finger_id": int(finger_id)}
     if device_id:
         payload["device_id"] = str(device_id)
     return jobs.enqueue_and_wait(
         BridgeDeviceJob.KIND_ENROLL,
+        payload,
+        bridge_device_id=device_id,
+        timeout=120.0,
+    )
+
+
+def enroll_session(
+    *,
+    user_id: str,
+    name: str,
+    finger_id: int,
+    pin: str = "",
+    uid: int = 0,
+    device_id: str | None = None,
+    privilege: int | None = None,
+) -> dict:
+    """One job: ensure user + interactive enroll + return templates (near real-time)."""
+    payload: dict = {
+        "user_id": user_id,
+        "name": name,
+        "pin": pin or "",
+        "uid": int(uid or 0),
+        "finger_id": int(finger_id),
+    }
+    if device_id:
+        payload["device_id"] = str(device_id)
+    if privilege is not None:
+        payload["privilege"] = int(privilege)
+    return jobs.enqueue_and_wait(
+        BridgeDeviceJob.KIND_ENROLL_SESSION,
         payload,
         bridge_device_id=device_id,
         timeout=120.0,

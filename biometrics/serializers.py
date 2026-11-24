@@ -140,6 +140,7 @@ class BridgeJobOutput(serializers.Serializer):
 class BridgeJobsClaimQuery(serializers.Serializer):
     bridge_device_id = serializers.CharField(required=False, allow_blank=True, default="")
     limit = serializers.IntegerField(required=False, min_value=1, max_value=10, default=1)
+    wait = serializers.FloatField(required=False, min_value=0, max_value=25, default=0)
 
 
 class BridgeJobsClaimOutput(serializers.Serializer):

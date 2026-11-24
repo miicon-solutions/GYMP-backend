@@ -42,12 +42,10 @@ def test_enroll_staff_interactive_sets_ready(client, staff, super_admin, setting
     client.force_authenticate(super_admin)
     with (
         patch("biometrics.bridge.require_device_online", return_value=None),
-        patch("biometrics.bridge.ensure_user", return_value={"ok": True}) as ensure,
-        patch("biometrics.bridge.enroll_fingerprint", return_value={"ok": True, "finger_id": 2}),
         patch(
-            "biometrics.bridge.get_templates",
-            return_value={"templates": {"2": template_b64}},
-        ),
+            "biometrics.bridge.enroll_session",
+            return_value={"ok": True, "finger_id": 2, "templates": {"2": template_b64}},
+        ) as enroll_session,
     ):
         resp = client.post(
             f"/api/v1/admin/staff/{staff.pk}/fingerprint/enroll/",
@@ -62,9 +60,9 @@ def test_enroll_staff_interactive_sets_ready(client, staff, super_admin, setting
     profile.refresh_from_db()
     assert profile.fingerprint_status == "ready"
     assert StaffBiometricTemplate.objects.filter(staff=profile, finger_index=2).exists()
-    ensure.assert_called()
-    assert ensure.call_args.kwargs["user_id"] == profile.short_id
-    assert ensure.call_args.kwargs["privilege"] == 0
+    enroll_session.assert_called()
+    assert enroll_session.call_args.kwargs["user_id"] == profile.short_id
+    assert enroll_session.call_args.kwargs["privilege"] == 0
 
 
 def test_delete_staff_template_sets_pending(client, staff, super_admin, settings):

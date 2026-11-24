@@ -191,11 +191,9 @@ def enqueue_and_wait(
     )
 
 
-@transaction.atomic
-def claim_next(*, bridge_device_id: str | None = None, limit: int = 1) -> list[BridgeDeviceJob]:
-    """Atomically claim pending jobs for the bridge worker."""
+def _claim_once(*, bridge_device_id: str | None = None, limit: int = 1) -> list[BridgeDeviceJob]:
+    """Single atomic claim attempt (no wait)."""
     now = timezone.now()
-    # Expire stale pending/claimed before selecting.
     BridgeDeviceJob.objects.filter(
         status__in=(BridgeDeviceJob.STATUS_PENDING, BridgeDeviceJob.STATUS_CLAIMED),
         expires_at__lte=now,
@@ -205,33 +203,49 @@ def claim_next(*, bridge_device_id: str | None = None, limit: int = 1) -> list[B
         completed_at=now,
     )
 
-    qs = (
-        BridgeDeviceJob.objects.select_for_update(skip_locked=True)
-        .filter(status=BridgeDeviceJob.STATUS_PENDING)
-        .order_by("created_at")
-    )
-    bid = str(bridge_device_id or "").strip()
-    if bid:
-        # Prefer jobs targeted at this device, then unscoped jobs.
-        targeted = list(qs.filter(bridge_device_id=bid)[: max(1, int(limit))])
-        if targeted:
-            claimed = targeted
-        else:
-            claimed = list(qs.filter(bridge_device_id="")[: max(1, int(limit))])
-    else:
-        claimed = list(qs[: max(1, int(limit))])
-
-    out: list[BridgeDeviceJob] = []
-    for job in claimed:
-        job.status = BridgeDeviceJob.STATUS_CLAIMED
-        job.claimed_at = now
-        if bid and not job.bridge_device_id:
-            job.bridge_device_id = bid
-        job.save(
-            update_fields=["status", "claimed_at", "bridge_device_id", "updated_at"]
+    with transaction.atomic():
+        qs = (
+            BridgeDeviceJob.objects.select_for_update(skip_locked=True)
+            .filter(status=BridgeDeviceJob.STATUS_PENDING)
+            .order_by("created_at")
         )
-        out.append(job)
-    return out
+        bid = str(bridge_device_id or "").strip()
+        if bid:
+            targeted = list(qs.filter(bridge_device_id=bid)[: max(1, int(limit))])
+            if targeted:
+                claimed = targeted
+            else:
+                claimed = list(qs.filter(bridge_device_id="")[: max(1, int(limit))])
+        else:
+            claimed = list(qs[: max(1, int(limit))])
+
+        out: list[BridgeDeviceJob] = []
+        for job in claimed:
+            job.status = BridgeDeviceJob.STATUS_CLAIMED
+            job.claimed_at = now
+            if bid and not job.bridge_device_id:
+                job.bridge_device_id = bid
+            job.save(
+                update_fields=["status", "claimed_at", "bridge_device_id", "updated_at"]
+            )
+            out.append(job)
+        return out
+
+
+def claim_next(
+    *,
+    bridge_device_id: str | None = None,
+    limit: int = 1,
+    wait_sec: float = 0.0,
+) -> list[BridgeDeviceJob]:
+    """Claim pending jobs; optionally long-poll until one appears."""
+    wait_sec = max(0.0, min(25.0, float(wait_sec or 0)))
+    deadline = time.monotonic() + wait_sec
+    while True:
+        claimed = _claim_once(bridge_device_id=bridge_device_id, limit=limit)
+        if claimed or wait_sec <= 0 or time.monotonic() >= deadline:
+            return claimed
+        time.sleep(0.05)
 
 
 def complete_job(

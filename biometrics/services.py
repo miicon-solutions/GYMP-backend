@@ -143,9 +143,23 @@ def enroll_interactive(
         raise ValidationError({"finger_id": "Must be between 0 and 9."})
 
     bridge.require_device_online(device_id=device_id)
-    enroll_prepare(actor, member, pin=pin or "", device_id=device_id)
-    bridge.enroll_fingerprint(member.member_id, finger_id, device_id=device_id)
-    pulled = pull_templates(actor, member, device_id=device_id)
+    name = (member.user.full_name or member.member_id).strip() or member.member_id
+    pin_value = pin or ""
+    if pin_value:
+        member.device_pin_enc = crypto.encrypt_bytes(pin_value.encode())
+        member.device_pin_updated_at = timezone.now()
+        member.save(update_fields=["device_pin_enc", "device_pin_updated_at", "updated_at"])
+    # Single outbound job: ensure + capture + return templates (avoids 3 poll cycles).
+    session = bridge.enroll_session(
+        user_id=member.member_id,
+        name=name,
+        finger_id=finger_id,
+        pin=pin_value,
+        device_id=device_id,
+    )
+    pulled = store_member_templates(
+        actor, member, templates=session.get("templates") or {}
+    )
     member.refresh_from_db(fields=["fingerprint_status"])
     indexes = _finger_indexes(member)
     if actor is not None:
@@ -205,12 +219,15 @@ def delete_member_template(
     }
 
 
-def pull_templates(actor, member: MemberProfile, *, device_id: str | None = None) -> dict:
+def store_member_templates(
+    actor, member: MemberProfile, *, templates: dict
+) -> dict:
+    """Persist base64 template map into the vault (no device call)."""
     _ = actor
-    raw = bridge.get_templates(member.member_id, device_id=device_id)
-    templates = raw.get("templates") or {}
     stored = 0
-    for index_str, b64 in templates.items():
+    for index_str, b64 in (templates or {}).items():
+        if not isinstance(b64, str) or not b64:
+            continue
         finger_index = int(index_str)
         data = base64.b64decode(b64)
         MemberBiometricTemplate.objects.update_or_create(
@@ -231,6 +248,11 @@ def pull_templates(actor, member: MemberProfile, *, device_id: str | None = None
 
         notify_fingerprint_ready(member.user)
     return {"stored": stored, "fingerprint_status": member.fingerprint_status}
+
+
+def pull_templates(actor, member: MemberProfile, *, device_id: str | None = None) -> dict:
+    raw = bridge.get_templates(member.member_id, device_id=device_id)
+    return store_member_templates(actor, member, templates=raw.get("templates") or {})
 
 
 def push_vault_to_device(
@@ -497,9 +519,17 @@ def enroll_staff_interactive(
         raise ValidationError({"finger_id": "Must be between 0 and 9."})
 
     bridge.require_device_online(device_id=device_id)
-    enroll_staff_prepare(actor, staff, device_id=device_id)
-    bridge.enroll_fingerprint(staff.short_id, finger_id, device_id=device_id)
-    pulled = pull_staff_templates(actor, staff, device_id=device_id)
+    name = (staff.user.full_name or staff.short_id).strip() or staff.short_id
+    session = bridge.enroll_session(
+        user_id=staff.short_id,
+        name=name,
+        finger_id=finger_id,
+        device_id=device_id,
+        privilege=_staff_privilege(staff),
+    )
+    pulled = store_staff_templates(
+        actor, staff, templates=session.get("templates") or {}
+    )
     staff.refresh_from_db(fields=["fingerprint_status"])
     indexes = _staff_finger_indexes(staff)
     if actor is not None:
@@ -563,14 +593,12 @@ def delete_staff_template(
     }
 
 
-def pull_staff_templates(
-    actor, staff: StaffProfile, *, device_id: str | None = None
-) -> dict:
+def store_staff_templates(actor, staff: StaffProfile, *, templates: dict) -> dict:
     _ = actor
-    raw = bridge.get_templates(staff.short_id, device_id=device_id)
-    templates = raw.get("templates") or {}
     stored = 0
-    for index_str, b64 in templates.items():
+    for index_str, b64 in (templates or {}).items():
+        if not isinstance(b64, str) or not b64:
+            continue
         finger_index = int(index_str)
         data = base64.b64decode(b64)
         StaffBiometricTemplate.objects.update_or_create(
@@ -588,6 +616,13 @@ def pull_staff_templates(
         staff.fingerprint_status = "ready"
         staff.save(update_fields=["fingerprint_status", "updated_at"])
     return {"stored": stored, "fingerprint_status": staff.fingerprint_status}
+
+
+def pull_staff_templates(
+    actor, staff: StaffProfile, *, device_id: str | None = None
+) -> dict:
+    raw = bridge.get_templates(staff.short_id, device_id=device_id)
+    return store_staff_templates(actor, staff, templates=raw.get("templates") or {})
 
 
 def push_staff_vault_to_device(

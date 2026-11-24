@@ -51,11 +51,9 @@ def test_enroll_interactive_sets_ready(client, staff, member, settings):
     client.force_authenticate(staff)
     with (
         patch("biometrics.bridge.require_device_online", return_value=None),
-        patch("biometrics.bridge.ensure_user", return_value={"ok": True}),
-        patch("biometrics.bridge.enroll_fingerprint", return_value={"ok": True, "finger_id": 1}),
         patch(
-            "biometrics.bridge.get_templates",
-            return_value={"templates": {"1": template_b64}},
+            "biometrics.bridge.enroll_session",
+            return_value={"ok": True, "finger_id": 1, "templates": {"1": template_b64}},
         ),
     ):
         resp = client.post(
