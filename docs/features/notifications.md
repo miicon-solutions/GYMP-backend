@@ -51,6 +51,10 @@ System SMS bodies are fixed **English** plain text (no member locale on the API)
 | `membership_expired` | Cron day after expiry | yes | **yes** |
 
 Run expiry batch: `python manage.py notify_membership_expiry` (daily cron, Asia/Dhaka).
+Flips **all** still-`active` members with `expires_on < today` (catch-up, not
+only yesterday) and enqueues scanner `revoke_access` (soft-delete; vault kept).
+Follow with `python manage.py reconcile_device_access` for drift (failed jobs,
+past-due lag, missing restores).
 
 ## Admin ops alerts (cron)
 

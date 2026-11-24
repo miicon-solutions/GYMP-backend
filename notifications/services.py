@@ -991,15 +991,60 @@ def notify_membership_expiry_batch(*, today=None) -> dict:
             if notif:
                 created[bucket] += 1
 
+    # Catch-up: any still-active membership past expires_on (not only "yesterday").
+    # Fixes lag when the daily cron missed a day (e.g. PF-0003 still unlockable).
+    revoked = 0
+    past_due = (
+        MemberProfile.objects.filter(
+            membership_status="active",
+            expires_on__lt=today,
+        )
+        .exclude(expires_on__isnull=True)
+        .select_related("user")
+    )
+    for profile in past_due:
+        expired_on = profile.expires_on
+        profile.membership_status = "expired"
+        profile.save(update_fields=["membership_status", "updated_at"])
+        notif = create_notification(
+            profile.user,
+            code="membership_expired",
+            body_params={"expiresOn": expired_on.isoformat()},
+            dedupe_key=f"expired:{expired_on.isoformat()}",
+        )
+        if notif:
+            created["expired"] += 1
+        try:
+            from biometrics.services import revoke_member_device_access
+
+            out = revoke_member_device_access(
+                profile,
+                wait=False,
+                idempotency_key=(
+                    f"expire-revoke:{profile.member_id}:{expired_on.isoformat()}"
+                ),
+            )
+            if out.get("revoked"):
+                revoked += 1
+            elif out.get("error") or out.get("reason") == "bridge_unavailable":
+                logger.warning(
+                    "expire revoke failed member=%s detail=%s",
+                    profile.member_id,
+                    out,
+                )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "expire revoke unexpected failure member=%s", profile.member_id
+            )
+
+    # Already-expired whose expiry day was yesterday: ensure the daily notif exists
+    # (no second revoke — reconcile handles device sync).
     expired_day = today - timedelta(days=1)
-    expired_profiles = MemberProfile.objects.filter(
-        membership_status__in={"active", "expired"},
+    already_expired = MemberProfile.objects.filter(
+        membership_status="expired",
         expires_on=expired_day,
     ).select_related("user")
-    for profile in expired_profiles:
-        if profile.membership_status == "active":
-            profile.membership_status = "expired"
-            profile.save(update_fields=["membership_status", "updated_at"])
+    for profile in already_expired:
         notif = create_notification(
             profile.user,
             code="membership_expired",
@@ -1008,6 +1053,8 @@ def notify_membership_expiry_batch(*, today=None) -> dict:
         )
         if notif:
             created["expired"] += 1
+
+    created["device_revoked"] = revoked
     return created
 
 

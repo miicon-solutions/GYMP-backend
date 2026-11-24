@@ -483,8 +483,17 @@ def record_checkin(data):
     )
     if member.membership_status in {"none", "pending_payment"}:
         raise PermissionDenied("Membership payment is required before checking in.")
+    if member.membership_status == "expired":
+        raise PermissionDenied("Membership has expired. Renew before checking in.")
     at = data.get("checked_in_at") or timezone.now()
     day = at.astimezone(DHAKA).date()
+    # Status lag: still marked active but expires_on already passed (Dhaka calendar).
+    if (
+        member.membership_status == "active"
+        and member.expires_on is not None
+        and member.expires_on < day
+    ):
+        raise PermissionDenied("Membership has expired. Renew before checking in.")
     source = data.get("source", "device")
     row, created = CheckIn.objects.get_or_create(
         member=member,

@@ -163,6 +163,12 @@ core/             # shared API helpers, middleware, permissions
   device-controller add call `require_device_online` and return **503** when
   the scanner is unreachable — admin UIs should disable those actions after a
   status probe rather than letting staff start a wait.
+- **Membership expiry blocks the door:** matching stays on-device; GYMP decides
+  panel presence. Daily `notify_membership_expiry` flips any `active` with
+  `expires_on < today` and soft-deletes via `revoke_access` (pyzk has no
+  per-user disable; vault kept). Payment `activate` re-pushes vault
+  (`push_user`). Run `reconcile_device_access` after expiry cron. `record_checkin`
+  rejects `expired` (and active past `expires_on`).
 
 ## API docs (humans + AI agents)
 

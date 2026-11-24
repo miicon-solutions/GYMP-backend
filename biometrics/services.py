@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
@@ -738,3 +738,270 @@ def remove_device_controller(actor, staff_user: User) -> dict:
 
 def device_controller_input_staff(staff_id) -> User:
     return get_object_or_404(User, pk=staff_id, role="admin")
+
+
+def _open_bridge_job(*, kind: str, user_id: str):
+    """Return a pending/claimed job for this user_id, if any."""
+    from biometrics.models import BridgeDeviceJob
+
+    return (
+        BridgeDeviceJob.objects.filter(
+            kind=kind,
+            status__in=(
+                BridgeDeviceJob.STATUS_PENDING,
+                BridgeDeviceJob.STATUS_CLAIMED,
+            ),
+            payload__user_id=user_id,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+
+def revoke_member_device_access(
+    member: MemberProfile,
+    *,
+    wait: bool = False,
+    idempotency_key: str = "",
+) -> dict:
+    """Remove the member from the scanner; vault templates are kept."""
+    from biometrics.models import BridgeDeviceJob
+
+    user_id = (member.member_id or "").strip()
+    if not user_id:
+        return {"revoked": False, "reason": "missing_member_id"}
+
+    if not wait:
+        open_job = _open_bridge_job(
+            kind=BridgeDeviceJob.KIND_REVOKE_ACCESS, user_id=user_id
+        )
+        if open_job is not None:
+            FingerprintDeviceSyncState.objects.filter(member=member).update(
+                templates_synced_at=None,
+                pin_synced_at=None,
+                last_error="",
+            )
+            return {
+                "revoked": True,
+                "queued": True,
+                "already_pending": True,
+                "job_id": str(open_job.id),
+            }
+
+    try:
+        result = bridge.revoke_access(
+            user_id,
+            wait=wait,
+            idempotency_key=idempotency_key
+            or f"revoke:{user_id}:{timezone.localdate().isoformat()}",
+        )
+    except bridge.BridgeUnavailable as exc:
+        log.warning(
+            "revoke_access bridge unavailable member=%s err=%s",
+            user_id,
+            exc,
+        )
+        return {"revoked": False, "reason": "bridge_unavailable", "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        log.warning("revoke_access failed member=%s err=%s", user_id, exc)
+        return {"revoked": False, "error": str(exc)}
+
+    # Clear sync timestamps so reconcile knows device no longer has templates.
+    FingerprintDeviceSyncState.objects.filter(member=member).update(
+        templates_synced_at=None,
+        pin_synced_at=None,
+        last_error="",
+    )
+    if wait:
+        return {"revoked": True, "result": result if isinstance(result, dict) else {}}
+    job_id = getattr(result, "id", None)
+    return {"revoked": True, "queued": True, "job_id": str(job_id) if job_id else ""}
+
+
+def restore_member_device_access(
+    member: MemberProfile,
+    *,
+    wait: bool = False,
+) -> dict:
+    """Re-push vault templates to the scanner after renew/activate."""
+    member.refresh_from_db()
+    if not member.biometric_templates.exists():
+        return {"restored": False, "reason": "no_vault"}
+    if member.membership_status != "active":
+        return {"restored": False, "reason": "not_active"}
+
+    name = (member.user.full_name or member.member_id).strip() or member.member_id
+    pin = ""
+    if member.device_pin_enc:
+        pin = crypto.decrypt_bytes(member.device_pin_enc).decode()
+    templates = {
+        str(row.finger_index): base64.b64encode(
+            crypto.decrypt_bytes(row.template_ciphertext)
+        ).decode()
+        for row in member.biometric_templates.all()
+    }
+    device = _resolve_target_device(None)
+    device_id = device.bridge_device_id if device else None
+
+    payload = {
+        "user_id": member.member_id,
+        "name": name,
+        "pin": pin,
+        "uid": 0,
+        "templates": templates,
+    }
+    if device_id:
+        payload["device_id"] = str(device_id)
+
+    try:
+        if wait:
+            bridge.push_user(
+                user_id=member.member_id,
+                name=name,
+                pin=pin,
+                templates=templates,
+                device_id=device_id or None,
+            )
+            if device:
+                FingerprintDeviceSyncState.objects.update_or_create(
+                    device=device,
+                    member=member,
+                    defaults={
+                        "templates_synced_at": timezone.now(),
+                        "pin_synced_at": timezone.now() if pin else None,
+                        "last_error": "",
+                    },
+                )
+            return {"restored": True, "template_count": len(templates)}
+
+        from biometrics import jobs
+        from biometrics.models import BridgeDeviceJob
+
+        job = jobs.enqueue(
+            BridgeDeviceJob.KIND_PUSH_USER,
+            payload,
+            bridge_device_id=device_id,
+            timeout=70.0,
+            idempotency_key=f"restore:{member.member_id}:{timezone.localdate().isoformat()}",
+        )
+        return {
+            "restored": True,
+            "queued": True,
+            "job_id": str(job.id),
+            "template_count": len(templates),
+        }
+    except bridge.BridgeUnavailable as exc:
+        log.warning(
+            "restore_access bridge unavailable member=%s err=%s",
+            member.member_id,
+            exc,
+        )
+        return {"restored": False, "reason": "bridge_unavailable", "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        log.warning("restore_access failed member=%s err=%s", member.member_id, exc)
+        return {"restored": False, "error": str(exc)}
+
+
+def reconcile_device_access(*, today=None) -> dict:
+    """Ensure expired members are revoked and active+ready members are restored.
+
+    Safe to run daily alongside membership expiry notifications. Also flips
+    past-due ``active`` rows (``expires_on < today``) so device sync cannot lag
+    the calendar.
+    """
+    from biometrics.models import BridgeDeviceJob
+
+    today = today or timezone.localdate()
+    revoked = 0
+    restored = 0
+    skipped = 0
+    flipped = 0
+    errors: list[dict] = []
+
+    # Catch-up flip before revoke loop (same rule as notify_membership_expiry_batch).
+    past_due = (
+        MemberProfile.objects.filter(
+            membership_status="active",
+            expires_on__lt=today,
+        )
+        .exclude(expires_on__isnull=True)
+        .select_related("user")
+    )
+    for profile in past_due:
+        profile.membership_status = "expired"
+        profile.save(update_fields=["membership_status", "updated_at"])
+        flipped += 1
+
+    # Revoke anyone expired who might still be on the panel (vault and/or ready).
+    expired_qs = (
+        MemberProfile.objects.filter(membership_status="expired")
+        .filter(Q(biometric_templates__isnull=False) | Q(fingerprint_status="ready"))
+        .distinct()
+        .select_related("user")
+    )
+    for profile in expired_qs:
+        try:
+            out = revoke_member_device_access(
+                profile,
+                wait=False,
+                idempotency_key=(
+                    f"reconcile-revoke:{profile.member_id}:{today.isoformat()}"
+                ),
+            )
+            if out.get("revoked"):
+                revoked += 1
+            else:
+                skipped += 1
+                if out.get("error") or out.get("reason") == "bridge_unavailable":
+                    errors.append({"member_id": profile.member_id, **out})
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "reconcile revoke failed member=%s err=%s", profile.member_id, exc
+            )
+            errors.append({"member_id": profile.member_id, "error": str(exc)})
+
+    active_ready = (
+        MemberProfile.objects.filter(
+            membership_status="active",
+            fingerprint_status="ready",
+        )
+        .filter(biometric_templates__isnull=False)
+        .distinct()
+        .select_related("user")
+        .prefetch_related("device_sync_states", "biometric_templates")
+    )
+    for profile in active_ready:
+        synced = any(
+            state.templates_synced_at is not None
+            for state in profile.device_sync_states.all()
+        )
+        if synced:
+            skipped += 1
+            continue
+        open_push = _open_bridge_job(
+            kind=BridgeDeviceJob.KIND_PUSH_USER, user_id=profile.member_id
+        )
+        if open_push is not None:
+            skipped += 1
+            continue
+        try:
+            out = restore_member_device_access(profile, wait=False)
+            if out.get("restored"):
+                restored += 1
+            else:
+                skipped += 1
+                if out.get("error") or out.get("reason") == "bridge_unavailable":
+                    errors.append({"member_id": profile.member_id, **out})
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "reconcile restore failed member=%s err=%s", profile.member_id, exc
+            )
+            errors.append({"member_id": profile.member_id, "error": str(exc)})
+
+    return {
+        "flipped": flipped,
+        "revoked": revoked,
+        "restored": restored,
+        "skipped": skipped,
+        "errors": errors,
+    }

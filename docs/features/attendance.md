@@ -16,5 +16,7 @@ Content-Type: application/json
 ```
 
 `member_id` may be display `PF-…` or staff `short_id`. Duplicate same Asia/Dhaka day returns `recorded: false`.
+Member check-in is **403** when `membership_status` is `none`, `pending_payment`, or
+`expired` (also when still `active` but `expires_on` is before the punch’s Dhaka date).
 
 Member calendar: `GET /api/v1/member/attendance/?year=&month=`.

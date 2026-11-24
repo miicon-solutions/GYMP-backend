@@ -255,6 +255,38 @@ def delete_fingerprint(
     )
 
 
+def revoke_access(
+    user_id: str,
+    *,
+    device_id: str | None = None,
+    wait: bool = False,
+    timeout: float = 70.0,
+    idempotency_key: str = "",
+) -> dict | BridgeDeviceJob:
+    """Soft-delete member on the scanner; vault templates stay in GYMP.
+
+    Batch expiry uses ``wait=False`` (fire-and-forget). Interactive callers may
+    set ``wait=True``.
+    """
+    payload: dict = {"user_id": user_id}
+    if device_id:
+        payload["device_id"] = str(device_id)
+    if wait:
+        return jobs.enqueue_and_wait(
+            BridgeDeviceJob.KIND_REVOKE_ACCESS,
+            payload,
+            bridge_device_id=device_id,
+            timeout=timeout,
+        )
+    return jobs.enqueue(
+        BridgeDeviceJob.KIND_REVOKE_ACCESS,
+        payload,
+        bridge_device_id=device_id,
+        timeout=timeout,
+        idempotency_key=idempotency_key,
+    )
+
+
 def list_attendance(
     *,
     user_id: str | None = None,

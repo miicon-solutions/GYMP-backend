@@ -125,6 +125,7 @@ class BridgeDeviceJob(Entity):
     KIND_GET_TEMPLATES = "get_templates"
     KIND_PUSH_USER = "push_user"
     KIND_DELETE_FINGERPRINT = "delete_fingerprint"
+    KIND_REVOKE_ACCESS = "revoke_access"
     KIND_CHOICES = (
         (KIND_DEVICE_STATUS, KIND_DEVICE_STATUS),
         (KIND_ENSURE_USER, KIND_ENSURE_USER),
@@ -133,6 +134,7 @@ class BridgeDeviceJob(Entity):
         (KIND_GET_TEMPLATES, KIND_GET_TEMPLATES),
         (KIND_PUSH_USER, KIND_PUSH_USER),
         (KIND_DELETE_FINGERPRINT, KIND_DELETE_FINGERPRINT),
+        (KIND_REVOKE_ACCESS, KIND_REVOKE_ACCESS),
     )
 
     STATUS_PENDING = "pending"

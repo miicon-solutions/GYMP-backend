@@ -6,8 +6,10 @@ from notifications.services import notify_membership_expiry_batch
 
 class Command(BaseCommand):
     help = (
-        "Create membership expiring (7d/1d) and expired notifications. "
-        "Run daily via host cron in Asia/Dhaka."
+        "Create membership expiring (7d/1d) and expired notifications, "
+        "and enqueue scanner revoke_access jobs when memberships flip to expired. "
+        "Run daily via host cron in Asia/Dhaka "
+        "(then optionally reconcile_device_access)."
     )
 
     def add_arguments(self, parser):

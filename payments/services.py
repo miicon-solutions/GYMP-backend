@@ -252,6 +252,19 @@ def activate(member, plan, expires):
     if member.fingerprint_status == "not_required":
         member.fingerprint_status = "pending"
     member.save()
+    # Re-push vault templates so the scanner unlocks after renew.
+    try:
+        from biometrics.services import restore_member_device_access
+
+        if member.fingerprint_status == "ready" or member.biometric_templates.exists():
+            restore_member_device_access(member, wait=False)
+    except Exception:  # noqa: BLE001 — payment must not fail if bridge is down
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "restore device access after activate failed member=%s",
+            getattr(member, "member_id", ""),
+        )
 
 
 def _notify_payment(member, payment):
