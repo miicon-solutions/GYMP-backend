@@ -223,6 +223,24 @@ def test_production_starts_without_firebase():
     assert result.stdout.strip() == "''"
 
 
+def test_production_starts_without_sslcommerz():
+    env = production_env()
+    env.pop("SSLCOMMERZ_STORE_ID", None)
+    env.pop("SSLCOMMERZ_STORE_PASSWD", None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from config import settings as s; print(repr(s.SSLCOMMERZ_STORE_ID), repr(s.SSLCOMMERZ_STORE_PASSWD))",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "'' ''"
+
+
 def test_production_forces_bypasses_off():
     result = subprocess.run(
         [

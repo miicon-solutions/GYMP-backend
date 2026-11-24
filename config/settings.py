@@ -325,8 +325,6 @@ if PRODUCTION:
     for name in (
         "TOTP_ENCRYPTION_KEY",
         "SMS_NET_BD_API_KEY",
-        "SSLCOMMERZ_STORE_ID",
-        "SSLCOMMERZ_STORE_PASSWD",
         "ATTENDANCE_DEVICE_KEY",
     ):
         if not globals()[name]:
