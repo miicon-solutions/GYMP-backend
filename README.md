@@ -40,23 +40,7 @@ Compose runs the API; PostgreSQL and MinIO/S3 are managed separately. Create a d
 
 For PostgreSQL running in another Docker container with host port 5432 published, use `postgres://USER:PASSWORD@host.docker.internal:5432/DATABASE` from Compose. The file includes the Linux host-gateway mapping. Use your actual published port and URL-encode special characters in credentials. PostgreSQL must accept connections from the API container; a port published only on host loopback may be inaccessible through the gateway. Containers on a shared Docker network can instead use the database container's network hostname (attach the API using a local Compose override). `localhost` inside the API container refers to the API itself.
 
-`seed_dev` adds the original monthly/quarterly/annual catalog math (rate 1500, admission 1500, standing discounts 0/500/3500) and the Go-parity seed super admin above. It is idempotent and disabled in production. `--catalog-only` seeds those plans and default gym hours without creating or reclaiming any user, including in production. Exercises, routines, recipes, and cooking variations come from `seed_fitness_data`, which also creates no users. Do not run `seed_demo` when you want catalog data only; that command creates members and staff. Plans can also be created through the staff API. Local Compose runs `seed_dev` automatically after migrate; host Python still calls it manually after migrate.
-
-For a populated demo, use the seed super (or a bootstrapped super), then run:
-
-```bash
-docker compose exec api python manage.py seed_demo --admin-phone +8801700000000
-# Local Python alternative (after seed_dev or bootstrap_admin):
-uv run python manage.py seed_demo --admin-phone +8801700000000 --members 30
-# Dense October 2026 pack for admin Reports UI / share PNG testing:
-uv run python manage.py seed_demo --admin-phone +8801700000000 --report-month 2026-10
-```
-
-`seed_demo` requires that existing active super admin and runs only outside production. By default it creates 30 completed member profiles (10 unpaid, 15 active, 5 expired), two staff, catalogue plans, offers on demo-created plans, synthetic cash/online payments, attendance, expenses, holidays, and activity over the preceding 90 days. It never contacts SMS, Firebase, payments, or media providers. Sample staff have no password/browser access or enrolled authenticator; generate their enrollment token through your super admin interface. Demo member phone numbers are printed for login using the configured OTP provider or local development bypass.
-
-`--report-month YYYY-MM` (for example `2026-10`) adds an idempotent dense month pack: ~50 paid payments with list/discount/admission freeze fields, cash vs online mix, plan variety, multi-admin costs, and membership expiry tweaks for the expiring/expired report. In the app, open Reports and filter to that month (or custom `YYYY-MM-01`–month end).
-
-The command reuses existing catalogue durations without changing their settings. Repeated runs preserve existing demo records; a larger `--members` count adds members (maximum 1000). Deterministic identifiers prevent duplicates, and conflicting phone numbers abort the whole transaction without changing data. It does not delete or reset records.
+Local Compose runs `seed_dev` after migrate. That loads plans, gym hours, and the seed super admin above. Host Python runs the same command manually after migrate. Catalog-only and fitness seeds are in [Seed scripts](#seed-scripts).
 
 The deployment entrypoint `/app/entrypoint.sh` runs migrations, collects static files, and starts Gunicorn on port `8000` for Traefik. `PORT` overrides the listen port. Explicit commands retain control of their startup steps, including the local Compose command on `8080`. Local configuration is loaded from `.env` by Django.
 
@@ -73,6 +57,56 @@ uv run python manage.py runserver 0.0.0.0:8080
 ```
 
 For local Python, replace `host.docker.internal` with `localhost` in `DATABASE_URL`, using the PostgreSQL container's published port. Compose passes your configured URL through unchanged. If your rootless Docker/network setup does not expose the database to host processes, run commands through `docker compose exec api` and use the container test workflow below.
+
+## Seed scripts
+
+None of these commands call SMS, Firebase, SSLCommerz, or object storage. Repeat a command safely: plans and gym hours are filled only when that row is missing, and fitness rows refresh the predefined catalog in place. Nothing here deletes members, payments, or an admin you created with `bootstrap_admin`.
+
+| Command | What it writes | Users | Production |
+|---|---|---|---|
+| `seed_dev` | Three plans, gym hours, and the local seed super admin | Yes. Phone `+8801700000000`, short id `SADM-7400`, browser `gym-pm` / `GYM-PM-7400`, plus a one-time MFA setup token | Refused |
+| `seed_dev --catalog-only` | The same three plans and gym hours | No | Allowed |
+| `seed_fitness_data` | 62 exercises, 8 routines, 6 recipes with cooking variations, 6 knowledge-feed articles | No | Allowed |
+| `seed_demo` | Demo members, two staff, payments, attendance, expenses, holidays, and activity | Yes. Requires an existing active super admin | Refused |
+
+Plans, when that duration does not already exist:
+
+| Plan | Months | Monthly rate | Admission | Discount |
+|---|---:|---:|---:|---:|
+| Monthly | 1 | 1500 | 1500 | 0 |
+| Quarterly | 3 | 1500 | 1500 | 500 |
+| Annual | 12 | 1500 | 1500 | 3500 |
+
+Gym hours, only for weekdays that have no row yet: Monday–Thursday, Saturday, and Sunday 06:00–22:00. Friday is closed. The operations migration inserts the same hours, so a migrated database usually already has them.
+
+`seed_fitness_data` does not create member meal logs. Routines are Lower Body Session, Upper Body Session, Strength Session, Endurance Session, PPL - Push Hyper-Drive, PPL - Pull Volume, PPL - Legs & Posterior Chain, and Alex's Chest Blast. Recipes are Crispy Lemon Herb Chicken Breast & Jasmine Rice, Seared Salmon Bowl with Quinoa & Avocado, High-Protein Greek Yogurt Parfait, Deshi Bhaat, Grilled Murgi & Masoor Dal Bowl, Ata Ruti, Siddho Dim & Mixed Sabzi, and Rui Maach Jhol with Steamed Bhaat & Lal Shak. Re-running replaces the exercises inside those routines and the cooking variations on those recipes.
+
+Catalog only, including a production container named `gymp_backend`. Create the real admin separately with `bootstrap_admin`; do not expect a password from these seeds.
+
+```bash
+docker exec gymp_backend python manage.py seed_dev --catalog-only
+docker exec gymp_backend python manage.py seed_fitness_data
+```
+
+Local Compose service `api`, or host Python after `uv sync`:
+
+```bash
+docker compose exec api python manage.py seed_dev
+docker compose exec api python manage.py seed_fitness_data
+uv run python manage.py seed_dev --catalog-only
+uv run python manage.py seed_fitness_data
+```
+
+`seed_demo` is local demo people and history, not catalog setup. It needs the seed super or a bootstrapped super, then creates 30 completed member profiles by default (10 unpaid, 15 active, 5 expired), staff `Demo Reception` and `Demo Trainer`, offers on a demo-created annual plan, and synthetic cash/online payments, check-ins, expenses, holidays, and activity over the preceding 90 days. Existing catalogue durations are left unchanged. Sample staff have no password and no authenticator. Member phones are printed for OTP login, or `000000` when `OTP_DEV_BYPASS` is on. `--members` accepts 1–1000 and only adds people. A conflicting phone aborts the transaction with no changes.
+
+```bash
+docker compose exec api python manage.py seed_demo --admin-phone +8801700000000
+uv run python manage.py seed_demo --admin-phone +8801700000000 --members 30
+# Dense October 2026 pack for admin Reports:
+uv run python manage.py seed_demo --admin-phone +8801700000000 --report-month 2026-10
+```
+
+`--report-month YYYY-MM` adds an idempotent month pack: about 50 paid payments with list, discount, and admission freeze fields, a cash and online mix, plan variety, costs from more than one admin, and membership dates for the expiring and expired report. In the app, open Reports and filter to that month.
 
 ## Next.js web app
 
