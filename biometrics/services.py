@@ -32,7 +32,11 @@ log = logging.getLogger(__name__)
 def _member_device_creds(
     member: MemberProfile, *, pin_override: str = "", rotate_pin: bool = False
 ) -> tuple[str, str]:
-    """Return (keypad_id, pin) for ZK provision; never uses PF- display id as user_id."""
+    """Return (keypad_id, pin) for ZK provision; never uses PF- display id as user_id.
+
+    Member PINs are admin-visible only (not in the member app). Each password
+    unlock rotates the PIN so shared credentials cannot be reused.
+    """
     previous = (member.device_keypad_id or "").strip()
     keypad = ensure_device_keypad_id(member)
     if previous and previous != keypad:
@@ -912,7 +916,10 @@ def migrate_owner_keypad_on_device(profile, *, previous: str, keypad: str) -> No
 
 
 def regenerate_member_device_pin(member: MemberProfile) -> dict:
-    """Rotate member PIN and best-effort push to the scanner (same keypad id)."""
+    """Rotate member PIN and best-effort push to the scanner (same keypad id).
+
+    Called by admin regenerate and by single-use password-unlock rotation.
+    """
     keypad, pin = _member_device_creds(member, rotate_pin=True)
     name = (member.user.full_name or member.member_id).strip() or member.member_id
     pushed = False
@@ -929,6 +936,34 @@ def regenerate_member_device_pin(member: MemberProfile) -> dict:
         "device_pin": pin,
         "pushed": pushed,
     }
+
+
+def reject_member_self_device_pin_regenerate() -> dict:
+    """Member app must not manage keypad PINs — admin member detail only."""
+    raise PermissionDenied(
+        "Scanner keypad access is managed by staff. Ask at the front desk."
+    )
+
+
+def consume_member_device_pin_after_password_unlock(member: MemberProfile) -> None:
+    """Invalidate the member PIN after one password unlock and push a replacement."""
+    try:
+        regenerate_member_device_pin(member)
+    except Exception:  # noqa: BLE001
+        log.exception(
+            "single-use pin rotate failed member=%s",
+            getattr(member, "member_id", ""),
+        )
+
+
+def consume_staff_device_pin_after_password_unlock(staff: StaffProfile) -> None:
+    """Invalidate the staff PIN after one password unlock and push a replacement."""
+    try:
+        regenerate_staff_device_pin(staff)
+    except Exception:  # noqa: BLE001
+        log.exception(
+            "single-use pin rotate failed staff=%s", getattr(staff, "short_id", "")
+        )
 
 
 def regenerate_staff_device_pin(staff: StaffProfile) -> dict:

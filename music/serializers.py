@@ -56,6 +56,7 @@ class MusicBlockedUserOutputSerializer(serializers.Serializer):
 class MusicQueueStateOutputSerializer(serializers.Serializer):
     is_enabled = serializers.BooleanField()
     require_approval = serializers.BooleanField(required=False)
+    is_playback_active = serializers.BooleanField(required=False)
     max_songs_per_user = serializers.IntegerField()
     user_active_count = serializers.IntegerField()
     remaining_slots = serializers.IntegerField()
@@ -66,6 +67,10 @@ class MusicQueueStateOutputSerializer(serializers.Serializer):
     reported_items = MusicQueueItemOutputSerializer(many=True, required=False)
     blocked_users = MusicBlockedUserOutputSerializer(many=True, required=False)
     history = MusicQueueItemOutputSerializer(many=True)
+
+
+class MusicPlaybackInputSerializer(serializers.Serializer):
+    is_playback_active = serializers.BooleanField()
 
 
 class MusicQueueAddInputSerializer(serializers.Serializer):

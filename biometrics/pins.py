@@ -15,6 +15,9 @@ from members.models import MemberProfile
 
 DEVICE_PIN_LENGTH = 4
 KEYPAD_ID_MAX_LEN = 9  # typical ZK PIN/user_id width
+# pyzk Attendance.status = verify mode (ZK standalone SDK).
+# 0=password; 3/4/6/9/11 = password combined with card/finger/face.
+PASSWORD_VERIFY_METHODS = frozenset({0, 3, 4, 6, 9, 11})
 _TRIVIAL_PINS = frozenset(
     {
         "0000",
@@ -80,6 +83,26 @@ def ensure_device_pin(profile: Any, *, rotate: bool = False) -> str:
     profile.device_pin_updated_at = timezone.now()
     profile.save(update_fields=["device_pin_enc", "device_pin_updated_at", "updated_at"])
     return pin
+
+
+def clear_device_pin(profile: Any) -> bool:
+    """Clear stored device PIN. Returns True when a value was removed."""
+    if not (getattr(profile, "device_pin_enc", "") or "").strip():
+        return False
+    profile.device_pin_enc = ""
+    profile.device_pin_updated_at = timezone.now()
+    profile.save(update_fields=["device_pin_enc", "device_pin_updated_at", "updated_at"])
+    return True
+
+
+def is_password_verify(method: Any) -> bool:
+    """True when ZK attendance verify mode includes keypad password."""
+    if method is None or method == "":
+        return False
+    try:
+        return int(method) in PASSWORD_VERIFY_METHODS
+    except (TypeError, ValueError):
+        return False
 
 
 def normalize_keypad_id(raw: str) -> str:

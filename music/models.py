@@ -24,6 +24,9 @@ class MusicSettings(models.Model):
     singleton_id = models.PositiveSmallIntegerField(primary_key=True, default=1)
     is_enabled = models.BooleanField(default=True)
     require_approval = models.BooleanField(default=True)
+    # Gym-floor speaker is actively outputting audio (admin YouTube play vs pause).
+    # Distinct from queue item status=playing (current track). Members poll this for UI.
+    is_playback_active = models.BooleanField(default=False)
     max_songs_per_user = models.PositiveSmallIntegerField(
         default=MAX_SONGS_PER_USER_DEFAULT,
         validators=[MinValueValidator(1), MaxValueValidator(10)],

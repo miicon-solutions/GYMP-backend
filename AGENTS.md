@@ -143,7 +143,10 @@ core/             # shared API helpers, middleware, permissions
   zeros (ZK keypad has no letters and cannot start with `0`; ≤9; `PF-0003` →
   `3`). Display `member_id` (`PF-…`) / staff `short_id` (`ADM-…` / seed
   `SADM-7400`) stay app/reception identity only. Random 4-digit PIN in
-  `device_pin_enc`; owner-only via profile / `staff_data` + regenerate endpoints.
+  `device_pin_enc` (member + staff). Member self-profile never exposes keypad/PIN;
+  admin member detail + `staff_data` do. Regenerate:
+  `POST …/admin/members/{id}/device-pin/regenerate/` and
+  `POST …/admin/me/device-pin/regenerate/`. Password unlock rotates PIN once.
   Check-in resolves keypad id first, then legacy display ids. Soft-delete old
   `PF-`/`ADM-` and zero-padded pins on migrate/push. After the `PG-` → `PF-`
   rename migration, re-push vault templates if fingers were enrolled under old

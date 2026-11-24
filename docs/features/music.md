@@ -12,12 +12,16 @@ default), then play from the admin app.
 1. Member searches (`GET /search/?q=`) or pastes a YouTube URL and `POST /queue/`.
 2. With `require_approval=true` (default), the item is `pending_approval` (inbox).
 3. Staff `POST /queue/{id}/approve/` → `queued`. Reject = `DELETE /queue/{id}/`.
-4. Staff `POST /queue/play/` starts the head of the playable queue (`playing`).
-5. On song end: `POST /queue/complete/`; skip: `POST /queue/skip/`.
-6. Staff may `POST /blocks/` / `DELETE /blocks/{user_id}/` to block members from FloorCue.
-7. Recently played: `DELETE /queue/history/{id}/`, `DELETE /queue/history/` (clear all),
+4. Staff `POST /queue/play/` starts the head of the playable queue (`playing`) and
+   sets `is_playback_active=true`.
+5. Staff pause/resume on the gym speaker: `POST /queue/playback/` with
+   `{ "is_playback_active": false|true }` (keeps `now_playing`; members poll this for
+   Lottie vs pause UI).
+6. On song end: `POST /queue/complete/`; skip: `POST /queue/skip/`.
+7. Staff may `POST /blocks/` / `DELETE /blocks/{user_id}/` to block members from FloorCue.
+8. Recently played: `DELETE /queue/history/{id}/`, `DELETE /queue/history/` (clear all),
    or `POST /queue/history/{id}/play/` to replay immediately.
-8. Curated mix: `GET /playlists/gym/` then `POST /playlists/gym/enqueue/` (optional `video_ids`).
+9. Curated mix: `GET /playlists/gym/` then `POST /playlists/gym/enqueue/` (optional `video_ids`).
 
 Playback does **not** auto-start on `GET` or add — only staff play / skip / complete /
 remove-of-playing advance the player. Gym playlist enqueue also does not auto-play.

@@ -18,6 +18,8 @@ class CheckInInput(serializers.Serializer):
     checked_out_at = serializers.DateTimeField(required=False)
     action = serializers.ChoiceField(choices=["check_in", "check_out"], default="check_in", required=False)
     source = serializers.ChoiceField(choices=["device", "admin", "manual"], default="device")
+    # pyzk Attendance.status — verify mode (0=password, 1=fingerprint, …).
+    verify_method = serializers.IntegerField(required=False, allow_null=True)
 
 
 class MemberSessionAdjustInput(serializers.Serializer):

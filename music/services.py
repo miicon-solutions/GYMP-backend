@@ -411,6 +411,14 @@ def get_settings(*, for_update: bool = False) -> MusicSettings:
     return obj
 
 
+def _set_playback_active(settings_obj: MusicSettings, active: bool) -> None:
+    """Persist whether the gym speaker is currently outputting audio."""
+    if settings_obj.is_playback_active == active:
+        return
+    settings_obj.is_playback_active = active
+    settings_obj.save(update_fields=["is_playback_active", "updated_at"])
+
+
 def _sync_playing_track(
     settings_obj: MusicSettings, *, advance: bool = False
 ) -> MusicQueueItem | None:
@@ -421,6 +429,7 @@ def _sync_playing_track(
     """
     if not settings_obj.is_enabled:
         MusicQueueItem.objects.filter(status="playing").update(status="queued", started_at=None)
+        _set_playback_active(settings_obj, False)
         return None
 
     # Reported tracks should not stay in 'playing'
@@ -453,7 +462,9 @@ def _sync_playing_track(
         next_item.status = "playing"
         next_item.started_at = timezone.now()
         next_item.save(update_fields=["status", "started_at", "updated_at"])
+        _set_playback_active(settings_obj, True)
         return next_item
+    _set_playback_active(settings_obj, False)
     return None
 
 
@@ -595,9 +606,12 @@ def get_queue_state(user) -> dict:
         else 0
     )
     max_per_user = settings_obj.max_songs_per_user
+    # Speaker active only when a current track exists and staff has not paused.
+    playback_active = bool(now_playing) and bool(settings_obj.is_playback_active)
     return {
         "is_enabled": settings_obj.is_enabled,
         "require_approval": settings_obj.require_approval,
+        "is_playback_active": playback_active,
         "max_songs_per_user": max_per_user,
         "user_active_count": user_active_count,
         "remaining_slots": max(0, max_per_user - user_active_count),
@@ -833,6 +847,22 @@ def play_queue_head(actor) -> dict:
     )
     if playing is None:
         _sync_playing_track(settings_obj, advance=True)
+    else:
+        _set_playback_active(settings_obj, True)
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def set_playback_active(actor, is_playback_active: bool) -> dict:
+    """Staff reports gym-floor speaker play/pause without changing the queue item."""
+    require_staff_permission(actor, "music.update")
+    settings_obj = get_settings(for_update=True)
+    if is_playback_active and not settings_obj.is_enabled:
+        raise ValidationError({"detail": "The gym music queue is currently turned off by staff."})
+    has_playing = MusicQueueItem.objects.filter(
+        status="playing", is_reported=False
+    ).exists()
+    _set_playback_active(settings_obj, bool(is_playback_active) and has_playing)
     return get_queue_state(actor)
 
 
@@ -924,6 +954,7 @@ def play_queue_item(actor, item_id) -> dict:
     target.save(update_fields=["status", "started_at", "updated_at"])
 
     _sync_playing_track(settings_obj, advance=False)
+    _set_playback_active(settings_obj, True)
     return get_queue_state(actor)
 
 
@@ -1056,6 +1087,7 @@ def play_history_item(actor, item_id) -> dict:
         approved_by=actor,
     )
     _sync_playing_track(settings_obj, advance=False)
+    _set_playback_active(settings_obj, True)
     return get_queue_state(actor)
 
 

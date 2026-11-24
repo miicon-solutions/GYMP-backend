@@ -46,47 +46,9 @@ def get_member(member_id):
 
 
 def profile_data(user):
-    from biometrics.pins import (
-        DEVICE_PIN_LENGTH,
-        decrypt_device_pin,
-        ensure_device_keypad_id,
-        ensure_device_pin,
-    )
-
     p = owned_profile(user)
     fp = getattr(user, "fitness_profile", None)
-    keypad = (p.device_keypad_id or "").strip()
-    pin = ""
-    # Owner credentials: after enroll (or if keypad/pin already stored), always
-    # return both keypad id and PIN — create the PIN if it was never written.
-    if (
-        p.fingerprint_status == "ready"
-        or keypad
-        or (p.device_pin_enc or "").strip()
-    ):
-        previous_keypad = keypad
-        existing_pin = decrypt_device_pin(p)
-        had_usable_pin = (
-            bool(existing_pin)
-            and existing_pin.isdigit()
-            and len(existing_pin) == DEVICE_PIN_LENGTH
-            and not existing_pin.startswith("0")
-        )
-        keypad = ensure_device_keypad_id(p)
-        pin = ensure_device_pin(p)
-        migrated = bool(previous_keypad and previous_keypad != keypad)
-        if migrated or (pin and not had_usable_pin):
-            from biometrics.services import (
-                enqueue_owner_pin_sync,
-                migrate_owner_keypad_on_device,
-            )
-
-            if migrated:
-                migrate_owner_keypad_on_device(
-                    p, previous=previous_keypad, keypad=keypad
-                )
-            else:
-                enqueue_owner_pin_sync(p)
+    # Member app never sees keypad credentials — admin member detail does.
     return {
         **member_data(user),
         "emergency_name": p.emergency_name,
@@ -98,9 +60,49 @@ def profile_data(user):
         "age": p.age if p.age is not None else (fp.age if fp else None),
         "sex": p.sex or (fp.sex if fp else ""),
         "photo_url": urljoin(settings.PUBLIC_BASE_URL + "/", p.photo.url) if p.photo else None,
-        "device_keypad_id": keypad or None,
-        "device_pin": pin or None,
     }
+
+
+def _admin_member_device_credentials(profile):
+    """Ensure keypad + PIN for admin visibility; sync when newly provisioned."""
+    from biometrics.pins import (
+        DEVICE_PIN_LENGTH,
+        decrypt_device_pin,
+        ensure_device_keypad_id,
+        ensure_device_pin,
+    )
+
+    keypad = (profile.device_keypad_id or "").strip()
+    pin = ""
+    if (
+        profile.fingerprint_status == "ready"
+        or keypad
+        or (profile.device_pin_enc or "").strip()
+    ):
+        previous_keypad = keypad
+        existing_pin = decrypt_device_pin(profile)
+        had_usable_pin = (
+            bool(existing_pin)
+            and existing_pin.isdigit()
+            and len(existing_pin) == DEVICE_PIN_LENGTH
+            and not existing_pin.startswith("0")
+        )
+        keypad = ensure_device_keypad_id(profile)
+        pin = ensure_device_pin(profile)
+        migrated = bool(previous_keypad and previous_keypad != keypad)
+        if migrated or (pin and not had_usable_pin):
+            from biometrics.services import (
+                enqueue_owner_pin_sync,
+                migrate_owner_keypad_on_device,
+            )
+
+            if migrated:
+                migrate_owner_keypad_on_device(
+                    profile, previous=previous_keypad, keypad=keypad
+                )
+            else:
+                enqueue_owner_pin_sync(profile)
+    return keypad or None, pin or None
 
 
 def plan_brief(profile):
@@ -118,15 +120,16 @@ def plan_brief(profile):
 def admin_member_data(p):
     last = p.payments.filter(status="paid").order_by("-paid_at").first()
     data = profile_data(p.user)
-    # Owner-only device credentials — never expose to admin member detail.
-    data.pop("device_pin", None)
-    data.pop("device_keypad_id", None)
+    keypad, pin = _admin_member_device_credentials(p)
     return {
         **data,
         "fingerprint_status": p.fingerprint_status,
         "plan": plan_brief(p),
         "expires_on": p.expires_on if p.membership_status in {"active", "expired"} else None,
         "last_paid_at": last.paid_at if last else None,
+        # Admin-only scanner keypad access (hidden from member profile).
+        "device_keypad_id": keypad,
+        "device_pin": pin,
     }
 
 

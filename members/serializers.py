@@ -87,16 +87,16 @@ class ProfileOutput(MemberOutput):
         allow_null=True,
         required=False,
         help_text=(
-            "Owner-only digits-only scanner keypad id (no leading zeros). "
-            "Omitted from admin member detail."
+            "Admin-only digits-only scanner keypad id (no leading zeros). "
+            "Omitted from member self profile."
         ),
     )
     device_pin = serializers.CharField(
         allow_null=True,
         required=False,
         help_text=(
-            "Owner-only plaintext 4-digit device PIN for fingerprint-fail unlock. "
-            "Omitted from admin member detail."
+            "Admin-only plaintext 4-digit device PIN (single-use). "
+            "Omitted from member self profile."
         ),
     )
 

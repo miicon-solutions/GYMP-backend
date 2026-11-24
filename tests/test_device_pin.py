@@ -159,19 +159,31 @@ def test_record_checkin_legacy_member_id_still_works(member, plan):
     assert out["member_id"] == profile.member_id
 
 
-def test_regenerate_member_device_pin(client, member, settings):
+def test_member_self_device_pin_regenerate_forbidden(client, member, settings):
+    settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
+    settings.ZKTECO_BRIDGE_KEY = "test-key"
+    profile = member.member_profile
+    ensure_device_keypad_id(profile)
+    ensure_device_pin(profile)
+    client.force_authenticate(member)
+    with patch("biometrics.bridge.push_user", return_value={"ok": True}) as push:
+        resp = client.post("/api/v1/member/device-pin/regenerate/")
+    assert resp.status_code == 403
+    push.assert_not_called()
+
+
+def test_admin_regenerate_member_device_pin(client, staff, member, settings):
     settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
     settings.ZKTECO_BRIDGE_KEY = "test-key"
     profile = member.member_profile
     ensure_device_keypad_id(profile)
     first = ensure_device_pin(profile)
-    client.force_authenticate(member)
+    client.force_authenticate(staff)
     with patch("biometrics.bridge.push_user", return_value={"ok": True}) as push:
-        resp = client.post("/api/v1/member/device-pin/regenerate/")
+        resp = client.post(f"/api/v1/admin/members/{member.pk}/device-pin/regenerate/")
     assert resp.status_code == 200
     assert resp.data["device_keypad_id"] == profile.device_keypad_id
     assert resp.data["device_pin"] != first
-    assert resp.data["device_pin"].isdigit()
     assert push.call_args.kwargs["user_id"] == profile.device_keypad_id
     assert push.call_args.kwargs["pin"] == resp.data["device_pin"]
 
@@ -191,47 +203,103 @@ def test_regenerate_staff_device_pin(client, staff, settings):
     assert push.call_args.kwargs["user_id"] == sp.device_keypad_id
 
 
-def test_own_profile_includes_device_credentials(client, member):
+def test_own_profile_hides_device_credentials(client, member):
     profile = member.member_profile
     ensure_device_keypad_id(profile)
-    pin = ensure_device_pin(profile)
+    ensure_device_pin(profile)
     client.force_authenticate(member)
     resp = client.get("/api/v1/member/profile/")
     assert resp.status_code == 200
-    assert resp.data["device_keypad_id"] == profile.device_keypad_id
-    assert resp.data["device_pin"] == pin
-
-
-def test_own_profile_creates_missing_pin_when_ready(client, member):
-    profile = member.member_profile
-    profile.fingerprint_status = "ready"
-    profile.device_keypad_id = "7777"
-    profile.device_pin_enc = ""
-    profile.save(
-        update_fields=[
-            "fingerprint_status",
-            "device_keypad_id",
-            "device_pin_enc",
-            "updated_at",
-        ]
-    )
-    client.force_authenticate(member)
-    resp = client.get("/api/v1/member/profile/")
-    assert resp.status_code == 200
-    assert resp.data["device_keypad_id"] == "7777"
-    assert resp.data["device_pin"]
-    assert resp.data["device_pin"].isdigit()
+    assert "device_keypad_id" not in resp.data
+    assert "device_pin" not in resp.data
     profile.refresh_from_db()
     assert profile.device_pin_enc
 
 
-def test_admin_member_view_hides_device_credentials(member):
+def test_admin_member_view_includes_device_credentials(member):
     profile = member.member_profile
+    profile.fingerprint_status = "ready"
+    profile.save(update_fields=["fingerprint_status", "updated_at"])
     ensure_device_keypad_id(profile)
-    ensure_device_pin(profile)
+    pin = ensure_device_pin(profile)
     data = admin_member_data(profile)
-    assert "device_pin" not in data
-    assert "device_keypad_id" not in data
+    assert data["device_keypad_id"] == profile.device_keypad_id
+    assert data["device_pin"] == pin
+
+
+def test_staff_password_checkin_rotates_pin_once(
+    staff, settings, django_capture_on_commit_callbacks
+):
+    settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
+    settings.ZKTECO_BRIDGE_KEY = "test-key"
+    sp = staff.staff_profile
+    ensure_device_keypad_id(sp)
+    first = ensure_device_pin(sp)
+    with (
+        patch("biometrics.bridge.push_user", return_value={"ok": True}) as push,
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        out = record_checkin(
+            {
+                "member_id": sp.device_keypad_id,
+                "source": "device",
+                "verify_method": 0,
+            }
+        )
+    assert out["subject"] == "staff"
+    sp.refresh_from_db()
+    from biometrics.pins import decrypt_device_pin
+
+    assert decrypt_device_pin(sp) != first
+    assert push.called
+    # Fingerprint unlock must not rotate again.
+    second = decrypt_device_pin(sp)
+    with (
+        patch("biometrics.bridge.push_user", return_value={"ok": True}) as push2,
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        record_checkin(
+            {
+                "member_id": sp.device_keypad_id,
+                "source": "device",
+                "verify_method": 1,
+                "checked_in_at": timezone.now() + timedelta(minutes=1),
+            }
+        )
+    push2.assert_not_called()
+    sp.refresh_from_db()
+    assert decrypt_device_pin(sp) == second
+
+
+def test_member_password_checkin_rotates_pin_once(
+    member, plan, settings, django_capture_on_commit_callbacks
+):
+    settings.ZKTECO_BRIDGE_URL = "http://bridge.test"
+    settings.ZKTECO_BRIDGE_KEY = "test-key"
+    profile = member.member_profile
+    profile.membership_status = "active"
+    profile.plan = plan
+    profile.expires_on = timezone.localdate() + timedelta(days=5)
+    profile.save()
+    ensure_device_keypad_id(profile)
+    first = ensure_device_pin(profile)
+    with (
+        patch("biometrics.bridge.push_user", return_value={"ok": True}) as push,
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        out = record_checkin(
+            {
+                "member_id": profile.device_keypad_id,
+                "source": "device",
+                "verify_method": 0,
+            }
+        )
+    assert out["subject"] == "member"
+    profile.refresh_from_db()
+    from biometrics.pins import decrypt_device_pin
+
+    assert decrypt_device_pin(profile) != first
+    assert push.called
 
 
 def test_restore_push_uses_keypad_id(member, plan):

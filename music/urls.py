@@ -9,6 +9,7 @@ from music import services
 from music.playlists import serialize_gym_playlist
 from music.serializers import (
     MusicBlockUserInputSerializer,
+    MusicPlaybackInputSerializer,
     MusicPlaylistEnqueueInputSerializer,
     MusicPlaylistEnqueueOutputSerializer,
     MusicPlaylistOutputSerializer,
@@ -164,6 +165,27 @@ class MusicQueuePlayView(APIView):
     )
     def post(self, request):
         return Response(services.play_queue_head(request.user))
+
+
+class MusicQueuePlaybackView(APIView):
+    """Staff reports gym-floor speaker play/pause for member FloorCue UI."""
+
+    permission_classes = [StaffPermission("music.update")]
+    serializer_class = MusicQueueStateOutputSerializer
+
+    @extend_schema(
+        request=MusicPlaybackInputSerializer,
+        responses={200: MusicQueueStateOutputSerializer},
+        tags=["music"],
+    )
+    def post(self, request):
+        serializer = MusicPlaybackInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(
+            services.set_playback_active(
+                request.user, serializer.validated_data["is_playback_active"]
+            )
+        )
 
 
 class MusicQueueReorderView(APIView):
@@ -359,6 +381,7 @@ class MusicGymPlaylistEnqueueView(APIView):
 urlpatterns = [
     path("queue/", MusicQueueView.as_view(), name="music-queue"),
     path("queue/play/", MusicQueuePlayView.as_view(), name="music-queue-play"),
+    path("queue/playback/", MusicQueuePlaybackView.as_view(), name="music-queue-playback"),
     path("queue/reorder/", MusicQueueReorderView.as_view(), name="music-queue-reorder"),
     path("queue/skip/", MusicQueueSkipView.as_view(), name="music-queue-skip"),
     path("queue/complete/", MusicQueueCompleteView.as_view(), name="music-queue-complete"),

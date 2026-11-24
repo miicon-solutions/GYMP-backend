@@ -92,12 +92,12 @@ Use code `000000` only when the server reports `dev_bypass` (local/dev). Product
 
 ## Staff token `staff` object
 
-Unlock / refresh may include owner-only scanner fields when provisioned:
+Unlock / refresh may include staff-only scanner fields when provisioned:
 
 - `device_keypad_id` — digits-only panel id (no leading zeros)
-- `device_pin` — 4-digit fingerprint-fail PIN
+- `device_pin` — 4-digit fingerprint-fail PIN (single-use; rotates after password unlock)
 
-See the `device` feature pack for regenerate endpoints.
+Members never receive these fields. See the `device` feature pack for regenerate.
 
 ## Related
 

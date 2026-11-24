@@ -17,18 +17,20 @@ attendance punches.
 - `GET /api/v1/admin/device/status/` — from last bridge heartbeat (`online` only when the scanner was reachable; includes `last_seen_at` / `heartbeat_age_sec`)
 - `GET /api/v1/admin/device/ping/` — connection check (`bridge_connected` / `scanner_online`)
 - Controllers: `GET|POST /api/v1/admin/device/controllers/`, delete by staff id
-- Owner PIN rotate: `POST /api/v1/member/device-pin/regenerate/`, `POST /api/v1/admin/me/device-pin/regenerate/`
+- Staff PIN rotate: `POST /api/v1/admin/me/device-pin/regenerate/`
+- Admin member PIN rotate: `POST /api/v1/admin/members/{id}/device-pin/regenerate/`
+  (member self-regenerate is rejected)
 - Internal bridge: `GET …/internal/bridge/ping/`, `POST …/heartbeat/`, `GET …/jobs/`, `POST …/jobs/{id}/complete/`
 - Internal vault: `GET …/vault-members/`, `POST …/vault-export/`, `POST …/vault-sync-ack/`
   (`POST …/vault-push/` still enqueues per-member `push_user` jobs)
 
 Enroll/delete return **503** when there is no recent heartbeat or the scanner is offline — probe status first.
 
-### Sample — regenerate member device PIN
+### Sample — regenerate staff device PIN
 
 ```http
-POST /api/v1/member/device-pin/regenerate/
-Authorization: Bearer <member_access_token>
+POST /api/v1/admin/me/device-pin/regenerate/
+Authorization: Bearer <staff_access_token>
 ```
 
 ```json
@@ -38,8 +40,6 @@ Authorization: Bearer <member_access_token>
   "pushed": true
 }
 ```
-
-Staff uses the same shape at `POST /api/v1/admin/me/device-pin/regenerate/`.
 
 ## Membership expiry ↔ scanner access
 
@@ -68,17 +68,21 @@ Staff / device-controller pins are never revoked by membership expiry.
 ZK keypads cannot type letters (and cannot start input with `0`). Device
 `user_id` is therefore a dedicated **digits-only, no-leading-zeros**
 `device_keypad_id` on member/staff (not display `PF-…` / `ADM-…`; `PF-0003` →
-`3`, never `0003` or `0`). A cryptographically random **4-digit** PIN is stored
-encrypted (`device_pin_enc`) and written as the ZK password for fingerprint-fail
-unlock.
+`3`, never `0003` or `0`).
+
+**Members and staff** get a cryptographically random **4-digit** PIN
+(`device_pin_enc`) for fingerprint-fail unlock. Each PIN is **single-use**: after
+a password verify check-in (`verify_method` from the bridge), GYMP rotates the
+PIN and re-pushes. Member credentials are **admin-only** (never in the member app).
 
 | Concern | Behavior |
 | --- | --- |
-| Provision (enroll / push / restore / ensure) | `ensure_device_keypad_id` + `ensure_device_pin`; bridge gets `user_id=keypad`, `password=PIN` |
+| Provision | `ensure_device_keypad_id` + `ensure_device_pin`; bridge gets `user_id=keypad`, `password=PIN` |
 | Legacy migration | Soft-delete old `PF-`/`ADM-` pin and zero-padded keypad ids when pushing under the unpadded id |
-| Check-in | Resolve punch id: staff keypad → member keypad → legacy short_id / member_id |
-| App visibility | Owner-only: own profile / `staff_data` expose keypad id + plaintext PIN; admin member detail never includes them |
-| Regenerate | `POST …/member/device-pin/regenerate/` and `POST …/admin/me/device-pin/regenerate/` rotate PIN, keep keypad id, re-push |
+| Check-in | Resolve punch id: staff keypad → member keypad → legacy short_id / member_id; bridge sends `verify_method` |
+| App visibility | Member profile never includes credentials; admin member detail + staff Manage → Scanner keypad access |
+| Regenerate | `POST …/admin/members/{id}/device-pin/regenerate/` and `POST …/admin/me/device-pin/regenerate/`; member self-regenerate rejected |
+| Single-use | Password unlock → rotate PIN + push (fingerprint unlock leaves PIN unchanged) |
 
 Expiry revoke deletes by `device_keypad_id` (falls back to display id only for
 unmigrated rows). Soft-delete remains the only door block (no EnableUser).

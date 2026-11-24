@@ -33,7 +33,10 @@ class DevicePinOutput(serializers.Serializer):
         ),
     )
     device_pin = serializers.CharField(
-        help_text="New random 4-digit PIN (first digit 1–9); written as ZK password.",
+        help_text=(
+            "New random 4-digit PIN (first digit 1–9); written as ZK password. "
+            "Staff-only; each PIN unlocks once then rotates."
+        ),
     )
     pushed = serializers.BooleanField(
         help_text="True when the new PIN was enqueued/pushed to the scanner.",

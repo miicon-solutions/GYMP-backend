@@ -438,11 +438,28 @@ def record_staff_checkin(staff: StaffProfile, data) -> dict:
         if at >= prior:
             row.last_punch_at = at
             row.save(update_fields=["last_punch_at", "updated_at"])
-    StaffCheckInPunch.objects.get_or_create(
+    _, punch_created = StaffCheckInPunch.objects.get_or_create(
         check_in=row,
         punched_at=at,
         defaults={"source": source},
     )
+    # Single-use staff PIN: rotate after a password unlock so shared creds die.
+    if (
+        punch_created
+        and source == "device"
+    ):
+        from biometrics.pins import is_password_verify
+        from biometrics.services import consume_staff_device_pin_after_password_unlock
+
+        if is_password_verify(data.get("verify_method")):
+            staff_id = staff.pk
+
+            def _rotate() -> None:
+                fresh = StaffProfile.objects.filter(pk=staff_id).first()
+                if fresh is not None:
+                    consume_staff_device_pin_after_password_unlock(fresh)
+
+            transaction.on_commit(_rotate)
     punches = list(
         row.punches.order_by("punched_at").values_list("punched_at", flat=True)
     )
@@ -531,11 +548,25 @@ def record_checkin(data):
         if at >= prior:
             row.last_punch_at = at
             row.save(update_fields=["last_punch_at", "updated_at"])
-    CheckInPunch.objects.get_or_create(
+    _, punch_created = CheckInPunch.objects.get_or_create(
         check_in=row,
         punched_at=at,
         defaults={"source": source},
     )
+    # Single-use member PIN: rotate after a password unlock so shared creds die.
+    if punch_created and source == "device":
+        from biometrics.pins import is_password_verify
+        from biometrics.services import consume_member_device_pin_after_password_unlock
+
+        if is_password_verify(data.get("verify_method")):
+            member_pk = member.pk
+
+            def _rotate() -> None:
+                fresh = MemberProfile.objects.filter(pk=member_pk).first()
+                if fresh is not None:
+                    consume_member_device_pin_after_password_unlock(fresh)
+
+            transaction.on_commit(_rotate)
     punches = list(
         row.punches.order_by("punched_at").values_list("punched_at", flat=True)
     )

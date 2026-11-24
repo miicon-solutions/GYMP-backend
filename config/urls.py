@@ -291,7 +291,7 @@ api = [
         endpoint(
             "member_device_pin_regenerate",
             response=DevicePinOutput,
-            handler=lambda r, d: bio.regenerate_member_device_pin(r.user.member_profile),
+            handler=lambda r, d: bio.reject_member_self_device_pin_regenerate(),
             method="post",
             permission=MemberOnly,
             tags=["device"],
@@ -317,6 +317,19 @@ api = [
             ),
             method="post",
             permission=AdminOnly,
+            tags=["device"],
+        ),
+    ),
+    path(
+        "admin/members/<uuid:pk>/device-pin/regenerate/",
+        endpoint(
+            "admin_member_device_pin_regenerate",
+            response=DevicePinOutput,
+            handler=lambda r, d, pk: bio.regenerate_member_device_pin(
+                member.get_member(pk)
+            ),
+            method="post",
+            permission=StaffPermission("members.update"),
             tags=["device"],
         ),
     ),

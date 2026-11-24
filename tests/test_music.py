@@ -111,6 +111,34 @@ def test_user_can_queue_max_three_songs_fifo_without_autoplay(
     assert play_res.status_code == 200
     assert play_res.data["now_playing"]["video_id"] == "eVTXPUF4Oz4"
     assert play_res.data["now_playing"]["status"] == "playing"
+    assert play_res.data["is_playback_active"] is True
+
+    # Pause keeps now_playing but clears speaker-active for member UI
+    pause_res = staff_client.post(
+        "/api/v1/music/queue/playback/",
+        {"is_playback_active": False},
+        format="json",
+    )
+    assert pause_res.status_code == 200
+    assert pause_res.data["now_playing"]["video_id"] == "eVTXPUF4Oz4"
+    assert pause_res.data["is_playback_active"] is False
+    member_view = m1.get("/api/v1/music/queue/")
+    assert member_view.status_code == 200
+    assert member_view.data["is_playback_active"] is False
+    assert member_view.data["now_playing"]["video_id"] == "eVTXPUF4Oz4"
+
+    resume_speaker = staff_client.post(
+        "/api/v1/music/queue/playback/",
+        {"is_playback_active": True},
+        format="json",
+    )
+    assert resume_speaker.status_code == 200
+    assert resume_speaker.data["is_playback_active"] is True
+    assert m1.post(
+        "/api/v1/music/queue/playback/",
+        {"is_playback_active": False},
+        format="json",
+    ).status_code == 403
 
 
 @pytest.mark.django_db
