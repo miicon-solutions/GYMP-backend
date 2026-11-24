@@ -129,7 +129,8 @@ def test_gateway_credentials_and_network_failure(settings):
         {"email_verified": True, "firebase": {"sign_in_provider": "google.com"}},
     ],
 )
-def test_firebase_rejects_other_providers_unverified_and_incomplete(identity):
+def test_firebase_rejects_other_providers_unverified_and_incomplete(identity, settings):
+    settings.FIREBASE_CREDENTIALS_FILE = "/not-read.json"
     with (
         patch("accounts.providers.firebase_app"),
         patch("firebase_admin.auth.verify_id_token", return_value=identity),
@@ -138,7 +139,8 @@ def test_firebase_rejects_other_providers_unverified_and_incomplete(identity):
             providers.verify_google("id-token")
 
 
-def test_firebase_verifies_revocation():
+def test_firebase_verifies_revocation(settings):
+    settings.FIREBASE_CREDENTIALS_FILE = "/not-read.json"
     identity = {
         "uid": "u",
         "email": "a@example.com",
@@ -201,6 +203,24 @@ def production_env():
         "OTP_DEV_BYPASS": "true",
         "EMAIL_DEV_BYPASS": "true",
     }
+
+
+def test_production_starts_without_firebase():
+    env = production_env()
+    env.pop("FIREBASE_CREDENTIALS_FILE", None)
+    env.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from config import settings as s; print(repr(s.FIREBASE_CREDENTIALS_FILE))",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "''"
 
 
 def test_production_forces_bypasses_off():

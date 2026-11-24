@@ -134,7 +134,7 @@ management (tags, `make schema`, feature pack) — mandatory per [AGENTS.md](AGE
 
 See [API migration reference](docs/API_MIGRATION.md) for every old/new route, payload rules, examples, and integration differences. The committed [OpenAPI schema](docs/openapi/v1.yaml) describes the new contract (also live at `/openapi/v1.yaml`).
 
-Member login uses phone OTP or verified Google/Firebase identity. Staff login uses TOTP. API credentials are Bearer HS256 access JWTs and opaque, hashed refresh tokens with one-time rotation. No password-grant API was added. Browser operator access is granted explicitly and uses Django sessions, password validation, CSRF protection, and login throttling.
+Member login uses phone OTP, or verified Google/Firebase identity when Firebase credentials are configured. Staff login uses TOTP. API credentials are Bearer HS256 access JWTs and opaque, hashed refresh tokens with one-time rotation. No password-grant API was added. Browser operator access is granted explicitly and uses Django sessions, password validation, CSRF protection, and login throttling.
 
 Public signup saves a member account and the existing full profile form without purchasing a membership. Web and mobile restore completed unpaid accounts to **Account registered → Awaiting payment**, where the user can edit their information, pay online, or visit reception. Staff receive cash against that same registration using a server-calculated plan price. Successful cash collection or verified online settlement activates membership and starts its expiry. Both payment paths require a completed profile. Unpaid registrations cannot check in. Members require no authenticator; staff MFA remains required.
 
@@ -156,7 +156,7 @@ With the bootstrap setup token, call `/api/v1/auth/admin/mfa/setup/` with `phone
 
 The local default `OTP_DEV_BYPASS=true` skips **OTP** SMS only and accepts `000000`; it does **not** bypass system/announcement notification SMS (`send_sms_message`). `EMAIL_DEV_BYPASS=true` returns a clearly identified development result. Both are forcibly disabled with `APP_ENV=prod`. Local Google and online-payment routes still require real provider configuration; they do not fabricate provider success.
 
-- **Firebase:** set `FIREBASE_CREDENTIALS_FILE` to a readable service-account JSON file. In Docker, mount it read-only at that container path using a local Compose override. Only verified Google-provider ID tokens are accepted, with revocation checking.
+- **Firebase:** optional. Leave `FIREBASE_CREDENTIALS_FILE` empty to run without Google sign-in; `GET /api/v1/public/config/` then returns `google_sign_in: false`, and the Google routes respond 404. To enable it, set that variable to a readable service-account JSON file and mount the file read-only at that container path. Only verified Google-provider ID tokens are accepted, with revocation checking. Production does not require this file.
 - **SMS:** set `SMS_NET_BD_API_KEY` and optionally `SMS_NET_BD_SENDER_ID`. Requests use sms.net.bd's form API with a 10-second timeout.
 - **SSLCommerz:** set store ID/password and `PUBLIC_BASE_URL`. Sandbox is enabled outside production by default. Register `{PUBLIC_BASE_URL}/api/v1/webhooks/sslcommerz/ipn/` with the provider. Both hosted checkout and Flutter SDK checkout (`checkout: "sdk"`) are supported. Credentials stay on the server.
 - **Attendance:** set a private `ATTENDANCE_DEVICE_KEY`; device requests send it in `X-Device-Key`.

@@ -20,7 +20,7 @@ The Django backend intentionally breaks the Go wire contract. The Flutter client
 
 Send canonical slash-terminated URLs directly, especially for POST/PATCH/PUT; do not rely on redirecting request bodies. Dates are `YYYY-MM-DD`; instants are ISO 8601 with an offset. Monetary values are integer BDT taka. Error field arrays contain short strings. Status codes include 401 unauthenticated, 403 unauthorized role, 404 absent/not-owned resource, 409 conflict, 413 oversized upload, 429 cooldown/rate limit (with `Retry-After`), 502 provider failure, and safe 500 errors.
 
-Member and staff API identity IDs are **user UUIDs**. Internal profile UUIDs are not public account identifiers. Device requests use the human-readable `member_id` (`PF-0001`, etc.; formerly `PG-…`). API staff identifiers follow `ADM-1001`, etc.; the bootstrap super admin has `SADM-7400`. New UUIDs, sessions, and authenticator enrollment are independent of the Go service.
+Member and staff API identity IDs are **user UUIDs**. Internal profile UUIDs are not public account identifiers. Device requests use the 9-character zero-padded numeric `member_id` (`000000001`, etc.; `PG-` is UI-only decoration and is not stored). API staff identifiers follow `ADM-1001`, etc.; the bootstrap super admin has `S-ADM-7400`. New UUIDs, sessions, and authenticator enrollment are independent of the Go service.
 
 Business enum values remain unchanged, including `confirmCurrentPhone`, `changePhone`, `adminLinkMemberPhone`, `needsPhoneLink`, online payment kinds (`first_purchase`, `renew`, `change_plan`) and cash kinds (`first_payment`, `renewal`, `plan_change`). Field names change; enum strings do not. Activity `summary_key` localization identifiers are unchanged; parameter field names are snake_case.
 
@@ -53,7 +53,7 @@ Phone changes retain the original proof flow:
 
 Proofs expire after 15 minutes and cannot authenticate API requests. Staff linking uses `adminLinkMemberPhone`, `target_member_id` (user UUID), and the initiating admin's token. Submit that challenge/code to the target member's administrative `/phone/` endpoint; the generic OTP verifier rejects it.
 
-Google accepts `id_token`; a new identity returns `status: "needsPhoneLink"` and `google_session_id`. Complete phone OTP onboarding, then submit `google_session_id`, `otp_session_id`, and `code` to `auth/google/link-phone/`. Known identities return `status: "authenticated"` with tokens. Existing phone-first members use `member/profile/link-google/` with a verified Google `id_token`.
+`GET /api/v1/public/config/` returns `google_sign_in`. That flag is true only when `FIREBASE_CREDENTIALS_FILE` is set. When it is false, hide Google sign-in: `auth/google/`, `auth/google/link-phone/`, and `member/profile/link-google/` respond 404 with "Google sign-in is not available." When it is true, Google accepts `id_token`; a new identity returns `status: "needsPhoneLink"` and `google_session_id`. Complete phone OTP onboarding, then submit `google_session_id`, `otp_session_id`, and `code` to `auth/google/link-phone/`. Known identities return `status: "authenticated"` with tokens. Existing phone-first members use `member/profile/link-google/` with a verified Google `id_token`.
 
 Staff MFA setup/confirm accept `phone_e164`, `setup_token`, and (confirm only) `totp_code`. Unlock accepts `phone_e164` and `totp_code`. A super admin starts/reset enrollment using the target staff's `/mfa/enroll/` operation. API staff have no browser password access unless explicitly provisioned as an operator.
 
@@ -131,6 +131,7 @@ Placeholders such as `{id}` are UUIDs except `{tranId}` (merchant transaction re
 | POST | `/v1/auth/resolve-phone` | `/api/v1/auth/resolve-phone/` |
 | POST | `/v1/auth/otp/send` | `/api/v1/auth/otp/send/` |
 | POST | `/v1/auth/otp/verify` | `/api/v1/auth/otp/verify/` |
+| GET | (new) public auth config | `/api/v1/public/config/` |
 | POST | `/v1/auth/google` | `/api/v1/auth/google/` |
 | POST | `/v1/auth/google/link-phone` | `/api/v1/auth/google/link-phone/` |
 | POST | `/v1/auth/admin/unlock` | `/api/v1/auth/admin/unlock/` |

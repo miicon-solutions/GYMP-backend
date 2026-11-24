@@ -310,6 +310,10 @@ def verify_otp(data, actor):
         return issue_tokens(user)
 
 
+def public_config():
+    return {"google_sign_in": providers.google_sign_in_enabled()}
+
+
 def google_login(raw):
     identity = providers.verify_google(raw)
     user = User.objects.filter(firebase_uid=identity["uid"], role="member").first()
@@ -349,6 +353,8 @@ def bind_google(user, identity):
 
 
 def link_google_phone(data):
+    if not providers.google_sign_in_enabled():
+        raise NotFound("Google sign-in is not available.")
     pending = GoogleLinkSession.objects.filter(
         pk=data["google_session_id"], consumed_at=None, expires_at__gt=timezone.now()
     ).first()

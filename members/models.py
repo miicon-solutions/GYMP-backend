@@ -8,7 +8,7 @@ class MemberProfile(Entity):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="member_profile"
     )
-    member_id = models.CharField(max_length=24, unique=True)
+    member_id = models.CharField(max_length=9, unique=True)
     emergency_name = models.CharField(max_length=200, blank=True)
     emergency_relationship = models.CharField(max_length=12, blank=True)
     emergency_phone_e164 = models.CharField(max_length=14, blank=True)
@@ -38,7 +38,7 @@ class MemberProfile(Entity):
     )
     device_pin_enc = models.TextField(blank=True)
     device_pin_updated_at = models.DateTimeField(null=True, blank=True)
-    # Digits-only ZK user_id for keypad entry (display member_id stays PF-…).
+    # Optional digits-only ZK user id. The scanner user id is the 9-digit member_id.
     device_keypad_id = models.CharField(max_length=16, blank=True, db_index=True)
     recovery_sent_at = models.DateTimeField(null=True, blank=True)
     push_enabled = models.BooleanField(default=True)

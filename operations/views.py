@@ -4,6 +4,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import generics, serializers
 from rest_framework.response import Response
 
+from accounts.identifiers import strip_member_id_prefix
 from accounts.models import User
 from biometrics import services as bio
 from core.api import StaffPermission, SuperOnly
@@ -156,12 +157,16 @@ class ActivityList(generics.ListAPIView):
                 rows = rows.filter(**{key: filters[key]})
         if filters.get("q"):
             q = filters["q"]
-            rows = rows.filter(
+            member_q = strip_member_id_prefix(q)
+            query = (
                 Q(admin_name__icontains=q)
                 | Q(admin_short_id__icontains=q)
                 | Q(summary_key__icontains=q)
                 | Q(summary_params__icontains=q)
             )
+            if member_q != q:
+                query |= Q(summary_params__icontains=member_q)
+            rows = rows.filter(query)
         for field, lookup in (("from", "created_at__gte"), ("to", "created_at__lte")):
             if field in filters:
                 rows = rows.filter(**{lookup: filters[field]})

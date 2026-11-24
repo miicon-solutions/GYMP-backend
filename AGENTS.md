@@ -69,7 +69,7 @@ core/             # shared API helpers, middleware, permissions
 
 ## Auth and providers
 
-- Members: phone OTP (sms.net.bd) or Firebase Google; Bearer HS256 access JWT +
+- Members: phone OTP (sms.net.bd), or Firebase Google when `FIREBASE_CREDENTIALS_FILE` is set (otherwise Google sign-in is hidden); Bearer HS256 access JWT +
   opaque refresh rotation.
 - Staff: TOTP MFA; browser operator console uses Django sessions when provisioned
   and allows CRUD on registered models (secrets stay off forms).
@@ -145,18 +145,7 @@ core/             # shared API helpers, middleware, permissions
 - Vault (encrypted templates, devices, sync state) lives in **this** database.
 - Admin APIs may call the standalone bridge when configured; otherwise return a
   clear unavailable response — never fail process startup.
-- Device user id on the scanner = digits-only `device_keypad_id` with no leading
-  zeros (ZK keypad has no letters and cannot start with `0`; ≤9; `PF-0003` →
-  `3`). Display `member_id` (`PF-…`) / staff `short_id` (`ADM-…` / seed
-  `SADM-7400`) stay app/reception identity only. Random 4-digit PIN in
-  `device_pin_enc` (member + staff). Member self-profile never exposes keypad/PIN;
-  admin member detail + `staff_data` do. Regenerate:
-  `POST …/admin/members/{id}/device-pin/regenerate/` and
-  `POST …/admin/me/device-pin/regenerate/`. Password unlock rotates PIN once.
-  Check-in resolves keypad id first, then legacy display ids. Soft-delete old
-  `PF-`/`ADM-` and zero-padded pins on migrate/push. After the `PG-` → `PF-`
-  rename migration, re-push vault templates if fingers were enrolled under old
-  display ids.
+- Device user id on the scanner = `member_id` (9-character zero-padded numeric ID, e.g. `000000001`; `PG-` is UI-only decoration).
 - Control-center HTML UI lives only on `zkteco-bridge`, not here.
 - Interactive enroll (`POST …/members|staff/{id}/fingerprint/enroll/` with
   `finger_id`) blocks on the bridge (~120s client timeout) while the person
