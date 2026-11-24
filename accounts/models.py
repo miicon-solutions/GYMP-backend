@@ -76,6 +76,10 @@ class StaffProfile(Entity):
         default="pending",
         choices=[(x, x) for x in ("not_required", "pending", "ready", "failed")],
     )
+    device_pin_enc = models.TextField(blank=True)
+    device_pin_updated_at = models.DateTimeField(null=True, blank=True)
+    # Digits-only ZK user_id for keypad entry (display short_id stays ADM-…).
+    device_keypad_id = models.CharField(max_length=16, blank=True, db_index=True)
     # When True, bridge ensure/push uses ZK USER_ADMIN so staff can open device settings.
     device_admin = models.BooleanField(default=False)
     # Grantable admin-app feature.action codes (see accounts.staff_permissions).

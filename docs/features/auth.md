@@ -90,6 +90,15 @@ Use code `000000` only when the server reports `dev_bypass` (local/dev). Product
 | 409 | Conflict (e.g. staff phone used for member OTP) |
 | 429 | Resend/rate limit (`Retry-After`) |
 
+## Staff token `staff` object
+
+Unlock / refresh may include owner-only scanner fields when provisioned:
+
+- `device_keypad_id` — digits-only panel id (no leading zeros)
+- `device_pin` — 4-digit fingerprint-fail PIN
+
+See the `device` feature pack for regenerate endpoints.
+
 ## Related
 
 Phone change and Google link on the member profile live under the `member` feature pack.

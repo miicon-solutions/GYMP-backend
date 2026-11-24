@@ -38,6 +38,8 @@ class MemberProfile(Entity):
     )
     device_pin_enc = models.TextField(blank=True)
     device_pin_updated_at = models.DateTimeField(null=True, blank=True)
+    # Digits-only ZK user_id for keypad entry (display member_id stays PF-…).
+    device_keypad_id = models.CharField(max_length=16, blank=True, db_index=True)
     recovery_sent_at = models.DateTimeField(null=True, blank=True)
     push_enabled = models.BooleanField(default=True)
     sms_enabled = models.BooleanField(default=True)

@@ -25,6 +25,21 @@ class BridgePingOutput(serializers.Serializer):
     bridge_device_id = serializers.CharField(allow_blank=True, required=False)
 
 
+class DevicePinOutput(serializers.Serializer):
+    device_keypad_id = serializers.CharField(
+        help_text=(
+            "Digits-only ZK user id with no leading zeros (panel cannot start with 0). "
+            "Stable across PIN regenerate."
+        ),
+    )
+    device_pin = serializers.CharField(
+        help_text="New random 4-digit PIN (first digit 1–9); written as ZK password.",
+    )
+    pushed = serializers.BooleanField(
+        help_text="True when the new PIN was enqueued/pushed to the scanner.",
+    )
+
+
 class EnrollPrepareInput(serializers.Serializer):
     """Legacy prepare-only body; interactive enroll prefers finger_id."""
 

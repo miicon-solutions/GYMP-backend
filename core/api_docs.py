@@ -26,7 +26,12 @@ FEATURE_TAGS: list[dict[str, str]] = [
     {"name": "plans", "description": "Catalog plans, offers, and public plan listing."},
     {"name": "payments", "description": "SSLCommerz sessions, IPN, cash requests, receipts."},
     {"name": "attendance", "description": "Member calendar and device/internal check-in."},
-    {"name": "device", "description": "Device status, controllers, and biometric vault."},
+    {
+        "name": "device",
+        "description": (
+            "Device status, controllers, biometric vault, and owner keypad id / PIN."
+        ),
+    },
     {"name": "staff", "description": "Staff CRUD, permissions catalog, and MFA enroll."},
     {"name": "operations", "description": "Costs, gym hours, holidays, and activity."},
     {"name": "reports", "description": "Revenue and reporting."},
@@ -49,10 +54,12 @@ _PATH_TAG_RULES: list[tuple[str, str]] = [
     ("member/plans", "plans"),
     ("member/notifications", "notifications"),
     ("member/devices", "notifications"),
+    ("member/device-pin", "device"),
     ("member/", "member"),
     ("admin/notifications", "notifications"),
     ("admin/members", "admin-members"),
     ("admin/cash-requests", "admin-members"),
+    ("admin/me/device-pin", "device"),
     ("admin/device", "device"),
     ("admin/staff", "staff"),
     ("admin/plans", "plans"),

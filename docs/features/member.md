@@ -30,6 +30,19 @@ Content-Type: application/json
 }
 ```
 
+## Scanner keypad credentials (owner-only)
+
+After fingerprint enroll (or when a keypad/PIN already exists), `GET /api/v1/member/profile/`
+includes:
+
+| Field | Meaning |
+| --- | --- |
+| `device_keypad_id` | Digits-only ZK user id, **no leading zeros** (type this on the panel) |
+| `device_pin` | Random **4-digit** PIN (first digit 1–9) for fingerprint-fail unlock |
+
+Admin member detail **never** returns these fields. Rotate PIN (same keypad id) via
+`POST /api/v1/member/device-pin/regenerate/` — see the `device` feature pack.
+
 ## Notes
 
 - Membership stays `none` / `pending_payment` until cash accept or verified online payment.

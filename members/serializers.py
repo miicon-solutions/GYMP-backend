@@ -83,6 +83,22 @@ class ProfileOutput(MemberOutput):
     age = serializers.IntegerField(allow_null=True, required=False)
     sex = serializers.CharField(allow_blank=True, required=False)
     photo_url = serializers.CharField(allow_null=True)
+    device_keypad_id = serializers.CharField(
+        allow_null=True,
+        required=False,
+        help_text=(
+            "Owner-only digits-only scanner keypad id (no leading zeros). "
+            "Omitted from admin member detail."
+        ),
+    )
+    device_pin = serializers.CharField(
+        allow_null=True,
+        required=False,
+        help_text=(
+            "Owner-only plaintext 4-digit device PIN for fingerprint-fail unlock. "
+            "Omitted from admin member detail."
+        ),
+    )
 
 
 class PlanBrief(serializers.Serializer):

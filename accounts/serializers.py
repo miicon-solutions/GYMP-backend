@@ -76,6 +76,16 @@ class StaffOutput(serializers.Serializer):
     is_active = serializers.BooleanField()
     mfa_enrolled = serializers.BooleanField()
     permissions = serializers.ListField(child=serializers.CharField(), required=False)
+    device_keypad_id = serializers.CharField(
+        allow_null=True,
+        required=False,
+        help_text="Owner-only digits-only scanner keypad id (no leading zeros).",
+    )
+    device_pin = serializers.CharField(
+        allow_null=True,
+        required=False,
+        help_text="Owner-only plaintext 4-digit device PIN (fingerprint-fail unlock).",
+    )
 
 
 class TokenOutput(serializers.Serializer):

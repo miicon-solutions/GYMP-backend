@@ -43,9 +43,12 @@ def test_revoke_member_device_access_enqueues_job(member):
     out = revoke_member_device_access(profile, wait=False)
     assert out["revoked"] is True
     assert out["queued"] is True
+    profile.refresh_from_db()
     job = BridgeDeviceJob.objects.get(pk=out["job_id"])
     assert job.kind == BridgeDeviceJob.KIND_REVOKE_ACCESS
-    assert job.payload["user_id"] == profile.member_id
+    assert job.payload["user_id"] == profile.device_keypad_id
+    assert str(job.payload["user_id"]).isdigit()
+    assert not str(job.payload["user_id"]).startswith("0")
     assert job.status == BridgeDeviceJob.STATUS_PENDING
 
 
@@ -59,9 +62,11 @@ def test_restore_member_device_access_enqueues_push(member):
     out = restore_member_device_access(profile, wait=False)
     assert out["restored"] is True
     assert out["queued"] is True
+    profile.refresh_from_db()
     job = BridgeDeviceJob.objects.get(pk=out["job_id"])
     assert job.kind == BridgeDeviceJob.KIND_PUSH_USER
-    assert job.payload["user_id"] == profile.member_id
+    assert job.payload["user_id"] == profile.device_keypad_id
+    assert str(job.payload["user_id"]).isdigit()
     assert "0" in (job.payload.get("templates") or {})
 
 
@@ -130,7 +135,7 @@ def test_reconcile_flips_past_due_then_revokes(member, plan):
     assert result["revoked"] == 1
     assert BridgeDeviceJob.objects.filter(
         kind=BridgeDeviceJob.KIND_REVOKE_ACCESS,
-        payload__user_id=profile.member_id,
+        payload__user_id=profile.device_keypad_id,
     ).exists()
 
 
@@ -142,10 +147,11 @@ def test_revoke_skips_duplicate_open_job(member):
     assert first["revoked"] is True
     assert second["revoked"] is True
     assert second.get("already_pending") is True
+    profile.refresh_from_db()
     assert (
         BridgeDeviceJob.objects.filter(
             kind=BridgeDeviceJob.KIND_REVOKE_ACCESS,
-            payload__user_id=profile.member_id,
+            payload__user_id=profile.device_keypad_id,
             status=BridgeDeviceJob.STATUS_PENDING,
         ).count()
         == 1
@@ -181,20 +187,23 @@ def test_reconcile_revokes_expired_and_restores_active(member, plan):
 
     result = reconcile_device_access()
     assert result["revoked"] == 1
+    profile.refresh_from_db()
     assert BridgeDeviceJob.objects.filter(
         kind=BridgeDeviceJob.KIND_REVOKE_ACCESS,
-        payload__user_id=profile.member_id,
+        payload__user_id=profile.device_keypad_id,
     ).exists()
 
-    # Flip to active with cleared sync → restore.
+    # Flip to active with cleared sync → restore (ZK user_id = digits keypad id).
     BridgeDeviceJob.objects.all().delete()
     profile.membership_status = "active"
     profile.save(update_fields=["membership_status", "updated_at"])
     result2 = reconcile_device_access()
     assert result2["restored"] == 1
+    profile.refresh_from_db()
+    assert profile.device_keypad_id.isdigit()
     assert BridgeDeviceJob.objects.filter(
         kind=BridgeDeviceJob.KIND_PUSH_USER,
-        payload__user_id=profile.member_id,
+        payload__user_id=profile.device_keypad_id,
     ).exists()
 
 

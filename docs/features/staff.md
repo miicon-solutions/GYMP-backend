@@ -6,6 +6,12 @@ Staff CRUD, activate/deactivate, permissions catalog, MFA enroll reset, and staf
 - **Base path:** `/api/v1/admin/staff/`
 - **Auth:** Bearer staff; identity mutations are SuperOnly
 
+## Own scanner credentials
+
+Auth unlock / refresh `staff` objects may include owner-only `device_keypad_id` and
+`device_pin` (same rules as member profile: digits-only keypad, no leading zeros,
+4-digit PIN). Rotate via `POST /api/v1/admin/me/device-pin/regenerate/` (`device` pack).
+
 ### Sample — permissions catalog
 
 ```http

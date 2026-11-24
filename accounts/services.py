@@ -85,8 +85,46 @@ def member_data(user):
 
 def staff_data(user):
     from accounts.staff_permissions import effective_permissions
+    from biometrics.pins import (
+        DEVICE_PIN_LENGTH,
+        decrypt_device_pin,
+        ensure_device_keypad_id,
+        ensure_device_pin,
+    )
 
     p = StaffProfile.objects.get(user=user)
+    keypad = (p.device_keypad_id or "").strip()
+    pin = ""
+    # Owner credentials: after enroll (or if keypad/pin already stored), always
+    # return both keypad id and PIN — create the PIN if it was never written.
+    if (
+        p.fingerprint_status == "ready"
+        or keypad
+        or (p.device_pin_enc or "").strip()
+    ):
+        previous_keypad = keypad
+        existing_pin = decrypt_device_pin(p)
+        had_usable_pin = (
+            bool(existing_pin)
+            and existing_pin.isdigit()
+            and len(existing_pin) == DEVICE_PIN_LENGTH
+            and not existing_pin.startswith("0")
+        )
+        keypad = ensure_device_keypad_id(p)
+        pin = ensure_device_pin(p)
+        migrated = bool(previous_keypad and previous_keypad != keypad)
+        if migrated or (pin and not had_usable_pin):
+            from biometrics.services import (
+                enqueue_owner_pin_sync,
+                migrate_owner_keypad_on_device,
+            )
+
+            if migrated:
+                migrate_owner_keypad_on_device(
+                    p, previous=previous_keypad, keypad=keypad
+                )
+            else:
+                enqueue_owner_pin_sync(p)
     return {
         "id": str(user.pk),
         "short_id": p.short_id,
@@ -96,6 +134,8 @@ def staff_data(user):
         "is_active": user.is_active,
         "mfa_enrolled": bool(p.mfa_enrolled_at),
         "permissions": effective_permissions(user),
+        "device_keypad_id": keypad or None,
+        "device_pin": pin or None,
     }
 
 

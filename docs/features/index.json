@@ -118,13 +118,14 @@
     },
     "device": {
       "title": "Device",
-      "description": "Device status, controllers, and biometric vault.",
+      "description": "Device status, controllers, biometric vault, and owner keypad id / PIN.",
       "openapi": "/openapi/v1/device.yaml",
       "doc": "/docs/features/device/",
       "operations": [
         "admin_device_controllers_remove",
         "admin_device_ping",
         "admin_device_status",
+        "admin_me_device_pin_regenerate",
         "api_v1_admin_device_controllers_create",
         "api_v1_admin_device_controllers_retrieve",
         "internal_bridge_heartbeat",
@@ -135,7 +136,8 @@
         "internal_vault_export",
         "internal_vault_members",
         "internal_vault_push",
-        "internal_vault_sync_ack"
+        "internal_vault_sync_ack",
+        "member_device_pin_regenerate"
       ]
     },
     "staff": {

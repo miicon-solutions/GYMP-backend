@@ -17,11 +17,95 @@ from biometrics.models import (
     MemberBiometricTemplate,
     StaffBiometricTemplate,
 )
+from biometrics.pins import (
+    device_user_id_for_profile,
+    ensure_device_keypad_id,
+    ensure_device_pin,
+)
 from members.models import MemberProfile
 from members.services import get_member
 from operations.services import record
 
 log = logging.getLogger(__name__)
+
+
+def _member_device_creds(
+    member: MemberProfile, *, pin_override: str = "", rotate_pin: bool = False
+) -> tuple[str, str]:
+    """Return (keypad_id, pin) for ZK provision; never uses PF- display id as user_id."""
+    previous = (member.device_keypad_id or "").strip()
+    keypad = ensure_device_keypad_id(member)
+    if previous and previous != keypad:
+        # Drop leading-zero / legacy pin so the panel matches the typable id.
+        _retire_legacy_display_user(display_id=previous, keypad_id=keypad)
+    # Even when DB already stores unpadded id, panel may still have 0003.
+    _retire_padded_keypad_aliases(keypad_id=keypad)
+    if pin_override:
+        member.device_pin_enc = crypto.encrypt_bytes(pin_override.encode())
+        member.device_pin_updated_at = timezone.now()
+        member.save(update_fields=["device_pin_enc", "device_pin_updated_at", "updated_at"])
+        pin = pin_override
+    else:
+        pin = ensure_device_pin(member, rotate=rotate_pin)
+    return keypad, pin
+
+
+def _staff_device_creds(
+    staff: StaffProfile, *, rotate_pin: bool = False
+) -> tuple[str, str]:
+    previous = (staff.device_keypad_id or "").strip()
+    keypad = ensure_device_keypad_id(staff)
+    if previous and previous != keypad:
+        _retire_legacy_display_user(display_id=previous, keypad_id=keypad)
+    _retire_padded_keypad_aliases(keypad_id=keypad)
+    pin = ensure_device_pin(staff, rotate=rotate_pin)
+    return keypad, pin
+
+
+def _retire_padded_keypad_aliases(*, keypad_id: str, device_id: str | None = None) -> None:
+    """Soft-delete zero-padded forms of an unpadded keypad id (``3`` → retire ``0003``)."""
+    from biometrics.pins import KEYPAD_ID_MAX_LEN, normalize_keypad_id
+
+    keypad_id = normalize_keypad_id(keypad_id) or (keypad_id or "").strip()
+    if not keypad_id.isdigit():
+        return
+    for width in range(len(keypad_id) + 1, KEYPAD_ID_MAX_LEN + 1):
+        padded = keypad_id.zfill(width)
+        if padded == keypad_id:
+            continue
+        _retire_legacy_display_user(
+            display_id=padded, keypad_id=keypad_id, device_id=device_id
+        )
+
+
+def _retire_legacy_display_user(
+    *,
+    display_id: str,
+    keypad_id: str,
+    device_id: str | None = None,
+) -> None:
+    """Best-effort soft-delete of an old device user_id after migrating.
+
+    Retires PF-/ADM- display pins and zero-padded keypad ids (``0003`` → ``3``).
+    """
+    display_id = (display_id or "").strip()
+    keypad_id = (keypad_id or "").strip()
+    if not display_id or display_id == keypad_id:
+        return
+    try:
+        bridge.revoke_access(
+            display_id,
+            device_id=device_id,
+            wait=False,
+            idempotency_key=f"retire-legacy:{display_id}:{keypad_id}",
+        )
+    except Exception:  # noqa: BLE001
+        log.debug(
+            "legacy device user retire skipped display=%s keypad=%s",
+            display_id,
+            keypad_id,
+            exc_info=True,
+        )
 
 
 def _staff_privilege(staff: StaffProfile) -> int:
@@ -111,13 +195,13 @@ def enroll_prepare(actor, member: MemberProfile, pin: str = "", *, device_id: st
     """Ensure the member exists on the device (used internally before interactive enroll)."""
     _ = actor
     name = (member.user.full_name or member.member_id).strip() or member.member_id
-    bridge.ensure_user(
-        user_id=member.member_id, name=name, pin=pin or "", device_id=device_id
+    keypad, pin_value = _member_device_creds(member, pin_override=pin or "")
+    _retire_legacy_display_user(
+        display_id=member.member_id, keypad_id=keypad, device_id=device_id
     )
-    if pin:
-        member.device_pin_enc = crypto.encrypt_bytes(pin.encode())
-        member.device_pin_updated_at = timezone.now()
-        member.save(update_fields=["device_pin_enc", "device_pin_updated_at", "updated_at"])
+    bridge.ensure_user(
+        user_id=keypad, name=name, pin=pin_value, device_id=device_id
+    )
     return {
         "prepared": True,
         "message": (
@@ -144,14 +228,13 @@ def enroll_interactive(
 
     bridge.require_device_online(device_id=device_id)
     name = (member.user.full_name or member.member_id).strip() or member.member_id
-    pin_value = pin or ""
-    if pin_value:
-        member.device_pin_enc = crypto.encrypt_bytes(pin_value.encode())
-        member.device_pin_updated_at = timezone.now()
-        member.save(update_fields=["device_pin_enc", "device_pin_updated_at", "updated_at"])
+    keypad, pin_value = _member_device_creds(member, pin_override=pin or "")
+    _retire_legacy_display_user(
+        display_id=member.member_id, keypad_id=keypad, device_id=device_id
+    )
     # Single outbound job: ensure + capture + return templates (avoids 3 poll cycles).
     session = bridge.enroll_session(
-        user_id=member.member_id,
+        user_id=keypad,
         name=name,
         finger_id=finger_id,
         pin=pin_value,
@@ -194,7 +277,8 @@ def delete_member_template(
         raise ValidationError({"finger_id": "Must be between 0 and 9."})
 
     bridge.require_device_online(device_id=device_id)
-    bridge.delete_fingerprint(member.member_id, finger_id, device_id=device_id)
+    device_uid = device_user_id_for_profile(member)
+    bridge.delete_fingerprint(device_uid, finger_id, device_id=device_id)
     MemberBiometricTemplate.objects.filter(member=member, finger_index=finger_id).delete()
     indexes = _finger_indexes(member)
     if not indexes and member.fingerprint_status not in ("not_required",):
@@ -251,7 +335,9 @@ def store_member_templates(
 
 
 def pull_templates(actor, member: MemberProfile, *, device_id: str | None = None) -> dict:
-    raw = bridge.get_templates(member.member_id, device_id=device_id)
+    raw = bridge.get_templates(
+        device_user_id_for_profile(member), device_id=device_id
+    )
     return store_member_templates(actor, member, templates=raw.get("templates") or {})
 
 
@@ -260,17 +346,18 @@ def push_vault_to_device(
 ) -> dict:
     _ = actor
     name = (member.user.full_name or member.member_id).strip() or member.member_id
-    pin = ""
-    if member.device_pin_enc:
-        pin = crypto.decrypt_bytes(member.device_pin_enc).decode()
+    keypad, pin = _member_device_creds(member)
     templates = {
         str(row.finger_index): base64.b64encode(crypto.decrypt_bytes(row.template_ciphertext)).decode()
         for row in member.biometric_templates.all()
     }
     device = _resolve_target_device(bridge_device_id)
     device_id = (device.bridge_device_id if device else "") or bridge_device_id
+    _retire_legacy_display_user(
+        display_id=member.member_id, keypad_id=keypad, device_id=device_id or None
+    )
     bridge.push_user(
-        user_id=member.member_id,
+        user_id=keypad,
         name=name,
         pin=pin,
         templates=templates,
@@ -360,13 +447,12 @@ def export_vault(
         }
         if not templates:
             continue
-        pin = ""
-        if profile.device_pin_enc:
-            pin = crypto.decrypt_bytes(profile.device_pin_enc).decode()
+        keypad, pin = _member_device_creds(profile)
         users.append(
             {
                 "kind": "member",
-                "user_id": profile.member_id,
+                "user_id": keypad,
+                "display_id": profile.member_id,
                 "name": (profile.user.full_name or profile.member_id).strip()
                 or profile.member_id,
                 "pin": pin,
@@ -391,13 +477,15 @@ def export_vault(
             }
             if not templates:
                 continue
+            keypad, pin = _staff_device_creds(staff)
             users.append(
                 {
                     "kind": "staff",
-                    "user_id": staff.short_id,
+                    "user_id": keypad,
+                    "display_id": staff.short_id,
                     "name": (staff.user.full_name or staff.short_id).strip()
                     or staff.short_id,
-                    "pin": "",
+                    "pin": pin,
                     "privilege": _staff_privilege(staff),
                     "templates": templates,
                 }
@@ -495,9 +583,14 @@ def enroll_staff_prepare(
 ) -> dict:
     _ = actor
     name = (staff.user.full_name or staff.short_id).strip() or staff.short_id
+    keypad, pin = _staff_device_creds(staff)
+    _retire_legacy_display_user(
+        display_id=staff.short_id, keypad_id=keypad, device_id=device_id
+    )
     bridge.ensure_user(
-        user_id=staff.short_id,
+        user_id=keypad,
         name=name,
+        pin=pin,
         device_id=device_id,
         privilege=_staff_privilege(staff),
     )
@@ -520,10 +613,15 @@ def enroll_staff_interactive(
 
     bridge.require_device_online(device_id=device_id)
     name = (staff.user.full_name or staff.short_id).strip() or staff.short_id
+    keypad, pin = _staff_device_creds(staff)
+    _retire_legacy_display_user(
+        display_id=staff.short_id, keypad_id=keypad, device_id=device_id
+    )
     session = bridge.enroll_session(
-        user_id=staff.short_id,
+        user_id=keypad,
         name=name,
         finger_id=finger_id,
+        pin=pin,
         device_id=device_id,
         privilege=_staff_privilege(staff),
     )
@@ -568,7 +666,9 @@ def delete_staff_template(
         raise ValidationError({"finger_id": "Must be between 0 and 9."})
 
     bridge.require_device_online(device_id=device_id)
-    bridge.delete_fingerprint(staff.short_id, finger_id, device_id=device_id)
+    bridge.delete_fingerprint(
+        device_user_id_for_profile(staff), finger_id, device_id=device_id
+    )
     StaffBiometricTemplate.objects.filter(staff=staff, finger_index=finger_id).delete()
     indexes = _staff_finger_indexes(staff)
     if not indexes and staff.fingerprint_status not in ("not_required",):
@@ -621,7 +721,9 @@ def store_staff_templates(actor, staff: StaffProfile, *, templates: dict) -> dic
 def pull_staff_templates(
     actor, staff: StaffProfile, *, device_id: str | None = None
 ) -> dict:
-    raw = bridge.get_templates(staff.short_id, device_id=device_id)
+    raw = bridge.get_templates(
+        device_user_id_for_profile(staff), device_id=device_id
+    )
     return store_staff_templates(actor, staff, templates=raw.get("templates") or {})
 
 
@@ -630,6 +732,7 @@ def push_staff_vault_to_device(
 ) -> dict:
     _ = actor
     name = (staff.user.full_name or staff.short_id).strip() or staff.short_id
+    keypad, pin = _staff_device_creds(staff)
     templates = {
         str(row.finger_index): base64.b64encode(
             crypto.decrypt_bytes(row.template_ciphertext)
@@ -638,9 +741,13 @@ def push_staff_vault_to_device(
     }
     device = _resolve_target_device(bridge_device_id)
     device_id = (device.bridge_device_id if device else "") or bridge_device_id
+    _retire_legacy_display_user(
+        display_id=staff.short_id, keypad_id=keypad, device_id=device_id or None
+    )
     bridge.push_user(
-        user_id=staff.short_id,
+        user_id=keypad,
         name=name,
+        pin=pin,
         templates=templates,
         device_id=device_id or None,
         privilege=_staff_privilege(staff),
@@ -686,10 +793,13 @@ def add_device_controller(actor, staff_user: User) -> dict:
         staff.device_admin = True
         staff.save(update_fields=["device_admin", "updated_at"])
     name = (staff_user.full_name or staff.short_id).strip() or staff.short_id
+    keypad, pin = _staff_device_creds(staff)
+    _retire_legacy_display_user(display_id=staff.short_id, keypad_id=keypad)
     # Ensure device user exists with USER_ADMIN even before fingerprints are ready.
     bridge.ensure_user(
-        user_id=staff.short_id,
+        user_id=keypad,
         name=name,
+        pin=pin,
         privilege=bridge.ZK_PRIVILEGE_ADMIN,
     )
     if actor is not None:
@@ -716,10 +826,12 @@ def remove_device_controller(actor, staff_user: User) -> dict:
         staff.device_admin = False
         staff.save(update_fields=["device_admin", "updated_at"])
     name = (staff_user.full_name or staff.short_id).strip() or staff.short_id
+    keypad, pin = _staff_device_creds(staff)
     try:
         bridge.ensure_user(
-            user_id=staff.short_id,
+            user_id=keypad,
             name=name,
+            pin=pin,
             privilege=bridge.ZK_PRIVILEGE_DEFAULT,
         )
     except bridge.BridgeUnavailable:
@@ -738,6 +850,111 @@ def remove_device_controller(actor, staff_user: User) -> dict:
 
 def device_controller_input_staff(staff_id) -> User:
     return get_object_or_404(User, pk=staff_id, role="admin")
+
+
+def enqueue_owner_pin_sync(profile) -> None:
+    """Best-effort async push of keypad id + PIN (no template rewrite)."""
+    from biometrics import jobs
+    from biometrics.models import BridgeDeviceJob
+
+    keypad = device_user_id_for_profile(profile)
+    pin = ensure_device_pin(profile)
+    if not keypad or not pin:
+        return
+    if isinstance(profile, MemberProfile):
+        name = (profile.user.full_name or profile.member_id).strip() or profile.member_id
+        privilege = None
+        templates = {
+            str(row.finger_index): base64.b64encode(
+                crypto.decrypt_bytes(row.template_ciphertext)
+            ).decode()
+            for row in profile.biometric_templates.all()
+        }
+    elif isinstance(profile, StaffProfile):
+        name = (profile.user.full_name or profile.short_id).strip() or profile.short_id
+        privilege = _staff_privilege(profile)
+        templates = {
+            str(row.finger_index): base64.b64encode(
+                crypto.decrypt_bytes(row.template_ciphertext)
+            ).decode()
+            for row in profile.biometric_templates.all()
+        }
+    else:
+        return
+    payload: dict = {
+        "user_id": keypad,
+        "name": name,
+        "pin": pin,
+        "uid": 0,
+        "templates": templates,
+    }
+    if privilege is not None:
+        payload["privilege"] = privilege
+    try:
+        jobs.enqueue(
+            BridgeDeviceJob.KIND_PUSH_USER,
+            payload,
+            timeout=70.0,
+            idempotency_key=f"pin-sync:{keypad}:{timezone.localdate().isoformat()}",
+        )
+    except Exception:  # noqa: BLE001
+        log.debug("owner pin sync enqueue skipped user_id=%s", keypad, exc_info=True)
+
+
+def migrate_owner_keypad_on_device(profile, *, previous: str, keypad: str) -> None:
+    """Soft-delete old (e.g. leading-zero) pin and push under the typable keypad id."""
+    previous = (previous or "").strip()
+    keypad = (keypad or "").strip()
+    if not previous or not keypad or previous == keypad:
+        return
+    _retire_legacy_display_user(display_id=previous, keypad_id=keypad)
+    enqueue_owner_pin_sync(profile)
+
+
+def regenerate_member_device_pin(member: MemberProfile) -> dict:
+    """Rotate member PIN and best-effort push to the scanner (same keypad id)."""
+    keypad, pin = _member_device_creds(member, rotate_pin=True)
+    name = (member.user.full_name or member.member_id).strip() or member.member_id
+    pushed = False
+    try:
+        _retire_legacy_display_user(display_id=member.member_id, keypad_id=keypad)
+        bridge.push_user(user_id=keypad, name=name, pin=pin, templates={})
+        pushed = True
+    except bridge.BridgeUnavailable:
+        log.warning("regenerate pin bridge offline member=%s", member.member_id)
+    except Exception:  # noqa: BLE001
+        log.exception("regenerate pin push failed member=%s", member.member_id)
+    return {
+        "device_keypad_id": keypad,
+        "device_pin": pin,
+        "pushed": pushed,
+    }
+
+
+def regenerate_staff_device_pin(staff: StaffProfile) -> dict:
+    """Rotate staff PIN and best-effort push to the scanner (same keypad id)."""
+    keypad, pin = _staff_device_creds(staff, rotate_pin=True)
+    name = (staff.user.full_name or staff.short_id).strip() or staff.short_id
+    pushed = False
+    try:
+        _retire_legacy_display_user(display_id=staff.short_id, keypad_id=keypad)
+        bridge.push_user(
+            user_id=keypad,
+            name=name,
+            pin=pin,
+            templates={},
+            privilege=_staff_privilege(staff),
+        )
+        pushed = True
+    except bridge.BridgeUnavailable:
+        log.warning("regenerate pin bridge offline staff=%s", staff.short_id)
+    except Exception:  # noqa: BLE001
+        log.exception("regenerate pin push failed staff=%s", staff.short_id)
+    return {
+        "device_keypad_id": keypad,
+        "device_pin": pin,
+        "pushed": pushed,
+    }
 
 
 def _open_bridge_job(*, kind: str, user_id: str):
@@ -767,13 +984,16 @@ def revoke_member_device_access(
     """Remove the member from the scanner; vault templates are kept."""
     from biometrics.models import BridgeDeviceJob
 
-    user_id = (member.member_id or "").strip()
-    if not user_id:
+    previous = (member.device_keypad_id or "").strip()
+    keypad = ensure_device_keypad_id(member) if previous or member.member_id else ""
+    legacy = (member.member_id or "").strip()
+    if not keypad and not legacy:
         return {"revoked": False, "reason": "missing_member_id"}
+    primary = keypad or legacy
 
     if not wait:
         open_job = _open_bridge_job(
-            kind=BridgeDeviceJob.KIND_REVOKE_ACCESS, user_id=user_id
+            kind=BridgeDeviceJob.KIND_REVOKE_ACCESS, user_id=primary
         )
         if open_job is not None:
             FingerprintDeviceSyncState.objects.filter(member=member).update(
@@ -790,20 +1010,25 @@ def revoke_member_device_access(
 
     try:
         result = bridge.revoke_access(
-            user_id,
+            primary,
             wait=wait,
             idempotency_key=idempotency_key
-            or f"revoke:{user_id}:{timezone.localdate().isoformat()}",
+            or f"revoke:{primary}:{timezone.localdate().isoformat()}",
         )
+        # Drop zero-padded / PF- pins that may still sit on the panel.
+        if previous and previous != primary:
+            _retire_legacy_display_user(display_id=previous, keypad_id=primary)
+        if legacy and legacy != primary:
+            _retire_legacy_display_user(display_id=legacy, keypad_id=primary)
     except bridge.BridgeUnavailable as exc:
         log.warning(
             "revoke_access bridge unavailable member=%s err=%s",
-            user_id,
+            primary,
             exc,
         )
         return {"revoked": False, "reason": "bridge_unavailable", "error": str(exc)}
     except Exception as exc:  # noqa: BLE001
-        log.warning("revoke_access failed member=%s err=%s", user_id, exc)
+        log.warning("revoke_access failed member=%s err=%s", primary, exc)
         return {"revoked": False, "error": str(exc)}
 
     # Clear sync timestamps so reconcile knows device no longer has templates.
@@ -831,9 +1056,7 @@ def restore_member_device_access(
         return {"restored": False, "reason": "not_active"}
 
     name = (member.user.full_name or member.member_id).strip() or member.member_id
-    pin = ""
-    if member.device_pin_enc:
-        pin = crypto.decrypt_bytes(member.device_pin_enc).decode()
+    keypad, pin = _member_device_creds(member)
     templates = {
         str(row.finger_index): base64.b64encode(
             crypto.decrypt_bytes(row.template_ciphertext)
@@ -842,9 +1065,12 @@ def restore_member_device_access(
     }
     device = _resolve_target_device(None)
     device_id = device.bridge_device_id if device else None
+    _retire_legacy_display_user(
+        display_id=member.member_id, keypad_id=keypad, device_id=device_id
+    )
 
     payload = {
-        "user_id": member.member_id,
+        "user_id": keypad,
         "name": name,
         "pin": pin,
         "uid": 0,
@@ -856,7 +1082,7 @@ def restore_member_device_access(
     try:
         if wait:
             bridge.push_user(
-                user_id=member.member_id,
+                user_id=keypad,
                 name=name,
                 pin=pin,
                 templates=templates,
@@ -882,7 +1108,7 @@ def restore_member_device_access(
             payload,
             bridge_device_id=device_id,
             timeout=70.0,
-            idempotency_key=f"restore:{member.member_id}:{timezone.localdate().isoformat()}",
+            idempotency_key=f"restore:{keypad}:{timezone.localdate().isoformat()}",
         )
         return {
             "restored": True,
@@ -979,7 +1205,8 @@ def reconcile_device_access(*, today=None) -> dict:
             skipped += 1
             continue
         open_push = _open_bridge_job(
-            kind=BridgeDeviceJob.KIND_PUSH_USER, user_id=profile.member_id
+            kind=BridgeDeviceJob.KIND_PUSH_USER,
+            user_id=device_user_id_for_profile(profile) or profile.member_id,
         )
         if open_push is not None:
             skipped += 1

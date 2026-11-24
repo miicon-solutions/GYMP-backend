@@ -61,7 +61,8 @@ def test_enroll_staff_interactive_sets_ready(client, staff, super_admin, setting
     assert profile.fingerprint_status == "ready"
     assert StaffBiometricTemplate.objects.filter(staff=profile, finger_index=2).exists()
     enroll_session.assert_called()
-    assert enroll_session.call_args.kwargs["user_id"] == profile.short_id
+    assert enroll_session.call_args.kwargs["user_id"] == profile.device_keypad_id
+    assert str(enroll_session.call_args.kwargs["user_id"]).isdigit()
     assert enroll_session.call_args.kwargs["privilege"] == 0
 
 

@@ -139,9 +139,14 @@ core/             # shared API helpers, middleware, permissions
 - Vault (encrypted templates, devices, sync state) lives in **this** database.
 - Admin APIs may call the standalone bridge when configured; otherwise return a
   clear unavailable response — never fail process startup.
-- Device user id on the scanner = display `member_id` (`PF-…`) **or** staff
-  `short_id` (`ADM-…` / seed `SADM-7400`; ≤ device PIN width, often 9). After the `PG-` → `PF-` rename migration,
-  re-push vault templates to devices if fingers were enrolled under the old
+- Device user id on the scanner = digits-only `device_keypad_id` with no leading
+  zeros (ZK keypad has no letters and cannot start with `0`; ≤9; `PF-0003` →
+  `3`). Display `member_id` (`PF-…`) / staff `short_id` (`ADM-…` / seed
+  `SADM-7400`) stay app/reception identity only. Random 4-digit PIN in
+  `device_pin_enc`; owner-only via profile / `staff_data` + regenerate endpoints.
+  Check-in resolves keypad id first, then legacy display ids. Soft-delete old
+  `PF-`/`ADM-` and zero-padded pins on migrate/push. After the `PG-` → `PF-`
+  rename migration, re-push vault templates if fingers were enrolled under old
   display ids.
 - Control-center HTML UI lives only on `zkteco-bridge`, not here.
 - Interactive enroll (`POST …/members|staff/{id}/fingerprint/enroll/` with

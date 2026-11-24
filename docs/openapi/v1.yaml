@@ -534,6 +534,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/GymHoursOutput'
           description: ''
+  /api/v1/admin/me/device-pin/regenerate/:
+    post:
+      operationId: admin_me_device_pin_regenerate
+      tags:
+      - device
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePinOutput'
+          description: ''
   /api/v1/admin/members/:
     get:
       operationId: api_v1_admin_members_list
@@ -2900,6 +2915,10 @@ paths:
         name: limit
         schema:
           type: string
+      - in: query
+        name: wait
+        schema:
+          type: string
       tags:
       - device
       security:
@@ -3295,6 +3314,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardOutput'
+          description: ''
+  /api/v1/member/device-pin/regenerate/:
+    post:
+      operationId: member_device_pin_regenerate
+      tags:
+      - device
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePinOutput'
           description: ''
   /api/v1/member/devices/fcm/:
     post:
@@ -6230,6 +6264,16 @@ components:
         photo_url:
           type: string
           nullable: true
+        device_keypad_id:
+          type: string
+          nullable: true
+          description: Owner-only digits-only scanner keypad id (no leading zeros).
+            Omitted from admin member detail.
+        device_pin:
+          type: string
+          nullable: true
+          description: Owner-only plaintext 4-digit device PIN for fingerprint-fail
+            unlock. Omitted from admin member detail.
         fingerprint_status:
           type: string
         plan:
@@ -6310,6 +6354,16 @@ components:
         photo_url:
           type: string
           nullable: true
+        device_keypad_id:
+          type: string
+          nullable: true
+          description: Owner-only digits-only scanner keypad id (no leading zeros).
+            Omitted from admin member detail.
+        device_pin:
+          type: string
+          nullable: true
+          description: Owner-only plaintext 4-digit device PIN for fingerprint-fail
+            unlock. Omitted from admin member detail.
         fingerprint_status:
           type: string
         plan:
@@ -7553,6 +7607,23 @@ components:
       required:
       - controllers
       - count
+    DevicePinOutput:
+      type: object
+      properties:
+        device_keypad_id:
+          type: string
+          description: Digits-only ZK user id with no leading zeros (panel cannot
+            start with 0). Stable across PIN regenerate.
+        device_pin:
+          type: string
+          description: New random 4-digit PIN (first digit 1–9); written as ZK password.
+        pushed:
+          type: boolean
+          description: True when the new PIN was enqueued/pushed to the scanner.
+      required:
+      - device_keypad_id
+      - device_pin
+      - pushed
     DeviceStatusOutput:
       type: object
       properties:
@@ -11103,6 +11174,16 @@ components:
         photo_url:
           type: string
           nullable: true
+        device_keypad_id:
+          type: string
+          nullable: true
+          description: Owner-only digits-only scanner keypad id (no leading zeros).
+            Omitted from admin member detail.
+        device_pin:
+          type: string
+          nullable: true
+          description: Owner-only plaintext 4-digit device PIN for fingerprint-fail
+            unlock. Omitted from admin member detail.
       required:
       - blood_group
       - email
@@ -12110,6 +12191,14 @@ components:
           type: array
           items:
             type: string
+        device_keypad_id:
+          type: string
+          nullable: true
+          description: Owner-only digits-only scanner keypad id (no leading zeros).
+        device_pin:
+          type: string
+          nullable: true
+          description: Owner-only plaintext 4-digit device PIN (fingerprint-fail unlock).
       required:
       - id
       - is_active
@@ -12855,7 +12944,8 @@ tags:
 - name: attendance
   description: Member calendar and device/internal check-in.
 - name: device
-  description: Device status, controllers, and biometric vault.
+  description: Device status, controllers, biometric vault, and owner keypad id /
+    PIN.
 - name: staff
   description: Staff CRUD, permissions catalog, and MFA enroll.
 - name: operations

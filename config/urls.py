@@ -36,6 +36,7 @@ from biometrics.serializers import (
     BridgeJobsClaimOutput,
     BridgeJobsClaimQuery,
     BridgePingOutput,
+    DevicePinOutput,
     DeviceStatusOutput,
     EnrollInteractiveInput,
     EnrollInteractiveOutput,
@@ -286,6 +287,17 @@ api = [
     ),
     path("member/profile/photo/", PhotoView.as_view()),
     path(
+        "member/device-pin/regenerate/",
+        endpoint(
+            "member_device_pin_regenerate",
+            response=DevicePinOutput,
+            handler=lambda r, d: bio.regenerate_member_device_pin(r.user.member_profile),
+            method="post",
+            permission=MemberOnly,
+            tags=["device"],
+        ),
+    ),
+    path(
         "member/profile/link-google/",
         endpoint(
             "member_link_google",
@@ -293,6 +305,19 @@ api = [
             handler=lambda r, d: member.link_google(r.user, d["id_token"]),
             request=auth_s.GoogleInput,
             permission=MemberOnly,
+        ),
+    ),
+    path(
+        "admin/me/device-pin/regenerate/",
+        endpoint(
+            "admin_me_device_pin_regenerate",
+            response=DevicePinOutput,
+            handler=lambda r, d: bio.regenerate_staff_device_pin(
+                bio.staff_profile_for_user(r.user)
+            ),
+            method="post",
+            permission=AdminOnly,
+            tags=["device"],
         ),
     ),
     path("member/plans/", MemberPlanList.as_view()),

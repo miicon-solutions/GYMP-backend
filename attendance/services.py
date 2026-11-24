@@ -465,22 +465,44 @@ def record_checkin(data):
     if data.get("action") == "check_out" or data.get("checked_out_at"):
         return record_checkout(data)
 
-    display_id = data["member_id"]
+    display_id = str(data["member_id"] or "").strip()
     # Legacy seed pins truncated by ZK PIN width 9 (S-ADM-7400 → S-ADM-740).
     if display_id in LEGACY_SEED_SHORT_IDS:
         display_id = SEED_SUPER_SHORT_ID
-    staff = (
-        StaffProfile.objects.select_related("user")
-        .select_for_update()
-        .filter(short_id=display_id)
-        .first()
-    )
+
+    # Digits-only keypad id (preferred) then legacy short_id / member_id.
+    # Match zero-padded legacy keypad rows (0003) when the punch is "3".
+    from biometrics.pins import keypad_lookup_ids
+
+    staff = None
+    if display_id.isdigit():
+        staff = (
+            StaffProfile.objects.select_related("user")
+            .select_for_update()
+            .filter(device_keypad_id__in=keypad_lookup_ids(display_id))
+            .first()
+        )
+    if staff is None:
+        staff = (
+            StaffProfile.objects.select_related("user")
+            .select_for_update()
+            .filter(short_id=display_id)
+            .first()
+        )
     if staff is not None:
         return record_staff_checkin(staff, data)
 
-    member = get_object_or_404(
-        MemberProfile.objects.select_for_update(), member_id=display_id
-    )
+    member = None
+    if display_id.isdigit():
+        member = (
+            MemberProfile.objects.select_for_update()
+            .filter(device_keypad_id__in=keypad_lookup_ids(display_id))
+            .first()
+        )
+    if member is None:
+        member = get_object_or_404(
+            MemberProfile.objects.select_for_update(), member_id=display_id
+        )
     if member.membership_status in {"none", "pending_payment"}:
         raise PermissionDenied("Membership payment is required before checking in.")
     if member.membership_status == "expired":
