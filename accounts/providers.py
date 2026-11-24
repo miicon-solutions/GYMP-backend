@@ -2,7 +2,7 @@ from functools import lru_cache
 
 import httpx
 from django.conf import settings
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, NotFound
 
 from core.api import BadGateway
 
@@ -27,21 +27,26 @@ def send_sms(phone, code):
         raise BadGateway("Text message service is unavailable.") from exc
 
 
+def google_sign_in_enabled():
+    return bool(settings.FIREBASE_CREDENTIALS_FILE)
+
+
 @lru_cache(maxsize=1)
 def firebase_app():
     import firebase_admin
     from firebase_admin import credentials
 
-    if settings.FIREBASE_CREDENTIALS_FILE:
-        return firebase_admin.initialize_app(
-            credentials.Certificate(settings.FIREBASE_CREDENTIALS_FILE), name="gyma"
-        )
-    return firebase_admin.initialize_app(name="gyma")
+    path = settings.FIREBASE_CREDENTIALS_FILE
+    if not path:
+        raise RuntimeError("Firebase credentials are not configured.")
+    return firebase_admin.initialize_app(credentials.Certificate(path), name="gyma")
 
 
 def verify_google(raw):
     from firebase_admin import auth
 
+    if not google_sign_in_enabled():
+        raise NotFound("Google sign-in is not available.")
     try:
         result = auth.verify_id_token(raw, app=firebase_app(), check_revoked=True)
         if (

@@ -268,7 +268,6 @@ LOGGING = {
 if PRODUCTION:
     for name in (
         "TOTP_ENCRYPTION_KEY",
-        "FIREBASE_CREDENTIALS_FILE",
         "SMS_NET_BD_API_KEY",
         "SSLCOMMERZ_STORE_ID",
         "SSLCOMMERZ_STORE_PASSWD",

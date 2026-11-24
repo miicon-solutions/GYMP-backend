@@ -32,6 +32,10 @@ class GoogleInput(serializers.Serializer):
     id_token = serializers.CharField(max_length=12000)
 
 
+class PublicConfigOutput(serializers.Serializer):
+    google_sign_in = serializers.BooleanField()
+
+
 class GoogleLinkInput(VerifyInput):
     google_session_id = serializers.UUIDField()
 

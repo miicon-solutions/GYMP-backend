@@ -188,7 +188,8 @@ def test_admin_phone_link_bound_to_actor_and_target(client, staff, super_admin, 
     assert response.data["phone_e164"] == "+8801312345678"
 
 
-def test_google_onboarding_and_link(client, member):
+def test_google_onboarding_and_link(client, member, settings):
+    settings.FIREBASE_CREDENTIALS_FILE = "/configured.json"
     identity = {"uid": "google-1", "email": "test@example.com", "name": "Google Member"}
     with patch("accounts.providers.verify_google", return_value=identity):
         google = client.post(BASE + "google/", {"id_token": "opaque"}, format="json")
@@ -208,6 +209,34 @@ def test_google_onboarding_and_link(client, member):
         again = client.post(BASE + "google/", {"id_token": "opaque"}, format="json")
         assert again.data["status"] == "authenticated"
         assert User.objects.filter(role="member").count() == 1
+
+
+def test_google_hidden_without_firebase(client, member, settings):
+    settings.FIREBASE_CREDENTIALS_FILE = ""
+    config = client.get("/api/v1/public/config/")
+    assert config.status_code == 200
+    assert config.data == {"google_sign_in": False}
+    denied = client.post(BASE + "google/", {"id_token": "opaque"}, format="json")
+    assert denied.status_code == 404
+    assert denied.data["detail"] == "Google sign-in is not available."
+    link = client.post(
+        BASE + "google/link-phone/",
+        {
+            "google_session_id": "00000000-0000-0000-0000-000000000001",
+            "otp_session_id": "00000000-0000-0000-0000-000000000002",
+            "code": "000000",
+        },
+        format="json",
+    )
+    assert link.status_code == 404
+    client.force_authenticate(member)
+    profile = client.post(
+        "/api/v1/member/profile/link-google/", {"id_token": "opaque"}, format="json"
+    )
+    assert profile.status_code == 404
+    assert profile.data["detail"] == "Google sign-in is not available."
+    settings.FIREBASE_CREDENTIALS_FILE = "/configured.json"
+    assert client.get("/api/v1/public/config/").data == {"google_sign_in": True}
 
 
 def test_google_link_conflict_and_inactive(client, member, other_member):

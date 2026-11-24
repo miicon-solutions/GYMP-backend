@@ -110,6 +110,15 @@ def mfa_enroll(request, data, pk):
 
 api = [
     path("public/plans/", PublicPlanList.as_view()),
+    path(
+        "public/config/",
+        endpoint(
+            "public_config",
+            method="get",
+            response=auth_s.PublicConfigOutput,
+            handler=lambda r, d: auth.public_config(),
+        ),
+    ),
     path("auth/", include("accounts.urls")),
     path("users/", include("fitness.urls")),
     path("workouts/", include("workouts.urls")),

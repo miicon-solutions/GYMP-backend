@@ -3469,6 +3469,22 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/public/config/:
+    get:
+      operationId: public_config
+      tags:
+      - public
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicConfigOutput'
+          description: ''
   /api/public/plans/:
     get:
       operationId: api_public_plans_list
@@ -7249,6 +7265,22 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/public/config/:
+    get:
+      operationId: public_config_2
+      tags:
+      - public
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicConfigOutput'
+          description: ''
   /api/v1/public/plans/:
     get:
       operationId: api_v1_public_plans_list
@@ -13104,6 +13136,13 @@ components:
       - phone_e164
       - phone_proof_token
       - proof_kind
+    PublicConfigOutput:
+      type: object
+      properties:
+        google_sign_in:
+          type: boolean
+      required:
+      - google_sign_in
     PurposeEnum:
       enum:
       - onboarding

@@ -66,7 +66,7 @@ core/             # shared API helpers, middleware, permissions
 
 ## Auth and providers
 
-- Members: phone OTP (sms.net.bd) or Firebase Google; Bearer HS256 access JWT +
+- Members: phone OTP (sms.net.bd), or Firebase Google when `FIREBASE_CREDENTIALS_FILE` is set (otherwise Google sign-in is hidden); Bearer HS256 access JWT +
   opaque refresh rotation.
 - Staff: TOTP MFA; browser operator console uses Django sessions when provisioned.
 - **Local/dev seed super (Go parity):** `seed_dev` ensures
