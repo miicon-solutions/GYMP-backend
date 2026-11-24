@@ -300,13 +300,18 @@ SSLCOMMERZ_STORE_ID = env("SSLCOMMERZ_STORE_ID", default="")
 SSLCOMMERZ_STORE_PASSWD = env("SSLCOMMERZ_STORE_PASSWD", default="")
 SSLCOMMERZ_SANDBOX = not PRODUCTION and env.bool("SSLCOMMERZ_SANDBOX", default=True)
 ATTENDANCE_DEVICE_KEY = env("ATTENDANCE_DEVICE_KEY", default="")
+# Deprecated: bridge is outbound-only (jobs + heartbeat). Kept so old .env files
+# load without error; product code must not dial these.
 ZKTECO_BRIDGE_URL = env("ZKTECO_BRIDGE_URL", default="").rstrip("/")
 ZKTECO_BRIDGE_KEY = env("ZKTECO_BRIDGE_KEY", default="")
-# When the bridge poller's API_BASE_URL does not point at this API (common for a
-# remote gym bridge + local `make run`), pull punches from ZKTECO_BRIDGE_URL.
-ATTENDANCE_BRIDGE_PULL = env.bool("ATTENDANCE_BRIDGE_PULL", default=bool(ZKTECO_BRIDGE_URL))
+# Attendance is bridge→API push only. Pull required the API to reach the LAN
+# bridge and is disabled by default.
+ATTENDANCE_BRIDGE_PULL = env.bool("ATTENDANCE_BRIDGE_PULL", default=False)
 ATTENDANCE_BRIDGE_PULL_INTERVAL_SEC = env.int("ATTENDANCE_BRIDGE_PULL_INTERVAL_SEC", default=20)
 ATTENDANCE_BRIDGE_PULL_LOOKBACK_DAYS = env.int("ATTENDANCE_BRIDGE_PULL_LOOKBACK_DAYS", default=14)
+# Bridge worker must heartbeat within this window for device ops / status.
+BRIDGE_HEARTBEAT_STALE_SEC = env.int("BRIDGE_HEARTBEAT_STALE_SEC", default=90)
+BRIDGE_JOB_POLL_INTERVAL_SEC = env.float("BRIDGE_JOB_POLL_INTERVAL_SEC", default=0.4)
 BIOMETRIC_ENCRYPTION_KEY = env("BIOMETRIC_ENCRYPTION_KEY", default="") or TOTP_ENCRYPTION_KEY
 LOGGING = {
     "version": 1,

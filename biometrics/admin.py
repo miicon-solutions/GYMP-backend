@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from biometrics.models import (
+    BridgeDeviceJob,
     FingerprintDevice,
     FingerprintDeviceStaffSyncState,
     FingerprintDeviceSyncState,
@@ -11,8 +12,22 @@ from biometrics.models import (
 
 @admin.register(FingerprintDevice)
 class FingerprintDeviceAdmin(admin.ModelAdmin):
-    list_display = ["name", "lan_ip", "port", "is_active", "last_seen_at"]
-    list_filter = ["is_active"]
+    list_display = [
+        "name",
+        "lan_ip",
+        "port",
+        "scanner_online",
+        "is_active",
+        "last_seen_at",
+    ]
+    list_filter = ["is_active", "scanner_online"]
+
+
+@admin.register(BridgeDeviceJob)
+class BridgeDeviceJobAdmin(admin.ModelAdmin):
+    list_display = ["id", "kind", "status", "bridge_device_id", "created_at", "expires_at"]
+    list_filter = ["kind", "status"]
+    readonly_fields = ["payload", "result", "error", "claimed_at", "completed_at"]
 
 
 @admin.register(MemberBiometricTemplate)

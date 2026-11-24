@@ -1,13 +1,10 @@
-"""Pull device punches from zkteco-bridge into this API.
+"""Deprecated attendance pull from zkteco-bridge (inbound to the gym LAN).
 
-The bridge portal reads the scanner live, but check-ins only land in GYMP when
-the bridge poller can POST to ``API_BASE_URL``. A remote bridge often points
-that env at production (or nowhere reachable from a laptop ``make run``), so
-local/dev GYMP stays stale even though ``ZKTECO_BRIDGE_URL`` is correct.
+Production attendance is **bridge → API** push via the bridge poller
+(``SYNC_ENABLED`` + ``API_BASE_URL`` + ``ATTENDANCE_DEVICE_KEY``).
 
-When ``ATTENDANCE_BRIDGE_PULL`` is on, this process polls
-``GET {ZKTECO_BRIDGE_URL}/internal/attendance/`` and ingests rows via
-``record_checkin`` (idempotent per punch timestamp).
+``ATTENDANCE_BRIDGE_PULL`` remains for emergency/dev only and requires a
+reachable legacy ``ZKTECO_BRIDGE_URL``. Prefer push; leave pull ``false``.
 """
 
 from __future__ import annotations
@@ -102,7 +99,11 @@ def pull_once(*, lookback_days: int | None = None) -> dict[str, int]:
 
     Returns counts: ``fetched``, ``recorded``, ``skipped``, ``errors``.
     """
-    if not bridge.configured():
+    # Legacy inbound pull: requires deprecated ZKTECO_BRIDGE_URL (not heartbeat).
+    if not (
+        getattr(settings, "ZKTECO_BRIDGE_URL", "")
+        and getattr(settings, "ZKTECO_BRIDGE_KEY", "")
+    ):
         return {"fetched": 0, "recorded": 0, "skipped": 0, "errors": 0}
 
     days = lookback_days
@@ -199,8 +200,9 @@ def stop_puller() -> None:
 def maybe_start_from_apps() -> None:
     if not getattr(settings, "ATTENDANCE_BRIDGE_PULL", False):
         return
-    if not bridge.configured():
-        logger.info("attendance bridge pull disabled (ZKTECO_BRIDGE_URL/KEY missing)")
+    # Pull still needs a legacy inbound URL; outbound-only deploys leave this off.
+    if not (getattr(settings, "ZKTECO_BRIDGE_URL", "") and getattr(settings, "ZKTECO_BRIDGE_KEY", "")):
+        logger.info("attendance bridge pull disabled (legacy ZKTECO_BRIDGE_URL/KEY missing)")
         return
     if not should_autostart():
         return

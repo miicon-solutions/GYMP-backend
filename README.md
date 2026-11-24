@@ -19,8 +19,8 @@ cp .env.example .env
 # Edit .env: DATABASE_URL → your existing Postgres (host.docker.internal from compose,
 # localhost from host Python). Use DB name gyma_django — never the legacy Go database.
 # Generate TOTP_ENCRYPTION_KEY: python -c 'import secrets; print(secrets.token_hex(32))'
-# Local media: MEDIA_STORAGE=filesystem. Leave ZKTECO_BRIDGE_URL empty unless the
-# standalone zkteco-bridge is running on the gym LAN.
+# Local media: MEDIA_STORAGE=filesystem. Leave ZKTECO_BRIDGE_URL empty — the LAN
+# zkteco-bridge is an outbound client (API_BASE_URL + ATTENDANCE_DEVICE_KEY).
 docker compose up --build -d
 # Local Compose already runs seed_dev after migrate (plans + Go-parity seed super).
 # Capture the printed MFA setup token from api logs on first boot.

@@ -123,11 +123,19 @@
       "doc": "/docs/features/device/",
       "operations": [
         "admin_device_controllers_remove",
+        "admin_device_ping",
         "admin_device_status",
         "api_v1_admin_device_controllers_create",
         "api_v1_admin_device_controllers_retrieve",
+        "internal_bridge_heartbeat",
+        "internal_bridge_job_claim",
+        "internal_bridge_job_complete",
+        "internal_bridge_jobs_claim",
+        "internal_bridge_ping",
+        "internal_vault_export",
         "internal_vault_members",
-        "internal_vault_push"
+        "internal_vault_push",
+        "internal_vault_sync_ack"
       ]
     },
     "staff": {

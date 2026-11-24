@@ -47,6 +47,28 @@ def status_payload(*, device_id: str | None = None):
         "ip": st.ip,
         "port": st.port,
         "message": st.message,
+        "last_seen_at": st.last_seen_at,
+        "heartbeat_age_sec": st.heartbeat_age_sec,
+    }
+
+
+def bridge_ping_payload(*, device_id: str | None = None) -> dict:
+    """Lightweight connection check for admin UIs (heartbeat freshness)."""
+    st = bridge.device_status(device_id=device_id)
+    if st.bridge_ok and st.online:
+        message = "Bridge connected; scanner online."
+    elif st.bridge_ok:
+        message = st.message or "Bridge connected; scanner offline."
+    else:
+        message = st.message or "Bridge offline (no recent heartbeat)."
+    return {
+        "ok": st.bridge_ok,
+        "bridge_connected": st.bridge_ok,
+        "scanner_online": st.online,
+        "message": message,
+        "last_seen_at": st.last_seen_at,
+        "heartbeat_age_sec": st.heartbeat_age_sec,
+        "bridge_device_id": st.bridge_device_id,
     }
 
 
@@ -276,6 +298,7 @@ def list_vault_members() -> dict:
 
 
 def push_vault_bulk(*, bridge_device_id: str, member_ids: list[str] | None) -> dict:
+    """Legacy: enqueue push_user jobs per member (bridge worker applies locally)."""
     if not bridge_device_id:
         raise ValueError("bridge_device_id is required")
     qs = MemberProfile.objects.filter(biometric_templates__isnull=False).distinct()
@@ -293,6 +316,137 @@ def push_vault_bulk(*, bridge_device_id: str, member_ids: list[str] | None) -> d
             log.warning("vault bulk push failed member=%s err=%s", profile.member_id, exc)
             failures.append({"member_id": profile.member_id, "error": str(exc)})
     return {"pushed": pushed, "failed": len(failures), "failures": failures}
+
+
+def export_vault(
+    *,
+    member_ids: list[str] | None = None,
+    include_staff: bool = True,
+) -> dict:
+    """Return decrypted vault payloads for the bridge to push locally (no callback)."""
+    users: list[dict] = []
+
+    member_qs = MemberProfile.objects.filter(biometric_templates__isnull=False).distinct()
+    if member_ids is not None:
+        member_qs = member_qs.filter(member_id__in=member_ids)
+    for profile in member_qs.select_related("user").prefetch_related("biometric_templates"):
+        templates = {
+            str(row.finger_index): base64.b64encode(
+                crypto.decrypt_bytes(row.template_ciphertext)
+            ).decode()
+            for row in profile.biometric_templates.all()
+        }
+        if not templates:
+            continue
+        pin = ""
+        if profile.device_pin_enc:
+            pin = crypto.decrypt_bytes(profile.device_pin_enc).decode()
+        users.append(
+            {
+                "kind": "member",
+                "user_id": profile.member_id,
+                "name": (profile.user.full_name or profile.member_id).strip()
+                or profile.member_id,
+                "pin": pin,
+                "privilege": bridge.ZK_PRIVILEGE_DEFAULT,
+                "templates": templates,
+            }
+        )
+
+    if include_staff:
+        staff_qs = (
+            StaffProfile.objects.filter(biometric_templates__isnull=False)
+            .select_related("user")
+            .prefetch_related("biometric_templates")
+            .distinct()
+        )
+        for staff in staff_qs:
+            templates = {
+                str(row.finger_index): base64.b64encode(
+                    crypto.decrypt_bytes(row.template_ciphertext)
+                ).decode()
+                for row in staff.biometric_templates.all()
+            }
+            if not templates:
+                continue
+            users.append(
+                {
+                    "kind": "staff",
+                    "user_id": staff.short_id,
+                    "name": (staff.user.full_name or staff.short_id).strip()
+                    or staff.short_id,
+                    "pin": "",
+                    "privilege": _staff_privilege(staff),
+                    "templates": templates,
+                }
+            )
+
+    return {"count": len(users), "users": users}
+
+
+def ack_vault_sync(
+    *,
+    bridge_device_id: str,
+    member_ids: list[str] | None = None,
+    staff_ids: list[str] | None = None,
+    failures: list[dict] | None = None,
+) -> dict:
+    """Mark vault rows synced after the bridge applied templates locally."""
+    if not bridge_device_id:
+        raise ValidationError({"bridge_device_id": "Required."})
+    device = _resolve_target_device(bridge_device_id)
+    if device is None:
+        raise ValidationError({"bridge_device_id": "Unknown device."})
+
+    failure_map = {
+        str(item.get("member_id") or ""): str(item.get("error") or "")
+        for item in (failures or [])
+        if isinstance(item, dict)
+    }
+    now = timezone.now()
+    synced_members = 0
+    synced_staff = 0
+
+    if member_ids is not None:
+        for mid in member_ids:
+            profile = MemberProfile.objects.filter(member_id=mid).first()
+            if not profile:
+                continue
+            err = failure_map.get(mid, "")
+            FingerprintDeviceSyncState.objects.update_or_create(
+                device=device,
+                member=profile,
+                defaults={
+                    "templates_synced_at": None if err else now,
+                    "pin_synced_at": None if err else now,
+                    "last_error": err,
+                },
+            )
+            if not err:
+                synced_members += 1
+
+    if staff_ids is not None:
+        for sid in staff_ids:
+            staff = StaffProfile.objects.filter(short_id=sid).first()
+            if not staff:
+                continue
+            err = failure_map.get(sid, "")
+            FingerprintDeviceStaffSyncState.objects.update_or_create(
+                device=device,
+                staff=staff,
+                defaults={
+                    "templates_synced_at": None if err else now,
+                    "last_error": err,
+                },
+            )
+            if not err:
+                synced_staff += 1
+
+    return {
+        "ok": True,
+        "synced_members": synced_members,
+        "synced_staff": synced_staff,
+    }
 
 
 def get_member_for_admin(pk):

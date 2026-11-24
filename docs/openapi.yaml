@@ -348,6 +348,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeviceControllerRemovedOutput'
           description: ''
+  /api/v1/admin/device/ping/:
+    get:
+      operationId: admin_device_ping
+      tags:
+      - device
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgePingOutput'
+          description: ''
   /api/v1/admin/device/status/:
     get:
       operationId: admin_device_status
@@ -2753,6 +2768,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/CheckInOutput'
           description: ''
+  /api/v1/internal/biometrics/vault-export/:
+    post:
+      operationId: internal_vault_export
+      tags:
+      - device
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultExportInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VaultExportInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VaultExportInput'
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultExportOutput'
+          description: ''
   /api/v1/internal/biometrics/vault-members/:
     get:
       operationId: internal_vault_members
@@ -2794,6 +2835,159 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VaultBulkPushOutput'
+          description: ''
+  /api/v1/internal/biometrics/vault-sync-ack/:
+    post:
+      operationId: internal_vault_sync_ack
+      tags:
+      - device
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultSyncAckInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VaultSyncAckInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VaultSyncAckInput'
+        required: true
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultSyncAckOutput'
+          description: ''
+  /api/v1/internal/bridge/heartbeat/:
+    post:
+      operationId: internal_bridge_heartbeat
+      tags:
+      - device
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BridgeHeartbeatInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BridgeHeartbeatInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BridgeHeartbeatInput'
+        required: true
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgeHeartbeatOutput'
+          description: ''
+  /api/v1/internal/bridge/jobs/:
+    get:
+      operationId: internal_bridge_jobs_claim
+      parameters:
+      - in: query
+        name: bridge_device_id
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          type: string
+      tags:
+      - device
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgeJobsClaimOutput'
+          description: ''
+  /api/v1/internal/bridge/jobs/{id}/claim/:
+    post:
+      operationId: internal_bridge_job_claim
+      parameters:
+      - in: query
+        name: bridge_device_id
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - device
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgeJobsClaimOutput'
+          description: ''
+  /api/v1/internal/bridge/jobs/{id}/complete/:
+    post:
+      operationId: internal_bridge_job_complete
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - device
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BridgeJobCompleteInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BridgeJobCompleteInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BridgeJobCompleteInput'
+        required: true
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgeJobCompleteOutput'
+          description: ''
+  /api/v1/internal/bridge/ping/:
+    get:
+      operationId: internal_bridge_ping
+      tags:
+      - device
+      security:
+      - deviceKey: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BridgePingOutput'
           description: ''
   /api/v1/journal/entries/:
     get:
@@ -6511,6 +6705,144 @@ components:
         prefer_custom:
           type: boolean
           default: true
+    BridgeHeartbeatInput:
+      type: object
+      properties:
+        bridge_device_id:
+          type: string
+        online:
+          type: boolean
+        name:
+          type: string
+        serial:
+          type: string
+        firmware:
+          type: string
+        user_count:
+          type: integer
+          minimum: 0
+          default: 0
+        ip:
+          type: string
+        port:
+          type: integer
+          maximum: 65535
+          minimum: 1
+          default: 4370
+      required:
+      - online
+    BridgeHeartbeatOutput:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        bridge_device_id:
+          type: string
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - bridge_device_id
+      - last_seen_at
+      - ok
+    BridgeJobCompleteInput:
+      type: object
+      properties:
+        status:
+          enum:
+          - succeeded
+          - failed
+          type: string
+          description: '* `succeeded` - succeeded
+
+            * `failed` - failed'
+          x-spec-enum-id: c784105c2922494d
+        result:
+          type: object
+          additionalProperties: {}
+        error:
+          type: string
+      required:
+      - status
+    BridgeJobCompleteOutput:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+      required:
+      - id
+      - ok
+      - status
+    BridgeJobOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        status:
+          type: string
+        payload:
+          type: object
+          additionalProperties: {}
+        bridge_device_id:
+          type: string
+        expires_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          nullable: true
+      required:
+      - bridge_device_id
+      - id
+      - kind
+      - payload
+      - status
+    BridgeJobsClaimOutput:
+      type: object
+      properties:
+        count:
+          type: integer
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/BridgeJobOutput'
+      required:
+      - count
+      - jobs
+    BridgePingOutput:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        bridge_connected:
+          type: boolean
+        scanner_online:
+          type: boolean
+        message:
+          type: string
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        heartbeat_age_sec:
+          type: integer
+          nullable: true
+        bridge_device_id:
+          type: string
+      required:
+      - bridge_connected
+      - message
+      - ok
+      - scanner_online
     CashPaymentRequest:
       type: object
       properties:
@@ -7244,6 +7576,13 @@ components:
           type: integer
         message:
           type: string
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        heartbeat_age_sec:
+          type: integer
+          nullable: true
       required:
       - bridge_ok
       - firmware
@@ -11951,6 +12290,62 @@ components:
       - failed
       - failures
       - pushed
+    VaultExportInput:
+      type: object
+      properties:
+        bridge_device_id:
+          type: string
+        member_ids:
+          type: array
+          items:
+            type: string
+          nullable: true
+        include_staff:
+          type: boolean
+          default: true
+    VaultExportOutput:
+      type: object
+      properties:
+        count:
+          type: integer
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaultExportUser'
+      required:
+      - count
+      - users
+    VaultExportUser:
+      type: object
+      properties:
+        kind:
+          enum:
+          - member
+          - staff
+          type: string
+          description: '* `member` - member
+
+            * `staff` - staff'
+          x-spec-enum-id: 817cba736a0ad590
+        user_id:
+          type: string
+        name:
+          type: string
+        pin:
+          type: string
+        privilege:
+          type: integer
+        templates:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+      - kind
+      - name
+      - pin
+      - privilege
+      - templates
+      - user_id
     VaultMemberOutput:
       type: object
       properties:
@@ -11984,6 +12379,40 @@ components:
       required:
       - count
       - members
+    VaultSyncAckInput:
+      type: object
+      properties:
+        bridge_device_id:
+          type: string
+        member_ids:
+          type: array
+          items:
+            type: string
+          nullable: true
+        staff_ids:
+          type: array
+          items:
+            type: string
+          nullable: true
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaultBulkFailure'
+      required:
+      - bridge_device_id
+    VaultSyncAckOutput:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        synced_members:
+          type: integer
+        synced_staff:
+          type: integer
+      required:
+      - ok
+      - synced_members
+      - synced_staff
     VaultSyncOutput:
       type: object
       properties:

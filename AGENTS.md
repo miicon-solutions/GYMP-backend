@@ -59,10 +59,13 @@ core/             # shared API helpers, middleware, permissions
   `gyma_django` — never the legacy Go database).
 - From the API container use `host.docker.internal`; from host Python use
   `localhost` and the published Postgres port.
-- `ZKTECO_BRIDGE_URL` / `ZKTECO_BRIDGE_KEY` are optional. Empty = full product
-  except hardware enroll/sync. Health must not call the bridge.
+- Hardware control is **outbound-only**: the LAN `zkteco-bridge` dials this API
+  (`API_BASE_URL` + `ATTENDANCE_DEVICE_KEY`) for heartbeat, device jobs, vault
+  export, and attendance push. **`ZKTECO_BRIDGE_URL` is not required** (deprecated).
+  Empty/no recent heartbeat = full product except hardware enroll/sync. Health
+  must not call the bridge.
 - Start bridge separately: sibling `zkteco-bridge/` `docker compose up` on the
-  gym LAN.
+  gym LAN (same network as the scanner).
 
 ## Auth and providers
 
@@ -113,11 +116,12 @@ core/             # shared API helpers, middleware, permissions
   dropped on send; APNs/project misconfig must not delete tokens.
 - Device check-in: `X-Device-Key` == `ATTENDANCE_DEVICE_KEY` on
   `POST /api/v1/internal/attendance/check-in/`.
-- Remote bridge + local API: bridge push uses its own `API_BASE_URL` (often
-  production). Set `ZKTECO_BRIDGE_URL` and leave `ATTENDANCE_BRIDGE_PULL=true`
-  (default when URL is set) so this API polls
-  `GET {bridge}/internal/attendance/` and ingests punches. One-shot:
-  `manage.py pull_bridge_attendance`.
+- Bridge control plane (same `X-Device-Key`): `POST …/internal/bridge/heartbeat/`,
+  `GET …/internal/bridge/jobs/` (claim), `POST …/jobs/{id}/complete/`,
+  `POST …/internal/biometrics/vault-export/`, `POST …/vault-sync-ack/`.
+  Admin enroll/push/delete enqueue jobs and wait until the bridge completes.
+- Attendance is bridge→API push only. `ATTENDANCE_BRIDGE_PULL` defaults **false**
+  (legacy inbound pull; needs deprecated `ZKTECO_BRIDGE_URL`).
 - SSLCommerz: session → gateway → IPN/confirm; return pages never activate alone;
   IPN idempotent. Same architectural flow as the Go API.
 - Member cash request (first purchase): `POST /api/v1/member/payments/cash-requests/`
@@ -153,11 +157,12 @@ core/             # shared API helpers, middleware, permissions
   `GET/POST/DELETE …/admin/device/controllers/`. Controllers are ensured on the
   bridge with ZK `USER_ADMIN` (14) so they can open the scanner settings menu;
   members and non-controller staff stay `USER_DEFAULT` (0).
-- Device reachability: `GET …/admin/device/status/` (any authenticated staff).
-  `online` is true only when the bridge can probe the scanner. Fingerprint
-  enroll/delete and device-controller add call `require_device_online` and
-  return **503** when the scanner is unreachable — admin UIs should disable
-  those actions after a status probe rather than letting staff start a wait.
+- Device reachability: `GET …/admin/device/status/` (any authenticated staff)
+  reads the latest bridge **heartbeat** (`bridge_ok` = recent heartbeat;
+  `online` = scanner reachable on last probe). Fingerprint enroll/delete and
+  device-controller add call `require_device_online` and return **503** when
+  the scanner is unreachable — admin UIs should disable those actions after a
+  status probe rather than letting staff start a wait.
 
 ## API docs (humans + AI agents)
 

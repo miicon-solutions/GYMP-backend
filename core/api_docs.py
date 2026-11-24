@@ -63,6 +63,7 @@ _PATH_TAG_RULES: list[tuple[str, str]] = [
     ("admin/reports", "reports"),
     ("internal/attendance", "attendance"),
     ("internal/biometrics", "device"),
+    ("internal/bridge", "device"),
     ("webhooks/", "payments"),
     ("public/plans", "plans"),
     ("public/", "public"),

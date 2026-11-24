@@ -9,9 +9,12 @@ class FingerprintDevice(Entity):
     lan_ip = models.CharField(max_length=64)
     port = models.PositiveIntegerField(default=4370)
     serial = models.CharField(max_length=120, blank=True)
+    firmware = models.CharField(max_length=120, blank=True)
+    user_count = models.PositiveIntegerField(default=0)
     comm_password_enc = models.TextField(blank=True)
     bridge_device_id = models.CharField(max_length=64, blank=True, db_index=True)
     is_active = models.BooleanField(default=True)
+    scanner_online = models.BooleanField(default=False)
     last_seen_at = models.DateTimeField(null=True, blank=True)
 
     class Meta(Entity.Meta):
@@ -109,4 +112,54 @@ class FingerprintDeviceStaffSyncState(models.Model):
             models.UniqueConstraint(
                 fields=["device", "staff"], name="fingerprint_device_staff_sync"
             ),
+        ]
+
+
+class BridgeDeviceJob(Entity):
+    """Outbound command for the LAN bridge worker (bridge polls and completes)."""
+
+    KIND_DEVICE_STATUS = "device_status"
+    KIND_ENSURE_USER = "ensure_user"
+    KIND_ENROLL = "enroll"
+    KIND_GET_TEMPLATES = "get_templates"
+    KIND_PUSH_USER = "push_user"
+    KIND_DELETE_FINGERPRINT = "delete_fingerprint"
+    KIND_CHOICES = (
+        (KIND_DEVICE_STATUS, KIND_DEVICE_STATUS),
+        (KIND_ENSURE_USER, KIND_ENSURE_USER),
+        (KIND_ENROLL, KIND_ENROLL),
+        (KIND_GET_TEMPLATES, KIND_GET_TEMPLATES),
+        (KIND_PUSH_USER, KIND_PUSH_USER),
+        (KIND_DELETE_FINGERPRINT, KIND_DELETE_FINGERPRINT),
+    )
+
+    STATUS_PENDING = "pending"
+    STATUS_CLAIMED = "claimed"
+    STATUS_SUCCEEDED = "succeeded"
+    STATUS_FAILED = "failed"
+    STATUS_EXPIRED = "expired"
+    STATUS_CHOICES = (
+        (STATUS_PENDING, STATUS_PENDING),
+        (STATUS_CLAIMED, STATUS_CLAIMED),
+        (STATUS_SUCCEEDED, STATUS_SUCCEEDED),
+        (STATUS_FAILED, STATUS_FAILED),
+        (STATUS_EXPIRED, STATUS_EXPIRED),
+    )
+
+    kind = models.CharField(max_length=40, choices=KIND_CHOICES, db_index=True)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True
+    )
+    payload = models.JSONField(default=dict, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True)
+    bridge_device_id = models.CharField(max_length=64, blank=True, db_index=True)
+    idempotency_key = models.CharField(max_length=120, blank=True, db_index=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta(Entity.Meta):
+        indexes = [
+            models.Index(fields=["status", "created_at"], name="bridge_job_status_created"),
         ]

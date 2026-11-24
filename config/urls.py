@@ -26,8 +26,16 @@ from attendance.services import (
     record_checkin,
     record_checkout,
 )
+from biometrics import jobs as bridge_jobs
 from biometrics import services as bio
 from biometrics.serializers import (
+    BridgeHeartbeatInput,
+    BridgeHeartbeatOutput,
+    BridgeJobCompleteInput,
+    BridgeJobCompleteOutput,
+    BridgeJobsClaimOutput,
+    BridgeJobsClaimQuery,
+    BridgePingOutput,
     DeviceStatusOutput,
     EnrollInteractiveInput,
     EnrollInteractiveOutput,
@@ -36,7 +44,11 @@ from biometrics.serializers import (
     StaffTemplatesOutput,
     VaultBulkPushInput,
     VaultBulkPushOutput,
+    VaultExportInput,
+    VaultExportOutput,
     VaultMembersOutput,
+    VaultSyncAckInput,
+    VaultSyncAckOutput,
     VaultSyncOutput,
 )
 from core import public
@@ -148,6 +160,65 @@ def mfa_enroll(request, data, pk):
             raise NotFound("Staff not found.")
         auth.User.objects.select_for_update().get(pk=user.pk)
         return auth.begin_mfa(user)
+
+
+def _bridge_heartbeat(data):
+    device = bridge_jobs.record_heartbeat(data)
+    return {
+        "ok": True,
+        "bridge_device_id": device.bridge_device_id or "",
+        "last_seen_at": device.last_seen_at,
+    }
+
+
+def _bridge_claim_jobs(_request, data):
+    claimed = bridge_jobs.claim_next(
+        bridge_device_id=data.get("bridge_device_id") or None,
+        limit=int(data.get("limit") or 1),
+    )
+    return {
+        "count": len(claimed),
+        "jobs": [bridge_jobs.job_wire(job) for job in claimed],
+    }
+
+
+def _bridge_claim_one(request, _data, pk):
+    from biometrics.models import BridgeDeviceJob
+    from rest_framework.exceptions import NotFound, ValidationError
+
+    bid = (request.query_params.get("bridge_device_id") or "").strip()
+    with transaction.atomic():
+        try:
+            job = BridgeDeviceJob.objects.select_for_update().get(pk=pk)
+        except BridgeDeviceJob.DoesNotExist as exc:
+            raise NotFound("Bridge job not found.") from exc
+        if job.status != BridgeDeviceJob.STATUS_PENDING:
+            raise ValidationError({"status": "Job is not pending."})
+        from django.utils import timezone
+
+        now = timezone.now()
+        if job.expires_at and job.expires_at <= now:
+            job.status = BridgeDeviceJob.STATUS_EXPIRED
+            job.error = "Bridge job expired before completion."
+            job.completed_at = now
+            job.save(update_fields=["status", "error", "completed_at", "updated_at"])
+            raise ValidationError({"status": "Job expired."})
+        job.status = BridgeDeviceJob.STATUS_CLAIMED
+        job.claimed_at = now
+        if bid and not job.bridge_device_id:
+            job.bridge_device_id = bid
+        job.save(update_fields=["status", "claimed_at", "bridge_device_id", "updated_at"])
+    return {"count": 1, "jobs": [bridge_jobs.job_wire(job)]}
+
+
+def _bridge_complete_job(pk, data):
+    job = bridge_jobs.complete_job(
+        pk,
+        status=data["status"],
+        result=data.get("result") or {},
+        error=data.get("error") or "",
+    )
+    return {"ok": True, "id": job.id, "status": job.status}
 
 
 api = [
@@ -459,6 +530,41 @@ api = [
             permission=AllowAny,
             authentication=[DeviceAuthentication],
             throttle_public=False,
+            tags=["device"],
+        ),
+    ),
+    path(
+        "internal/biometrics/vault-export/",
+        endpoint(
+            "internal_vault_export",
+            response=VaultExportOutput,
+            handler=lambda r, d: bio.export_vault(
+                member_ids=d.get("member_ids"),
+                include_staff=bool(d.get("include_staff", True)),
+            ),
+            request=VaultExportInput,
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+            tags=["device"],
+        ),
+    ),
+    path(
+        "internal/biometrics/vault-sync-ack/",
+        endpoint(
+            "internal_vault_sync_ack",
+            response=VaultSyncAckOutput,
+            handler=lambda r, d: bio.ack_vault_sync(
+                bridge_device_id=d["bridge_device_id"],
+                member_ids=d.get("member_ids"),
+                staff_ids=d.get("staff_ids"),
+                failures=d.get("failures"),
+            ),
+            request=VaultSyncAckInput,
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+            tags=["device"],
         ),
     ),
     path(
@@ -474,6 +580,83 @@ api = [
             permission=AllowAny,
             authentication=[DeviceAuthentication],
             throttle_public=False,
+            tags=["device"],
+        ),
+    ),
+    path(
+        "internal/bridge/ping/",
+        endpoint(
+            "internal_bridge_ping",
+            response=BridgePingOutput,
+            handler=lambda r, d: {
+                "ok": True,
+                "bridge_connected": True,
+                "scanner_online": False,
+                "message": "GYMP-backend reachable; device key accepted.",
+                "last_seen_at": None,
+                "heartbeat_age_sec": None,
+                "bridge_device_id": "",
+            },
+            method="get",
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+            tags=["device"],
+        ),
+    ),
+    path(
+        "internal/bridge/heartbeat/",
+        endpoint(
+            "internal_bridge_heartbeat",
+            response=BridgeHeartbeatOutput,
+            handler=lambda r, d: _bridge_heartbeat(d),
+            request=BridgeHeartbeatInput,
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+            tags=["device"],
+        ),
+    ),
+    path(
+        "internal/bridge/jobs/",
+        endpoint(
+            "internal_bridge_jobs_claim",
+            response=BridgeJobsClaimOutput,
+            handler=_bridge_claim_jobs,
+            method="get",
+            request=BridgeJobsClaimQuery,
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+            tags=["device"],
+            parameters=query_parameters("bridge_device_id", "limit"),
+        ),
+    ),
+    path(
+        "internal/bridge/jobs/<uuid:pk>/claim/",
+        endpoint(
+            "internal_bridge_job_claim",
+            response=BridgeJobsClaimOutput,
+            handler=_bridge_claim_one,
+            method="post",
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+            tags=["device"],
+            parameters=query_parameters("bridge_device_id"),
+        ),
+    ),
+    path(
+        "internal/bridge/jobs/<uuid:pk>/complete/",
+        endpoint(
+            "internal_bridge_job_complete",
+            response=BridgeJobCompleteOutput,
+            handler=lambda r, d, pk: _bridge_complete_job(pk, d),
+            request=BridgeJobCompleteInput,
+            permission=AllowAny,
+            authentication=[DeviceAuthentication],
+            throttle_public=False,
+            tags=["device"],
         ),
     ),
     path("admin/members/", AdminMemberList.as_view()),
@@ -510,6 +693,17 @@ api = [
             # Any staff may probe reachability so fingerprint UIs can gate
             # enroll/delete without requiring device_controllers.view.
             permission=AdminOnly,
+        ),
+    ),
+    path(
+        "admin/device/ping/",
+        endpoint(
+            "admin_device_ping",
+            response=BridgePingOutput,
+            handler=lambda r, d: bio.bridge_ping_payload(),
+            method="get",
+            permission=AdminOnly,
+            tags=["device"],
         ),
     ),
     path("admin/device/controllers/", DeviceControllersList.as_view()),
