@@ -121,7 +121,8 @@ core/             # shared API helpers, middleware, permissions
   bundle id matches the shipping app. Invalid/unregistered tokens are
   dropped on send; APNs/project misconfig must not delete tokens.
 - Device check-in: `X-Device-Key` == `ATTENDANCE_DEVICE_KEY` on
-  `POST /api/v1/internal/attendance/check-in/`.
+  `POST /api/v1/internal/attendance/check-in/`. An empty key denies every
+  device and bridge call; production does not require the setting.
 - Bridge control plane (same `X-Device-Key`): `POST …/internal/bridge/heartbeat/`,
   `GET …/internal/bridge/jobs/` (claim), `POST …/jobs/{id}/complete/`,
   `POST …/internal/biometrics/vault-export/`, `POST …/vault-sync-ack/`.

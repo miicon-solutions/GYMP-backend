@@ -241,6 +241,23 @@ def test_production_starts_without_sslcommerz():
     assert result.stdout.strip() == "'' ''"
 
 
+def test_production_starts_without_attendance_device_key():
+    env = production_env()
+    env.pop("ATTENDANCE_DEVICE_KEY", None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from config import settings as s; print(repr(s.ATTENDANCE_DEVICE_KEY))",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "''"
+
+
 def test_production_forces_bypasses_off():
     result = subprocess.run(
         [

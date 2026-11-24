@@ -325,7 +325,6 @@ if PRODUCTION:
     for name in (
         "TOTP_ENCRYPTION_KEY",
         "SMS_NET_BD_API_KEY",
-        "ATTENDANCE_DEVICE_KEY",
     ):
         if not globals()[name]:
             raise ImproperlyConfigured(f"{name} is required in production.")
