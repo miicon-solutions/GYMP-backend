@@ -284,6 +284,7 @@
         "api_v1_music_queue_complete_create",
         "api_v1_music_queue_create",
         "api_v1_music_queue_destroy",
+        "api_v1_music_queue_play_create",
         "api_v1_music_queue_report_create",
         "api_v1_music_queue_restore_create",
         "api_v1_music_queue_retrieve",

@@ -1,4 +1,5 @@
 import re
+from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -8,7 +9,7 @@ from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from accounts.models import User
-from core.api import require_admin
+from core.api import require_staff_permission
 from music.models import (
     ACTIVE_QUEUE_STATUSES,
     MAX_SONGS_PER_USER_DEFAULT,
@@ -30,8 +31,32 @@ YOUTUBE_HOSTS = {
     "www.youtube-nocookie.com",
 }
 AGE_RESTRICTED_PATTERNS = re.compile(
-    r"(\b18\+\b|\bnsfw\b|\bage[\s-]*restricted\b|\badult\s+only\b|\bexplicit\s+18\+\b|\buncensored\s+18\+\b)",
+    r"("
+    r"\b18\+\b|"
+    r"\bnsfw\b|"
+    r"\bage[\s-]*restricted\b|"
+    r"\badult\s+only\b|"
+    r"\bexplicit\s+18\+\b|"
+    r"\buncensored\s+18\+\b|"
+    r"\bxxx\b|"
+    r"\bporn\b|"
+    r"\bporno\b|"
+    r"\bhentai\b|"
+    r"\berotic\b|"
+    r"\bsex\s*tape\b|"
+    r"\bonlyfans\b|"
+    r"\bnude\b|"
+    r"\bnudity\b|"
+    r"\bnot\s+safe\s+for\s+work\b|"
+    r"\bmature\s+audiences?\s+only\b|"
+    r"\bexplicit\s+(content|video|version)\b|"
+    r"\[explicit\]|\(explicit\)"
+    r")",
     re.IGNORECASE,
+)
+
+AGE_RESTRICTED_ADD_ERROR = (
+    "This track looks age-restricted or 18+ and can't be added to FloorCue."
 )
 
 FALLBACK_GYM_TRACKS = [
@@ -165,8 +190,16 @@ def parse_duration_seconds(duration_text: str) -> int | None:
     return total
 
 
-def is_age_restricted_content(title: str = "", metadata: dict | None = None) -> bool:
+def is_age_restricted_content(
+    title: str = "",
+    metadata: dict | None = None,
+    *,
+    channel_title: str = "",
+) -> bool:
+    """Heuristic 18+ / age-gate check (title, channel, metadata flags). Not perfect."""
     if title and AGE_RESTRICTED_PATTERNS.search(title):
+        return True
+    if channel_title and AGE_RESTRICTED_PATTERNS.search(channel_title):
         return True
     if metadata:
         if metadata.get("age_restricted") or metadata.get("is_age_restricted"):
@@ -174,7 +207,20 @@ def is_age_restricted_content(title: str = "", metadata: dict | None = None) -> 
         m_title = str(metadata.get("title") or "")
         if m_title and AGE_RESTRICTED_PATTERNS.search(m_title):
             return True
+        m_channel = str(metadata.get("channel_title") or "")
+        if m_channel and AGE_RESTRICTED_PATTERNS.search(m_channel):
+            return True
     return False
+
+
+def reject_if_age_restricted(
+    title: str = "",
+    metadata: dict | None = None,
+    *,
+    channel_title: str = "",
+) -> None:
+    if is_age_restricted_content(title, metadata, channel_title=channel_title):
+        raise ValidationError({"youtube_url": AGE_RESTRICTED_ADD_ERROR})
 
 
 def resolve_youtube_metadata(video_id: str) -> dict:
@@ -237,16 +283,20 @@ def _extract_video_renderers(node, collected: list, limit: int):
                     "".join(r.get("text", "") for r in title_runs)
                     or renderer.get("title", {}).get("simpleText", "")
                 ).strip()
-                # Skip age-restricted search results automatically
                 badges = str(renderer.get("badges") or "")
-                if is_age_restricted_content(title) or "age-restricted" in badges.lower():
-                    return
                 owner_runs = (
                     renderer.get("ownerText", {}).get("runs")
                     or renderer.get("longBylineText", {}).get("runs")
                     or []
                 )
                 channel_title = "".join(r.get("text", "") for r in owner_runs).strip()
+                # Skip age-restricted / 18+ search results automatically
+                if (
+                    is_age_restricted_content(title, channel_title=channel_title)
+                    or "age-restricted" in badges.lower()
+                    or "agerestricted" in badges.lower()
+                ):
+                    return
                 duration_text = (
                     renderer.get("lengthText", {}).get("simpleText", "")
                     or "".join(
@@ -287,7 +337,11 @@ def search_youtube(query: str, limit: int = 10) -> list[dict]:
     direct_id = extract_youtube_video_id(cleaned, allow_bare_id=False)
     if direct_id:
         meta = resolve_youtube_metadata(direct_id)
-        if not is_age_restricted_content(meta.get("title", ""), meta):
+        if not is_age_restricted_content(
+            meta.get("title", ""),
+            meta,
+            channel_title=str(meta.get("channel_title") or ""),
+        ):
             results.append(meta)
         if len(results) >= limit:
             return results[:limit]
@@ -348,7 +402,7 @@ def get_settings(*, for_update: bool = False) -> MusicSettings:
             singleton_id=1,
             defaults={
                 "is_enabled": True,
-                "require_approval": False,
+                "require_approval": True,
                 "max_songs_per_user": MAX_SONGS_PER_USER_DEFAULT,
             },
         )
@@ -357,8 +411,14 @@ def get_settings(*, for_update: bool = False) -> MusicSettings:
     return obj
 
 
-def _sync_playing_track(settings_obj: MusicSettings) -> MusicQueueItem | None:
-    """Ensure queue playback state matches settings_obj.is_enabled and FIFO ordering, skipping reported/pending tracks."""
+def _sync_playing_track(
+    settings_obj: MusicSettings, *, advance: bool = False
+) -> MusicQueueItem | None:
+    """Keep playback consistent with settings.
+
+    Does **not** auto-start the next track on GET/add unless ``advance=True``
+    (staff play / skip / complete / remove-of-playing). Pending approval never plays.
+    """
     if not settings_obj.is_enabled:
         MusicQueueItem.objects.filter(status="playing").update(status="queued", started_at=None)
         return None
@@ -379,6 +439,9 @@ def _sync_playing_track(settings_obj: MusicSettings) -> MusicQueueItem | None:
         return playing_items[0]
     if len(playing_items) == 1:
         return playing_items[0]
+
+    if not advance:
+        return None
 
     next_item = (
         MusicQueueItem.objects.select_for_update()
@@ -413,7 +476,9 @@ def serialize_queue_item(
         current_user and current_user.is_authenticated and item.user_id == current_user.id
     )
     is_admin = bool(current_user and current_user.is_authenticated and current_user.role == "admin")
-    can_remove = item.status in ACTIVE_QUEUE_STATUSES and (is_admin or is_owner)
+    can_remove = (item.status in ACTIVE_QUEUE_STATUSES and (is_admin or is_owner)) or (
+        is_admin and item.status in ("played", "skipped")
+    )
     can_report = (
         item.status in PLAYABLE_QUEUE_STATUSES
         and not item.is_reported
@@ -447,7 +512,7 @@ def serialize_queue_item(
 @transaction.atomic
 def get_queue_state(user) -> dict:
     settings_obj = get_settings(for_update=True)
-    _sync_playing_track(settings_obj)
+    _sync_playing_track(settings_obj, advance=False)
 
     is_admin = bool(user and user.is_authenticated and user.role == "admin")
     is_user_blocked = bool(
@@ -456,7 +521,8 @@ def get_queue_state(user) -> dict:
         and MusicBlockedUser.objects.filter(user=user).exists()
     )
 
-    # Playable queue excludes reported items and pending_approval items
+    # Playable items exclude reported / pending_approval. now_playing is separate
+    # from queue (upcoming only) so the UI does not duplicate the current track.
     playable_items = list(
         MusicQueueItem.objects.filter(status__in=PLAYABLE_QUEUE_STATUSES, is_reported=False)
         .select_related("user", "user__member_profile", "user__staff_profile")
@@ -464,13 +530,16 @@ def get_queue_state(user) -> dict:
     )
     playing_list = [i for i in playable_items if i.status == "playing"]
     queued_list = [i for i in playable_items if i.status == "queued"]
-    ordered_active = playing_list + queued_list
 
+    now_playing = (
+        serialize_queue_item(playing_list[0], current_user=user, position=None)
+        if playing_list
+        else None
+    )
     serialized_queue = [
         serialize_queue_item(item, current_user=user, position=idx + 1)
-        for idx, item in enumerate(ordered_active)
+        for idx, item in enumerate(queued_list)
     ]
-    now_playing = serialized_queue[0] if playing_list else None
 
     # Pending approval items (admins see all; members see their own pending items)
     pending_qs = (
@@ -581,33 +650,21 @@ def add_song_to_queue(user, data: dict) -> dict:
     provided_duration_text = (data.get("duration_text") or "").strip()
     provided_duration_seconds = data.get("duration_seconds")
 
-    meta = None
-    if not provided_title:
-        meta = resolve_youtube_metadata(video_id)
-        title = meta["title"]
-        channel_title = provided_channel or meta["channel_title"]
-        thumbnail_url = provided_thumb or meta["thumbnail_url"]
-        duration_text = provided_duration_text or meta.get("duration_text", "")
-        duration_seconds = (
-            provided_duration_seconds
-            if provided_duration_seconds is not None
-            else meta.get("duration_seconds")
-        )
-    else:
-        title = provided_title[:300]
-        channel_title = provided_channel[:200]
-        thumbnail_url = provided_thumb or default_thumbnail_url(video_id)
-        duration_text = provided_duration_text[:32]
-        duration_seconds = (
-            provided_duration_seconds
-            if provided_duration_seconds is not None
-            else parse_duration_seconds(duration_text)
-        )
+    # Always resolve oEmbed when possible so 18+ checks use live title/channel.
+    meta = resolve_youtube_metadata(video_id)
+    title = (provided_title or meta["title"])[:300]
+    channel_title = (provided_channel or meta.get("channel_title") or "")[:200]
+    thumbnail_url = provided_thumb or meta.get("thumbnail_url") or default_thumbnail_url(video_id)
+    duration_text = (provided_duration_text or meta.get("duration_text") or "")[:32]
+    duration_seconds = (
+        provided_duration_seconds
+        if provided_duration_seconds is not None
+        else meta.get("duration_seconds")
+    )
+    if duration_seconds is None:
+        duration_seconds = parse_duration_seconds(duration_text)
 
-    if is_age_restricted_content(title, meta):
-        raise ValidationError(
-            {"youtube_url": "Age-restricted videos are blocked and cannot be added to the gym queue."}
-        )
+    reject_if_age_restricted(title, meta, channel_title=channel_title)
 
     initial_status = (
         "pending_approval"
@@ -627,7 +684,8 @@ def add_song_to_queue(user, data: dict) -> dict:
         status=initial_status,
     )
 
-    _sync_playing_track(settings_obj)
+    # Never auto-start playback on add — staff must call play.
+    _sync_playing_track(settings_obj, advance=False)
     item.refresh_from_db()
 
     state = get_queue_state(user)
@@ -652,28 +710,32 @@ def remove_song_from_queue(actor, item_id) -> dict:
     if actor.role != "admin" and item.user_id != actor.id:
         raise PermissionDenied("Only staff or the member who added this song can remove it.")
 
+    was_playing = item.status == "playing"
     item.status = "removed"
     item.ended_at = timezone.now()
     item.removed_by = actor
     item.save(update_fields=["status", "ended_at", "removed_by", "updated_at"])
 
-    _sync_playing_track(settings_obj)
+    # Advance only when staff remove the currently playing track.
+    advance = was_playing and actor.role == "admin"
+    _sync_playing_track(settings_obj, advance=advance)
     return get_queue_state(actor)
 
 
 @transaction.atomic
 def approve_song_in_queue(actor, item_id) -> dict:
-    """Admin approves a member song that was waiting for approval (Suggestion 11)."""
-    require_admin(actor)
+    """Staff approves a pending member song so it enters the playable queue (not playing yet)."""
+    require_staff_permission(actor, "music.update")
     settings_obj = get_settings(for_update=True)
     item = get_object_or_404(MusicQueueItem.objects.select_for_update(), pk=item_id)
     if item.status != "pending_approval":
         raise ValidationError({"detail": "This song is not waiting for approval."})
+    reject_if_age_restricted(item.title, channel_title=item.channel_title)
     item.status = "queued"
     item.is_reported = False
     item.approved_by = actor
     item.save(update_fields=["status", "is_reported", "approved_by", "updated_at"])
-    _sync_playing_track(settings_obj)
+    _sync_playing_track(settings_obj, advance=False)
     return get_queue_state(actor)
 
 
@@ -703,14 +765,14 @@ def report_song_in_queue(actor, item_id, reason: str = "") -> dict:
             "updated_at",
         ]
     )
-    _sync_playing_track(settings_obj)
+    _sync_playing_track(settings_obj, advance=False)
     return get_queue_state(actor)
 
 
 @transaction.atomic
 def restore_reported_song(actor, item_id) -> dict:
-    """Admin dismisses a flag/report on a song and restores it to the active queue (Suggestion 11)."""
-    require_admin(actor)
+    """Staff dismisses a flag/report on a song and restores it to the active queue."""
+    require_staff_permission(actor, "music.update")
     settings_obj = get_settings(for_update=True)
     item = get_object_or_404(MusicQueueItem.objects.select_for_update(), pk=item_id)
     item.is_reported = False
@@ -718,18 +780,21 @@ def restore_reported_song(actor, item_id) -> dict:
     if item.status == "pending_approval":
         item.status = "queued"
     item.save(update_fields=["is_reported", "report_reason", "status", "updated_at"])
-    _sync_playing_track(settings_obj)
+    _sync_playing_track(settings_obj, advance=False)
     return get_queue_state(actor)
 
 
 @transaction.atomic
 def block_music_user(actor, target_user_id, reason: str = "") -> dict:
-    """Admin blocks a user who keeps adding bad songs and removes their active songs (Suggestion 11)."""
-    require_admin(actor)
+    """Staff blocks a member from FloorCue and removes their active songs."""
+    require_staff_permission(actor, "music.update")
     settings_obj = get_settings(for_update=True)
     target_user = get_object_or_404(User, pk=target_user_id)
     if target_user.role == "admin":
         raise ValidationError({"user_id": "Staff accounts cannot be blocked from the music queue."})
+    was_playing = MusicQueueItem.objects.filter(
+        user=target_user, status="playing"
+    ).exists()
     MusicBlockedUser.objects.update_or_create(
         user=target_user,
         defaults={
@@ -741,48 +806,157 @@ def block_music_user(actor, target_user_id, reason: str = "") -> dict:
     MusicQueueItem.objects.filter(
         user=target_user, status__in=ACTIVE_QUEUE_STATUSES
     ).update(status="removed", ended_at=now, removed_by=actor, updated_at=now)
-    _sync_playing_track(settings_obj)
+    _sync_playing_track(settings_obj, advance=was_playing)
     return get_queue_state(actor)
 
 
 @transaction.atomic
 def unblock_music_user(actor, target_user_id) -> dict:
-    """Admin unblocks a previously blocked user (Suggestion 11)."""
-    require_admin(actor)
+    """Staff unblocks a previously blocked member."""
+    require_staff_permission(actor, "music.update")
     MusicBlockedUser.objects.filter(user_id=target_user_id).delete()
     return get_queue_state(actor)
 
 
 @transaction.atomic
-def skip_current_song(actor) -> dict:
-    require_admin(actor)
+def play_queue_head(actor) -> dict:
+    """Staff starts (or resumes) playback of the head of the playable queue."""
+    require_staff_permission(actor, "music.update")
     settings_obj = get_settings(for_update=True)
-    current = (
-        MusicQueueItem.objects.select_for_update()
-        .filter(status__in=PLAYABLE_QUEUE_STATUSES, is_reported=False)
-        .order_by("-status", "created_at", "id")
-        .first()
-    )
+    if not settings_obj.is_enabled:
+        raise ValidationError({"detail": "The gym music queue is currently turned off by staff."})
     playing = (
         MusicQueueItem.objects.select_for_update()
         .filter(status="playing", is_reported=False)
         .order_by("created_at", "id")
         .first()
     )
-    target = playing or current
+    if playing is None:
+        _sync_playing_track(settings_obj, advance=True)
+    return get_queue_state(actor)
+
+
+def _rewrite_queue_created_at(ordered_ids: list) -> None:
+    """Assign ascending created_at so FIFO order matches ``ordered_ids``."""
+    if not ordered_ids:
+        return
+    now = timezone.now()
+    base = now - timedelta(seconds=len(ordered_ids) + 1)
+    for index, item_id in enumerate(ordered_ids):
+        MusicQueueItem.objects.filter(pk=item_id).update(
+            created_at=base + timedelta(milliseconds=index),
+            updated_at=now,
+        )
+
+
+@transaction.atomic
+def reorder_queue(actor, ordered_ids: list) -> dict:
+    """Staff drag-sorts the queued (not playing) FloorCue list."""
+    require_staff_permission(actor, "music.update")
+    settings_obj = get_settings(for_update=True)
+
+    queued = list(
+        MusicQueueItem.objects.select_for_update()
+        .filter(status="queued", is_reported=False)
+        .order_by("created_at", "id")
+    )
+    queued_ids = {item.id for item in queued}
+    normalized = []
+    seen = set()
+    for item_id in ordered_ids:
+        if item_id in seen:
+            raise ValidationError({"item_ids": "Duplicate queue item in reorder payload."})
+        seen.add(item_id)
+        normalized.append(item_id)
+
+    if set(normalized) != queued_ids or len(normalized) != len(queued_ids):
+        raise ValidationError(
+            {"item_ids": "Reorder must include every currently queued song exactly once."}
+        )
+
+    _rewrite_queue_created_at(normalized)
+    _sync_playing_track(settings_obj, advance=False)
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def play_queue_item(actor, item_id) -> dict:
+    """Staff plays a specific queued song now and rotates the remaining list."""
+    require_staff_permission(actor, "music.update")
+    settings_obj = get_settings(for_update=True)
+    if not settings_obj.is_enabled:
+        raise ValidationError({"detail": "The gym music queue is currently turned off by staff."})
+
+    target = get_object_or_404(MusicQueueItem.objects.select_for_update(), pk=item_id)
+    if target.status != "queued" or target.is_reported:
+        raise ValidationError({"detail": "Only a queued song can be started from the list."})
+
+    now = timezone.now()
+    playing = (
+        MusicQueueItem.objects.select_for_update()
+        .filter(status="playing", is_reported=False)
+        .order_by("created_at", "id")
+        .first()
+    )
+    if playing is not None:
+        playing.status = "skipped"
+        playing.ended_at = now
+        playing.removed_by = actor
+        playing.save(update_fields=["status", "ended_at", "removed_by", "updated_at"])
+
+    queued = list(
+        MusicQueueItem.objects.select_for_update()
+        .filter(status="queued", is_reported=False)
+        .order_by("created_at", "id")
+    )
+    try:
+        index = next(i for i, item in enumerate(queued) if item.id == target.id)
+    except StopIteration:
+        raise ValidationError({"detail": "Only a queued song can be started from the list."})
+
+    before = [item.id for item in queued[:index]]
+    after = [item.id for item in queued[index + 1 :]]
+    # Songs after the pick stay next; songs that were skipped ahead rotate to the end.
+    _rewrite_queue_created_at(after + before)
+
+    target.status = "playing"
+    target.started_at = now
+    target.save(update_fields=["status", "started_at", "updated_at"])
+
+    _sync_playing_track(settings_obj, advance=False)
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def skip_current_song(actor) -> dict:
+    require_staff_permission(actor, "music.update")
+    settings_obj = get_settings(for_update=True)
+    playing = (
+        MusicQueueItem.objects.select_for_update()
+        .filter(status="playing", is_reported=False)
+        .order_by("created_at", "id")
+        .first()
+    )
+    # If idle, skip the head of the queued list so staff can rotate without Play first.
+    target = playing or (
+        MusicQueueItem.objects.select_for_update()
+        .filter(status="queued", is_reported=False)
+        .order_by("created_at", "id")
+        .first()
+    )
     if target:
         target.status = "skipped"
         target.ended_at = timezone.now()
         target.removed_by = actor
         target.save(update_fields=["status", "ended_at", "removed_by", "updated_at"])
 
-    _sync_playing_track(settings_obj)
+    _sync_playing_track(settings_obj, advance=True)
     return get_queue_state(actor)
 
 
 @transaction.atomic
 def complete_current_song(actor, item_id=None) -> dict:
-    require_admin(actor)
+    require_staff_permission(actor, "music.update")
     settings_obj = get_settings(for_update=True)
     qs = MusicQueueItem.objects.select_for_update().filter(status="playing")
     if item_id:
@@ -794,13 +968,13 @@ def complete_current_song(actor, item_id=None) -> dict:
         playing.ended_at = timezone.now()
         playing.save(update_fields=["status", "ended_at", "updated_at"])
 
-    _sync_playing_track(settings_obj)
+    _sync_playing_track(settings_obj, advance=True)
     return get_queue_state(actor)
 
 
 @transaction.atomic
 def update_music_settings(actor, data: dict) -> dict:
-    require_admin(actor)
+    require_staff_permission(actor, "music.update")
     settings_obj = get_settings(for_update=True)
     updated_fields = ["updated_by", "updated_at"]
     if "is_enabled" in data:
@@ -815,10 +989,169 @@ def update_music_settings(actor, data: dict) -> dict:
     settings_obj.updated_by = actor
     settings_obj.save(update_fields=updated_fields)
 
-    _sync_playing_track(settings_obj)
+    # Re-enable does not auto-start; staff must call play.
+    _sync_playing_track(settings_obj, advance=False)
     return get_queue_state(actor)
 
 
 @transaction.atomic
 def set_queue_enabled(actor, is_enabled: bool) -> dict:
     return update_music_settings(actor, {"is_enabled": is_enabled})
+
+
+HISTORY_STATUSES = ("played", "skipped")
+
+
+@transaction.atomic
+def clear_history_item(actor, item_id) -> dict:
+    """Staff removes one played/skipped track from recent history."""
+    require_staff_permission(actor, "music.update")
+    item = get_object_or_404(MusicQueueItem.objects.select_for_update(), pk=item_id)
+    if item.status not in HISTORY_STATUSES:
+        raise ValidationError({"detail": "Only recently played or skipped songs can be cleared."})
+    item.status = "removed"
+    item.removed_by = actor
+    if item.ended_at is None:
+        item.ended_at = timezone.now()
+    item.save(update_fields=["status", "removed_by", "ended_at", "updated_at"])
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def play_history_item(actor, item_id) -> dict:
+    """Staff replays a recently played / skipped track immediately on the floor."""
+    require_staff_permission(actor, "music.update")
+    settings_obj = get_settings(for_update=True)
+    if not settings_obj.is_enabled:
+        raise ValidationError({"detail": "The gym music queue is currently turned off by staff."})
+
+    source = get_object_or_404(MusicQueueItem.objects.select_for_update(), pk=item_id)
+    if source.status not in HISTORY_STATUSES:
+        raise ValidationError({"detail": "Only recently played or skipped songs can be replayed."})
+
+    now = timezone.now()
+    playing = (
+        MusicQueueItem.objects.select_for_update()
+        .filter(status="playing", is_reported=False)
+        .order_by("created_at", "id")
+        .first()
+    )
+    if playing is not None:
+        playing.status = "skipped"
+        playing.ended_at = now
+        playing.removed_by = actor
+        playing.save(update_fields=["status", "ended_at", "removed_by", "updated_at"])
+
+    MusicQueueItem.objects.create(
+        user=actor,
+        video_id=source.video_id,
+        youtube_url=source.youtube_url,
+        title=source.title,
+        channel_title=source.channel_title,
+        thumbnail_url=source.thumbnail_url or default_thumbnail_url(source.video_id),
+        duration_text=source.duration_text,
+        duration_seconds=source.duration_seconds,
+        status="playing",
+        started_at=now,
+        approved_by=actor,
+    )
+    _sync_playing_track(settings_obj, advance=False)
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def clear_all_history(actor) -> dict:
+    """Staff clears the entire recently-played / skipped history list."""
+    require_staff_permission(actor, "music.update")
+    now = timezone.now()
+    MusicQueueItem.objects.filter(status__in=HISTORY_STATUSES).update(
+        status="removed",
+        removed_by=actor,
+        ended_at=now,
+        updated_at=now,
+    )
+    return get_queue_state(actor)
+
+
+@transaction.atomic
+def enqueue_gym_playlist(actor, video_ids: list[str] | None = None) -> dict:
+    """
+    Staff queues the curated gym-floor playlist.
+
+    Bypasses the per-user song limit so a full mix can land in one action.
+    Skips video IDs already active in the queue. Does not auto-start playback.
+    """
+    require_staff_permission(actor, "music.update")
+    settings_obj = get_settings(for_update=True)
+    if not settings_obj.is_enabled:
+        raise ValidationError({"detail": "The gym music queue is currently turned off by staff."})
+
+    from music.playlists import GYM_FLOOR_PLAYLIST
+
+    catalog = {entry["video_id"]: entry for entry in GYM_FLOOR_PLAYLIST}
+    selected_ids = list(video_ids) if video_ids else [entry["video_id"] for entry in GYM_FLOOR_PLAYLIST]
+    if not selected_ids:
+        raise ValidationError({"video_ids": "Select at least one track from the gym playlist."})
+
+    unknown = [vid for vid in selected_ids if vid not in catalog]
+    if unknown:
+        raise ValidationError({"video_ids": f"Unknown playlist track(s): {', '.join(unknown)}."})
+
+    active_video_ids = set(
+        MusicQueueItem.objects.filter(status__in=ACTIVE_QUEUE_STATUSES).values_list(
+            "video_id", flat=True
+        )
+    )
+
+    added = 0
+    skipped_existing = 0
+    skipped_filtered = 0
+    for video_id in selected_ids:
+        if video_id in active_video_ids:
+            skipped_existing += 1
+            continue
+        hint = catalog[video_id]
+        try:
+            try:
+                meta = resolve_youtube_metadata(video_id)
+                title = (meta.get("title") or hint["title"])[:300]
+                channel_title = (meta.get("channel_title") or hint.get("channel_title") or "")[:200]
+                thumbnail_url = meta.get("thumbnail_url") or default_thumbnail_url(video_id)
+                duration_text = (meta.get("duration_text") or "")[:32]
+                duration_seconds = meta.get("duration_seconds")
+            except ValidationError:
+                skipped_filtered += 1
+                continue
+            except Exception:
+                title = hint["title"][:300]
+                channel_title = (hint.get("channel_title") or "")[:200]
+                thumbnail_url = default_thumbnail_url(video_id)
+                duration_text = ""
+                duration_seconds = None
+
+            reject_if_age_restricted(title, channel_title=channel_title)
+            MusicQueueItem.objects.create(
+                user=actor,
+                video_id=video_id,
+                youtube_url=f"https://www.youtube.com/watch?v={video_id}",
+                title=title,
+                channel_title=channel_title,
+                thumbnail_url=thumbnail_url,
+                duration_text=duration_text,
+                duration_seconds=duration_seconds,
+                status="queued",
+                approved_by=actor,
+            )
+            active_video_ids.add(video_id)
+            added += 1
+        except ValidationError:
+            skipped_filtered += 1
+            continue
+
+    _sync_playing_track(settings_obj, advance=False)
+    return {
+        "added": added,
+        "skipped_existing": skipped_existing,
+        "skipped_filtered": skipped_filtered,
+        "queue_state": get_queue_state(actor),
+    }

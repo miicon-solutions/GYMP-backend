@@ -89,6 +89,14 @@ class MusicQueueCompleteInputSerializer(serializers.Serializer):
     item_id = serializers.UUIDField(required=False, allow_null=True)
 
 
+class MusicQueueReorderInputSerializer(serializers.Serializer):
+    item_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=True,
+        help_text="Queued item IDs in the desired play order.",
+    )
+
+
 class MusicSettingsInputSerializer(serializers.Serializer):
     is_enabled = serializers.BooleanField(required=False)
     require_approval = serializers.BooleanField(required=False)
@@ -102,3 +110,36 @@ class MusicReportInputSerializer(serializers.Serializer):
 class MusicBlockUserInputSerializer(serializers.Serializer):
     user_id = serializers.UUIDField()
     reason = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
+
+
+class MusicPlaylistTrackSerializer(serializers.Serializer):
+    video_id = serializers.CharField()
+    youtube_url = serializers.URLField()
+    title = serializers.CharField()
+    channel_title = serializers.CharField(allow_blank=True)
+    thumbnail_url = serializers.URLField(allow_blank=True)
+    duration_text = serializers.CharField(allow_blank=True)
+    duration_seconds = serializers.IntegerField(allow_null=True)
+
+
+class MusicPlaylistOutputSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
+    description = serializers.CharField()
+    tracks = MusicPlaylistTrackSerializer(many=True)
+
+
+class MusicPlaylistEnqueueInputSerializer(serializers.Serializer):
+    video_ids = serializers.ListField(
+        child=serializers.CharField(max_length=16),
+        required=False,
+        allow_empty=False,
+        max_length=40,
+    )
+
+
+class MusicPlaylistEnqueueOutputSerializer(serializers.Serializer):
+    added = serializers.IntegerField()
+    skipped_existing = serializers.IntegerField()
+    skipped_filtered = serializers.IntegerField()
+    queue_state = MusicQueueStateOutputSerializer()

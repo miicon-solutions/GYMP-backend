@@ -25,6 +25,8 @@ STAFF_PERMISSION_CATALOG: dict[str, tuple[str, ...]] = {
     # view = inbox/FCM for new cash requests + see pending on member;
     # update = accept / reject.
     "cash_requests": ("view", "update"),
+    # view = open FloorCue / read queue; update = play/skip/approve/block/settings.
+    "music": ("view", "update"),
 }
 
 def all_permission_codes() -> list[str]:

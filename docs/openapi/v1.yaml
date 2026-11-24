@@ -4163,8 +4163,7 @@ paths:
   /api/v1/music/queue/complete/:
     post:
       operationId: api_v1_music_queue_complete_create
-      description: Advance the gym player on /admin/music to the next song in queue
-        when the current song finishes playing.
+      description: Advance the gym player when the current song finishes playing.
       tags:
       - music
       requestBody:
@@ -4178,6 +4177,22 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/MusicQueueCompleteInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/play/:
+    post:
+      operationId: api_v1_music_queue_play_create
+      description: Staff starts playback of the head of the playable FloorCue queue.
+      tags:
+      - music
       security:
       - bearerAuth: []
       - jwtAuth: []

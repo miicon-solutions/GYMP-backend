@@ -4,13 +4,18 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.api import AdminOnly, StaffOrMember
+from core.api import StaffOrMember, StaffPermission
 from music import services
+from music.playlists import serialize_gym_playlist
 from music.serializers import (
     MusicBlockUserInputSerializer,
+    MusicPlaylistEnqueueInputSerializer,
+    MusicPlaylistEnqueueOutputSerializer,
+    MusicPlaylistOutputSerializer,
     MusicQueueAddInputSerializer,
     MusicQueueAddOutputSerializer,
     MusicQueueCompleteInputSerializer,
+    MusicQueueReorderInputSerializer,
     MusicQueueStateOutputSerializer,
     MusicReportInputSerializer,
     MusicSettingsInputSerializer,
@@ -61,7 +66,7 @@ class MusicQueueItemView(APIView):
 class MusicQueueApproveView(APIView):
     """Staff action to approve a pending member song so it enters the playback queue."""
 
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("music.update")]
     serializer_class = MusicQueueStateOutputSerializer
 
     @extend_schema(
@@ -97,7 +102,7 @@ class MusicQueueReportView(APIView):
 class MusicQueueRestoreView(APIView):
     """Staff action to dismiss a report on a song and restore it to the active queue."""
 
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("music.update")]
     serializer_class = MusicQueueStateOutputSerializer
 
     @extend_schema(
@@ -112,7 +117,7 @@ class MusicQueueRestoreView(APIView):
 class MusicBlockUserListView(APIView):
     """Staff action to block a member from adding songs to the gym music queue."""
 
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("music.update")]
     serializer_class = MusicQueueStateOutputSerializer
 
     @extend_schema(
@@ -135,7 +140,7 @@ class MusicBlockUserListView(APIView):
 class MusicBlockUserDetailView(APIView):
     """Staff action to unblock a member so they can add songs again."""
 
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("music.update")]
     serializer_class = MusicQueueStateOutputSerializer
 
     @extend_schema(
@@ -146,10 +151,59 @@ class MusicBlockUserDetailView(APIView):
         return Response(services.unblock_music_user(request.user, user_id))
 
 
+class MusicQueuePlayView(APIView):
+    """Staff starts playback of the head of the playable FloorCue queue."""
+
+    permission_classes = [StaffPermission("music.update")]
+    serializer_class = MusicQueueStateOutputSerializer
+
+    @extend_schema(
+        request=None,
+        responses={200: MusicQueueStateOutputSerializer},
+        tags=["music"],
+    )
+    def post(self, request):
+        return Response(services.play_queue_head(request.user))
+
+
+class MusicQueueReorderView(APIView):
+    """Staff drag-sorts the queued FloorCue list."""
+
+    permission_classes = [StaffPermission("music.update")]
+    serializer_class = MusicQueueStateOutputSerializer
+
+    @extend_schema(
+        request=MusicQueueReorderInputSerializer,
+        responses={200: MusicQueueStateOutputSerializer},
+        tags=["music"],
+    )
+    def post(self, request):
+        serializer = MusicQueueReorderInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(
+            services.reorder_queue(request.user, serializer.validated_data["item_ids"])
+        )
+
+
+class MusicQueueItemPlayView(APIView):
+    """Staff plays a specific queued song now and rotates the remaining list."""
+
+    permission_classes = [StaffPermission("music.update")]
+    serializer_class = MusicQueueStateOutputSerializer
+
+    @extend_schema(
+        request=None,
+        responses={200: MusicQueueStateOutputSerializer},
+        tags=["music"],
+    )
+    def post(self, request, pk):
+        return Response(services.play_queue_item(request.user, pk))
+
+
 class MusicQueueSkipView(APIView):
     """Staff action to skip the currently playing song and advance to the next song in queue."""
 
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("music.update")]
     serializer_class = MusicQueueStateOutputSerializer
 
     @extend_schema(
@@ -162,9 +216,9 @@ class MusicQueueSkipView(APIView):
 
 
 class MusicQueueCompleteView(APIView):
-    """Advance the gym player on /admin/music to the next song in queue when the current song finishes playing."""
+    """Advance the gym player when the current song finishes playing."""
 
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("music.update")]
     serializer_class = MusicQueueStateOutputSerializer
 
     @extend_schema(
@@ -183,7 +237,7 @@ class MusicQueueCompleteView(APIView):
 class MusicSettingsView(APIView):
     """Staff action to configure the gym music queue (enable/disable, require approval, max songs per user)."""
 
-    permission_classes = [AdminOnly]
+    permission_classes = [StaffPermission("music.update")]
     serializer_class = MusicQueueStateOutputSerializer
 
     @extend_schema(
@@ -223,10 +277,107 @@ class MusicYouTubeSearchView(APIView):
         return Response({"results": results})
 
 
+class MusicQueueHistoryClearView(APIView):
+    """Staff clears all recently played / skipped history entries."""
+
+    permission_classes = [StaffPermission("music.update")]
+    serializer_class = MusicQueueStateOutputSerializer
+
+    @extend_schema(
+        request=None,
+        responses={200: MusicQueueStateOutputSerializer},
+        tags=["music"],
+    )
+    def delete(self, request):
+        return Response(services.clear_all_history(request.user))
+
+
+class MusicQueueHistoryItemView(APIView):
+    """Staff removes one recently played / skipped history entry."""
+
+    permission_classes = [StaffPermission("music.update")]
+    serializer_class = MusicQueueStateOutputSerializer
+
+    @extend_schema(
+        responses={200: MusicQueueStateOutputSerializer},
+        tags=["music"],
+    )
+    def delete(self, request, pk):
+        return Response(services.clear_history_item(request.user, pk))
+
+
+class MusicQueueHistoryPlayView(APIView):
+    """Staff replays a recently played / skipped track immediately."""
+
+    permission_classes = [StaffPermission("music.update")]
+    serializer_class = MusicQueueStateOutputSerializer
+
+    @extend_schema(
+        request=None,
+        responses={200: MusicQueueStateOutputSerializer},
+        tags=["music"],
+    )
+    def post(self, request, pk):
+        return Response(services.play_history_item(request.user, pk))
+
+
+class MusicGymPlaylistView(APIView):
+    """Curated high-energy gym floor playlist for staff to preview."""
+
+    permission_classes = [StaffPermission("music.view")]
+    serializer_class = MusicPlaylistOutputSerializer
+
+    @extend_schema(
+        responses={200: MusicPlaylistOutputSerializer},
+        tags=["music"],
+    )
+    def get(self, request):
+        return Response(serialize_gym_playlist())
+
+
+class MusicGymPlaylistEnqueueView(APIView):
+    """Staff queues the curated gym playlist (full mix or selected tracks)."""
+
+    permission_classes = [StaffPermission("music.update")]
+    serializer_class = MusicPlaylistEnqueueOutputSerializer
+
+    @extend_schema(
+        request=MusicPlaylistEnqueueInputSerializer,
+        responses={200: MusicPlaylistEnqueueOutputSerializer},
+        tags=["music"],
+    )
+    def post(self, request):
+        serializer = MusicPlaylistEnqueueInputSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        return Response(
+            services.enqueue_gym_playlist(
+                request.user, serializer.validated_data.get("video_ids")
+            )
+        )
+
+
 urlpatterns = [
     path("queue/", MusicQueueView.as_view(), name="music-queue"),
+    path("queue/play/", MusicQueuePlayView.as_view(), name="music-queue-play"),
+    path("queue/reorder/", MusicQueueReorderView.as_view(), name="music-queue-reorder"),
     path("queue/skip/", MusicQueueSkipView.as_view(), name="music-queue-skip"),
     path("queue/complete/", MusicQueueCompleteView.as_view(), name="music-queue-complete"),
+    path("queue/history/", MusicQueueHistoryClearView.as_view(), name="music-queue-history-clear"),
+    path(
+        "queue/history/<uuid:pk>/",
+        MusicQueueHistoryItemView.as_view(),
+        name="music-queue-history-item",
+    ),
+    path(
+        "queue/history/<uuid:pk>/play/",
+        MusicQueueHistoryPlayView.as_view(),
+        name="music-queue-history-play",
+    ),
+    path(
+        "queue/<uuid:pk>/play/",
+        MusicQueueItemPlayView.as_view(),
+        name="music-queue-item-play",
+    ),
     path("queue/<uuid:pk>/", MusicQueueItemView.as_view(), name="music-queue-item"),
     path("queue/<uuid:pk>/approve/", MusicQueueApproveView.as_view(), name="music-queue-approve"),
     path("queue/<uuid:pk>/report/", MusicQueueReportView.as_view(), name="music-queue-report"),
@@ -235,4 +386,10 @@ urlpatterns = [
     path("blocks/<uuid:user_id>/", MusicBlockUserDetailView.as_view(), name="music-block-detail"),
     path("settings/", MusicSettingsView.as_view(), name="music-settings"),
     path("search/", MusicYouTubeSearchView.as_view(), name="music-search"),
+    path("playlists/gym/", MusicGymPlaylistView.as_view(), name="music-playlist-gym"),
+    path(
+        "playlists/gym/enqueue/",
+        MusicGymPlaylistEnqueueView.as_view(),
+        name="music-playlist-gym-enqueue",
+    ),
 ]
