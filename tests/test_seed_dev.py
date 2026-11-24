@@ -99,6 +99,16 @@ def test_seed_dev_prod_guard(settings):
     assert not User.objects.filter(phone_e164=SEED_SUPER_PHONE).exists()
 
 
+def test_seed_dev_catalog_only_skips_users(settings):
+    from plans.models import Plan
+
+    settings.APP_ENV = "prod"
+    call_command("seed_dev", "--catalog-only", stdout=StringIO())
+    assert not User.objects.exists()
+    assert not StaffProfile.objects.exists()
+    assert set(Plan.objects.values_list("duration_months", flat=True)) == {1, 3, 12}
+
+
 def test_seed_dev_idempotent_preserves_enrolled_mfa():
     call_command("seed_dev", stdout=StringIO())
     user = User.objects.get(phone_e164=SEED_SUPER_PHONE)

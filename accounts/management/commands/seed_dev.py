@@ -17,12 +17,21 @@ class Command(BaseCommand):
     help = (
         "Seed development plans, default gym hours, and the Go-parity seed super admin "
         f"({SEED_SUPER_PHONE} / {SEED_SUPER_SHORT_ID}; browser "
-        f"{SEED_OPERATOR_USERNAME} / {SEED_OPERATOR_PASSWORD}). Disabled in production."
+        f"{SEED_OPERATOR_USERNAME} / {SEED_OPERATOR_PASSWORD}). Disabled in production. "
+        "Pass --catalog-only to seed plans and hours without creating any user."
     )
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--catalog-only",
+            action="store_true",
+            help="Seed plans and gym hours only. Do not create or reclaim the seed super admin.",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
-        if settings.APP_ENV == "prod":
+        catalog_only = options["catalog_only"]
+        if settings.APP_ENV == "prod" and not catalog_only:
             raise CommandError("Development seed data is disabled in production.")
         seed_hours()
         for catalog, months, rate, reduction in [
@@ -42,6 +51,8 @@ class Command(BaseCommand):
                 },
             )
         self.stdout.write(self.style.SUCCESS("Development plans and gym hours are ready."))
+        if catalog_only:
+            return
         result = ensure_seed_super_admin()
         browser = f"Browser /admin/ login: {SEED_OPERATOR_USERNAME} / {SEED_OPERATOR_PASSWORD}."
         if result.status == "created":
