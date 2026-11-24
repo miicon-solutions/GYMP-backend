@@ -1,5 +1,14 @@
 from django.db import transaction
 
+MEMBER_ID_WIDTH = 9
+
+
+def strip_member_id_prefix(value: str) -> str:
+    cleaned = (value or "").strip()
+    if cleaned[:3].upper() == "PG-" and cleaned[3:].isdigit():
+        return cleaned[3:]
+    return cleaned
+
 
 @transaction.atomic
 def next_display(kind):
@@ -12,4 +21,6 @@ def next_display(kind):
     )
     sequence.value += 1
     sequence.save(update_fields=["value"])
-    return f"ADM-{sequence.value:04d}" if kind == "staff" else f"PG-{sequence.value:04d}"
+    if kind == "staff":
+        return f"ADM-{sequence.value:04d}"
+    return f"{sequence.value:0{MEMBER_ID_WIDTH}d}"

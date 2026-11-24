@@ -13,7 +13,7 @@ class MonthInput(serializers.Serializer):
 
 
 class CheckInInput(serializers.Serializer):
-    member_id = serializers.CharField(max_length=24)
+    member_id = serializers.CharField(max_length=9)
     checked_in_at = serializers.DateTimeField(required=False)
     checked_out_at = serializers.DateTimeField(required=False)
     action = serializers.ChoiceField(choices=["check_in", "check_out"], default="check_in", required=False)

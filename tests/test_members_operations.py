@@ -242,3 +242,37 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
         ).data["fingerprint_status"]
         == "ready"
     )
+
+
+def test_member_id_is_9_digit_numeric_without_prefix(client, member, staff, plan):
+    raw_id = member.member_profile.member_id
+    assert len(raw_id) == 9
+    assert raw_id.isdigit()
+    assert not raw_id.startswith("PG-")
+
+    member.member_profile.profile_complete = True
+    member.member_profile.save()
+    _, payment = receive_cash(staff, member.member_profile, plan.pk)
+
+    client.force_authenticate(staff)
+    by_raw = client.get("/api/v1/admin/members/", {"q": raw_id})
+    by_prefixed = client.get("/api/v1/admin/members/", {"q": f"PG-{raw_id}"})
+    assert by_raw.status_code == 200 and by_raw.data["results"][0]["member_id"] == raw_id
+    assert by_prefixed.status_code == 200 and by_prefixed.data["results"][0]["member_id"] == raw_id
+
+    activity = client.get("/api/v1/admin/activity/", {"q": f"PG-{raw_id}"})
+    assert activity.status_code == 200 and len(activity.data["results"]) >= 1
+    assert activity.data["results"][0]["summary_params"]["member_id"] == raw_id
+
+    too_long = client.post(
+        "/api/v1/internal/attendance/check-in/",
+        {"member_id": f"PG-{raw_id}"},
+        format="json",
+        HTTP_X_DEVICE_KEY="test-device-key",
+    )
+    assert too_long.status_code == 400
+
+    client.force_authenticate(member)
+    receipt = client.get(f"/api/v1/member/payments/{payment.pk}/receipt.html/")
+    assert receipt.status_code == 200
+    assert f"PG-{raw_id}".encode() in receipt.content

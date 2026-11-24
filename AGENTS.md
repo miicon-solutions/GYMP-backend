@@ -86,7 +86,7 @@ core/             # shared API helpers, middleware, permissions
 - Vault (encrypted templates, devices, sync state) lives in **this** database.
 - Admin APIs may call the standalone bridge when configured; otherwise return a
   clear unavailable response — never fail process startup.
-- Device user id on the scanner = display `member_id` (`PG-…`).
+- Device user id on the scanner = `member_id` (9-character zero-padded numeric ID, e.g. `000000001`; `PG-` is UI-only decoration).
 - Control-center HTML UI lives only on `zkteco-bridge`, not here.
 
 ## Testing and quality

@@ -3,6 +3,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import generics, serializers
 from rest_framework.response import Response
 
+from accounts.identifiers import strip_member_id_prefix
 from core.api import AdminOnly, MemberOnly
 from members import services
 from members.models import MemberProfile
@@ -46,8 +47,9 @@ class AdminMemberList(generics.ListAPIView):
         data = MemberSearch(data=self.request.query_params)
         data.is_valid(raise_exception=True)
         q = data.validated_data.get("q", "")
+        member_q = strip_member_id_prefix(q)
         rows = MemberProfile.objects.select_related("user", "plan").filter(
-            Q(member_id__icontains=q)
+            Q(member_id__icontains=member_q)
             | Q(user__full_name__icontains=q)
             | Q(user__phone_e164__icontains=q)
         )

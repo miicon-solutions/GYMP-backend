@@ -8,7 +8,7 @@ class MemberProfile(Entity):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="member_profile"
     )
-    member_id = models.CharField(max_length=24, unique=True)
+    member_id = models.CharField(max_length=9, unique=True)
     emergency_name = models.CharField(max_length=200, blank=True)
     emergency_relationship = models.CharField(max_length=12, blank=True)
     emergency_phone_e164 = models.CharField(max_length=14, blank=True)
