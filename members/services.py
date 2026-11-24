@@ -288,6 +288,17 @@ def delete_photo(user):
         transaction.on_commit(lambda: p.photo.storage.delete(old), robust=True)
 
 
+def _membership_activated_on(profile):
+    """Dhaka calendar date of first paid activation (or earliest paid payment)."""
+    paid = profile.payments.filter(status="paid", paid_at__isnull=False)
+    first = paid.filter(is_first_payment=True).order_by("paid_at").first()
+    if first is None:
+        first = paid.order_by("paid_at").first()
+    if first is None or first.paid_at is None:
+        return None
+    return first.paid_at.astimezone(DHAKA).date()
+
+
 def dashboard(user):
     from payments.serializers import PaymentSerializer
 
@@ -313,6 +324,7 @@ def dashboard(user):
         "plan": plan_brief(p),
         "status": p.membership_status,
         "expires_on": p.expires_on if include else None,
+        "activated_on": _membership_activated_on(p) if include else None,
         "days_left": days_left,
         "visits_this_month": p.check_ins.filter(
             check_in_date__year=local.year, check_in_date__month=local.month

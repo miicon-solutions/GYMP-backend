@@ -12,6 +12,8 @@ Authenticated member profile, photo, dashboard, and gym status.
 2. Read/update: `GET|PUT /api/v1/member/profile/`
 3. Photo: `POST|DELETE /api/v1/member/profile/photo/` (multipart `photo`)
 4. Dashboard: `GET /api/v1/member/dashboard/`
+   - Includes `activated_on` (Dhaka date of first paid activation) when status is
+     `active` / `expired`, for calendar lower-bound in the member app.
 5. Gym status: `GET /api/v1/member/gym-status/`
 
 ### Sample — complete profile

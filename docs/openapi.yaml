@@ -7502,6 +7502,11 @@ components:
           type: string
           format: date
           nullable: true
+        activated_on:
+          type: string
+          format: date
+          nullable: true
+          description: Dhaka date membership was first activated by payment.
         days_left:
           type: integer
           nullable: true
@@ -7522,6 +7527,7 @@ components:
         has_unread_notifications:
           type: boolean
       required:
+      - activated_on
       - closed_day_label
       - days_left
       - expires_on

@@ -125,6 +125,10 @@ class DashboardOutput(GymStatusOutput):
     plan = PlanBrief(allow_null=True)
     status = serializers.CharField()
     expires_on = serializers.DateField(allow_null=True)
+    activated_on = serializers.DateField(
+        allow_null=True,
+        help_text="Dhaka date membership was first activated by payment.",
+    )
     days_left = serializers.IntegerField(allow_null=True)
     visits_this_month = serializers.IntegerField()
     last_check_in_at = serializers.DateTimeField(allow_null=True)

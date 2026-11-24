@@ -267,6 +267,7 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
     assert dashboard.data["status"] == "active"
     assert dashboard.data["visits_this_month"] == 1
     assert dashboard.data["last_check_in_at"] == last_punch
+    assert dashboard.data["activated_on"] is not None
     client.force_authenticate(staff)
     detail = client.get(f"/api/v1/admin/members/{member.pk}/")
     assert detail.data["last_paid_at"] is not None
