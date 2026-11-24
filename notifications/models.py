@@ -21,6 +21,9 @@ NOTIFICATION_CODES = [
     ("announcement", "announcement"),
     ("admin_enrollment", "admin_enrollment"),
     ("admin_daily_enrollments", "admin_daily_enrollments"),
+    ("music_request", "music_request"),
+    ("music_request_approved", "music_request_approved"),
+    ("music_request_rejected", "music_request_rejected"),
 ]
 
 ANNOUNCEMENT_SCOPES = [

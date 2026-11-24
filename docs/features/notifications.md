@@ -4,7 +4,7 @@ Member in-app notification feed, FCM device registration, SMS delivery (critical
 
 - **OpenAPI:** `/openapi/v1/notifications.yaml`
 - **Base paths:** `/api/v1/member/notifications/`, `/api/v1/member/devices/fcm/`, `/api/v1/admin/notifications/`
-- **Auth:** Member or staff Bearer for FCM devices **and** the in-app feed; staff with `notifications.*` for announcement campaigns; staff with `cash_requests.view` receive cash-request inbox + FCM
+- **Auth:** Member or staff Bearer for FCM devices **and** the in-app feed; staff with `notifications.*` for announcement campaigns; staff with `cash_requests.view` receive cash-request inbox + FCM; staff with `music.view` receive FloorCue request inbox + FCM
 
 ## Member / staff feed
 
@@ -33,6 +33,8 @@ Member opt-out: `MemberProfile.push_enabled` (default true). SMS opt-out: `Membe
 
 **Staff cash-request notify:** when a member creates `POST …/cash-requests/`, after commit the API creates a `MemberNotification` (`code=cash_request`, kind `payment`) for each active staff with `cash_requests.view` (super included) and FCM-pushes those users’ registered devices (`type=cash_request`, `member_id`, `cash_request_id`, `amount_taka`). Tap opens admin member detail. Accept / reject / cancel marks matching staff inbox rows (`related_object_id` = request id) as read. A later re-request creates a new unread row.
 
+**Staff FloorCue music-request notify:** when a member `POST …/music/queue/` lands in `pending_approval`, after commit the API creates a `MemberNotification` (`code=music_request`, kind `general`) for each active staff with `music.view` and FCM-pushes (`type=music_request`, `music_queue_item_id` — **no** `member_id` in FCM data so taps open FloorCue, not member detail). Staff approve (`POST …/approve/`) or reject pending (`DELETE …/queue/{id}/`) marks those staff rows read and notifies the requesting member (`music_request_approved` / `music_request_rejected`, push only). Member self-withdraw of a pending item marks staff rows read without a member push. Auto-queue when `require_approval=false` (or staff add) does not fan out.
+
 ## SMS delivery
 
 Uses sms.net.bd (`SMS_NET_BD_API_KEY`, optional `SMS_NET_BD_SENDER_ID`) via `accounts.providers.send_sms_message`. **Requires a real API key** — without it, notification SMS is skipped (`sms_unconfigured`) and logged; in-app/push still work. OTP auth uses the OTP-only `send_sms` wrapper (which honors `OTP_DEV_BYPASS`); notification SMS never uses that bypass.
@@ -46,6 +48,9 @@ System SMS bodies are fixed **English** plain text (no member locale on the API)
 | `payment_received` | Online settle / cash accept / receive cash | yes | **yes** |
 | `membership_activated` | First payment only | no | no |
 | `cash_request_rejected` | Staff rejects cash request | yes | **yes** |
+| `music_request` | Member song → `pending_approval` (staff inbox) | yes | no |
+| `music_request_approved` | Staff approves pending FloorCue song | yes | no |
+| `music_request_rejected` | Staff rejects pending FloorCue song | yes | no |
 | `fingerprint_ready` | Enroll/pull or manual status → ready | yes | no |
 | `membership_expiring` | Cron 7d and 1d before expiry | yes | **yes** |
 | `membership_expired` | Cron day after expiry | yes | **yes** |

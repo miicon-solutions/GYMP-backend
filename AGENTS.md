@@ -103,7 +103,13 @@ core/             # shared API helpers, middleware, permissions
   `membership_expired` (not `fingerprint_ready` / `membership_activated`).
   Cash request create notifies staff with `cash_requests.view`
   (`notify_staff_cash_request`: inbox `code=cash_request` + FCM). Accept /
-  reject / cancel marks those staff rows read. Member opt-out:
+  reject / cancel marks those staff rows read. FloorCue: member song →
+  `pending_approval` notifies staff with `music.view`
+  (`notify_staff_music_request`: inbox `code=music_request` + FCM;
+  `type=music_request`, `music_queue_item_id` — no `member_id` in FCM data).
+  Staff approve / reject-pending marks those rows read and notifies the
+  member (`music_request_approved` / `music_request_rejected`, push only;
+  self-withdraw marks read only). Member opt-out:
   `push_enabled` / `sms_enabled` on `MemberProfile`. SMS via
   `accounts.providers.send_sms_message` (sms.net.bd; needs
   `SMS_NET_BD_API_KEY`). OTP uses `send_sms` only — `OTP_DEV_BYPASS` skips

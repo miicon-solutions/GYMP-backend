@@ -88,6 +88,27 @@ CATALOG = {
         True,
         False,
     ),
+    "music_request": (
+        "general",
+        "notifMusicRequestTitle",
+        "notifMusicRequestBody",
+        True,
+        False,
+    ),
+    "music_request_approved": (
+        "general",
+        "notifMusicRequestApprovedTitle",
+        "notifMusicRequestApprovedBody",
+        True,
+        False,
+    ),
+    "music_request_rejected": (
+        "general",
+        "notifMusicRequestRejectedTitle",
+        "notifMusicRequestRejectedBody",
+        True,
+        False,
+    ),
 }
 
 # English plain-text SMS bodies (always EN; no member locale on API).
@@ -158,6 +179,26 @@ PUSH_TEMPLATES = {
     "admin_daily_enrollments": (
         "আজকের এনরোলমেন্ট",
         "আজ ({tz}) {count} জন মেম্বার এনরোল, মোট ৳{amount}।",
+    ),
+    "music_request": (
+        "নতুন FloorCue অনুরোধ",
+        "{memberName} · {title}",
+    ),
+    "music_request_approved": (
+        "গান অনুমোদিত",
+        "আপনার অনুরোধ করা গান কিউতে যোগ হয়েছে: {title}",
+    ),
+    "music_request_approved_fallback": (
+        "গান অনুমোদিত",
+        "আপনার অনুরোধ করা গান কিউতে যোগ হয়েছে।",
+    ),
+    "music_request_rejected": (
+        "গান প্রত্যাখ্যান",
+        "স্টাফ আপনার গানের অনুরোধ গ্রহণ করেনি: {title}",
+    ),
+    "music_request_rejected_fallback": (
+        "গান প্রত্যাখ্যান",
+        "স্টাফ আপনার গানের অনুরোধ গ্রহণ করেনি।",
     ),
 }
 
@@ -354,6 +395,24 @@ def format_push(notif: MemberNotification) -> tuple[str, str]:
             count=params.get("count") or "0",
             amount=params.get("amount") or "0",
         )
+    if code == "music_request":
+        title, body = PUSH_TEMPLATES["music_request"]
+        return title, body.format(
+            memberName=params.get("memberName") or "Member",
+            title=params.get("title") or "Song",
+        )
+    if code == "music_request_approved":
+        track = params.get("title")
+        if track:
+            title, body = PUSH_TEMPLATES["music_request_approved"]
+            return title, body.format(title=track)
+        return PUSH_TEMPLATES["music_request_approved_fallback"]
+    if code == "music_request_rejected":
+        track = params.get("title")
+        if track:
+            title, body = PUSH_TEMPLATES["music_request_rejected"]
+            return title, body.format(title=track)
+        return PUSH_TEMPLATES["music_request_rejected_fallback"]
     return "Pure Fitness", ""
 
 
@@ -452,6 +511,101 @@ def notify_staff_cash_request(request_id) -> dict:
         # Push is queued via create_notification on_commit; count inbox rows.
         sent += 1
     return {"sent": sent, "failed": failed, "skipped": None}
+
+
+def _staff_with_music_view():
+    """Active admin users who may receive FloorCue request inbox + FCM."""
+    from accounts.models import User
+    from accounts.staff_permissions import staff_has_permission
+
+    return [
+        u
+        for u in User.objects.filter(role="admin", is_active=True).select_related(
+            "staff_profile"
+        )
+        if staff_has_permission(u, "music.view")
+    ]
+
+
+def mark_staff_music_request_notifications_read(item_id) -> int:
+    """Mark staff inbox rows for a resolved music request as read."""
+    return MemberNotification.objects.filter(
+        code="music_request",
+        related_object_id=str(item_id),
+        is_unread=True,
+    ).update(is_unread=False)
+
+
+def notify_staff_music_request(item_id) -> dict:
+    """Persist inbox rows + FCM for staff with music.view."""
+    from music.models import MusicQueueItem
+
+    try:
+        item = MusicQueueItem.objects.select_related("user").get(pk=item_id)
+    except MusicQueueItem.DoesNotExist:
+        return {"sent": 0, "failed": 0, "skipped": "missing"}
+
+    requester = item.user
+    name = (requester.full_name or "").strip() or "Member"
+    track = (item.title or "").strip() or "Song"
+    title = "New FloorCue request"
+    body = f"{name} · {track}"
+    member_id = str(requester.pk)
+    related = str(item.pk)
+
+    recipients = _staff_with_music_view()
+    if not recipients:
+        logger.info("Staff music-request notify skipped: no permitted staff")
+        return {"sent": 0, "failed": 0, "skipped": "no_recipients"}
+
+    sent = 0
+    failed = 0
+    for staff_user in recipients:
+        notif = create_notification(
+            staff_user,
+            code="music_request",
+            title=title,
+            body=body,
+            title_params={"memberId": member_id, "memberName": name},
+            body_params={
+                "member_id": member_id,
+                "memberId": member_id,
+                "memberName": name,
+                "title": track,
+                "video_id": item.video_id,
+            },
+            related_object_id=related,
+            push=True,
+            sms=False,
+        )
+        if notif is None:
+            continue
+        sent += 1
+    return {"sent": sent, "failed": failed, "skipped": None}
+
+
+def notify_music_request_approved(user, item) -> None:
+    track = (getattr(item, "title", None) or "").strip()
+    create_notification(
+        user,
+        code="music_request_approved",
+        body_params={"title": track} if track else {},
+        related_object_id=str(item.pk),
+        push=True,
+        sms=False,
+    )
+
+
+def notify_music_request_rejected(user, item) -> None:
+    track = (getattr(item, "title", None) or "").strip()
+    create_notification(
+        user,
+        code="music_request_rejected",
+        body_params={"title": track} if track else {},
+        related_object_id=str(item.pk),
+        push=True,
+        sms=False,
+    )
 
 
 def notify_fingerprint_ready(user, *, related_object_id: str = "") -> None:
@@ -1095,6 +1249,15 @@ def send_fcm_for_notification(notification_id) -> dict:
         amount = params.get("amount")
         if amount is not None and amount != "":
             data["amount_taka"] = str(amount)
+    elif notif.code in (
+        "music_request",
+        "music_request_approved",
+        "music_request_rejected",
+    ):
+        # Do not put member_id in FCM data — mobile open handler routes any
+        # member_id to admin member detail before music codes.
+        data["type"] = notif.code
+        data["music_queue_item_id"] = notif.related_object_id or ""
     elif notif.code == "admin_enrollment":
         params = dict(notif.body_params or {})
         data["type"] = "admin_enrollment"

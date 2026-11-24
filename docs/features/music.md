@@ -11,7 +11,10 @@ default), then play from the admin app.
 
 1. Member searches (`GET /search/?q=`) or pastes a YouTube URL and `POST /queue/`.
 2. With `require_approval=true` (default), the item is `pending_approval` (inbox).
-3. Staff `POST /queue/{id}/approve/` → `queued`. Reject = `DELETE /queue/{id}/`.
+   Staff with `music.view` get inbox + FCM (`code=music_request`); tap → admin FloorCue.
+3. Staff `POST /queue/{id}/approve/` → `queued` (member gets `music_request_approved` push).
+   Reject = `DELETE /queue/{id}/` while pending (member gets `music_request_rejected`).
+   Both mark staff `music_request` inbox rows read. Member self-withdraw marks read only.
 4. Staff `POST /queue/play/` starts the head of the playable queue (`playing`) and
    sets `is_playback_active=true`.
 5. Staff pause/resume on the gym speaker: `POST /queue/playback/` with
@@ -40,7 +43,7 @@ Not perfect without YouTube Data API; inbox-first is the human backstop.
 
 | Code | Use |
 |---|---|
-| `music.view` | Open FloorCue / read queue (client gate) |
+| `music.view` | Open FloorCue / read queue; receive pending-request inbox + FCM |
 | `music.update` | Play, skip, complete, approve, settings, block/unblock |
 
 ## Honest limits

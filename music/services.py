@@ -702,6 +702,16 @@ def add_song_to_queue(user, data: dict) -> dict:
     _sync_playing_track(settings_obj, advance=False)
     item.refresh_from_db()
 
+    if item.status == "pending_approval":
+        item_id = item.pk
+
+        def _push_staff():
+            from notifications.services import notify_staff_music_request
+
+            notify_staff_music_request(item_id)
+
+        transaction.on_commit(_push_staff, robust=True)
+
     state = get_queue_state(user)
     position = next(
         (entry["position"] for entry in state["queue"] if str(entry["id"]) == str(item.id)),
@@ -724,7 +734,9 @@ def remove_song_from_queue(actor, item_id) -> dict:
     if actor.role != "admin" and item.user_id != actor.id:
         raise PermissionDenied("Only staff or the member who added this song can remove it.")
 
+    was_pending = item.status == "pending_approval"
     was_playing = item.status == "playing"
+    requester = item.user
     item.status = "removed"
     item.ended_at = timezone.now()
     item.removed_by = actor
@@ -733,6 +745,23 @@ def remove_song_from_queue(actor, item_id) -> dict:
     # Advance only when staff remove the currently playing track.
     advance = was_playing and actor.role == "admin"
     _sync_playing_track(settings_obj, advance=advance)
+
+    if was_pending:
+        resolved_id = item.pk
+        notify_member = actor.role == "admin" and actor.id != requester.id
+
+        def _after_reject():
+            from notifications.services import (
+                mark_staff_music_request_notifications_read,
+                notify_music_request_rejected,
+            )
+
+            mark_staff_music_request_notifications_read(resolved_id)
+            if notify_member:
+                notify_music_request_rejected(requester, item)
+
+        transaction.on_commit(_after_reject, robust=True)
+
     return get_queue_state(actor)
 
 
@@ -750,6 +779,20 @@ def approve_song_in_queue(actor, item_id) -> dict:
     item.approved_by = actor
     item.save(update_fields=["status", "is_reported", "approved_by", "updated_at"])
     _sync_playing_track(settings_obj, advance=False)
+
+    approved_id = item.pk
+    requester = item.user
+
+    def _after_approve():
+        from notifications.services import (
+            mark_staff_music_request_notifications_read,
+            notify_music_request_approved,
+        )
+
+        mark_staff_music_request_notifications_read(approved_id)
+        notify_music_request_approved(requester, item)
+
+    transaction.on_commit(_after_approve, robust=True)
     return get_queue_state(actor)
 
 

@@ -242,6 +242,243 @@ def test_cash_request_resolve_marks_staff_notif_read(member, staff, plan):
 
 
 @pytest.mark.django_db
+def test_music_request_pushes_staff(
+    member, staff, monkeypatch, django_capture_on_commit_callbacks
+):
+    from music.services import add_song_to_queue
+
+    monkeypatch.setattr(
+        "music.services.resolve_youtube_metadata",
+        lambda vid: {
+            "video_id": vid,
+            "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+            "title": f"Track {vid}",
+            "channel_title": "Gym Artist",
+            "thumbnail_url": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            "duration_text": "3:30",
+            "duration_seconds": 210,
+            "age_restricted": False,
+        },
+    )
+    register_device(staff, "staff-music-fcm", "android")
+    with patch("notifications.services._send_fcm") as send_fcm:
+        with django_capture_on_commit_callbacks(execute=True):
+            result = add_song_to_queue(
+                member,
+                {"youtube_url": "https://www.youtube.com/watch?v=eVTXPUF4Oz4"},
+            )
+    assert result["item"]["status"] == "pending_approval"
+    send_fcm.assert_called()
+    kwargs = send_fcm.call_args.kwargs
+    assert kwargs["data"]["type"] == "music_request"
+    assert kwargs["data"]["music_queue_item_id"] == str(result["item"]["id"])
+    assert "member_id" not in kwargs["data"]
+    assert "New FloorCue request" in kwargs["title"]
+    assert MemberNotification.objects.filter(
+        user=staff, code="music_request", is_unread=True
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_music_request_notify_only_permitted_staff(
+    member, staff, monkeypatch, django_capture_on_commit_callbacks
+):
+    from accounts.models import StaffProfile, User
+    from music.services import add_song_to_queue
+
+    limited = User.objects.create_user(
+        "+8801911112222", role="admin", full_name="No Music"
+    )
+    StaffProfile.objects.create(
+        user=limited, short_id="S-NOMUSIC", permissions=["members.view"]
+    )
+    monkeypatch.setattr(
+        "music.services.resolve_youtube_metadata",
+        lambda vid: {
+            "video_id": vid,
+            "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+            "title": f"Track {vid}",
+            "channel_title": "Gym Artist",
+            "thumbnail_url": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            "duration_text": "3:30",
+            "duration_seconds": 210,
+            "age_restricted": False,
+        },
+    )
+    register_device(staff, "staff-music-ok", "android")
+    register_device(limited, "staff-music-deny", "android")
+    with patch("notifications.services._send_fcm") as send_fcm:
+        with django_capture_on_commit_callbacks(execute=True):
+            add_song_to_queue(
+                member,
+                {"youtube_url": "https://www.youtube.com/watch?v=eVTXPUF4Oz4"},
+            )
+    assert MemberNotification.objects.filter(user=staff, code="music_request").exists()
+    assert not MemberNotification.objects.filter(
+        user=limited, code="music_request"
+    ).exists()
+    tokens = {c.args[0] for c in send_fcm.call_args_list}
+    assert "staff-music-ok" in tokens
+    assert "staff-music-deny" not in tokens
+
+
+@pytest.mark.django_db
+def test_music_request_no_staff_push_when_auto_queued(
+    member, staff, monkeypatch, django_capture_on_commit_callbacks
+):
+    from music.services import add_song_to_queue, get_settings
+
+    settings_obj = get_settings()
+    settings_obj.require_approval = False
+    settings_obj.save(update_fields=["require_approval", "updated_at"])
+    monkeypatch.setattr(
+        "music.services.resolve_youtube_metadata",
+        lambda vid: {
+            "video_id": vid,
+            "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+            "title": f"Track {vid}",
+            "channel_title": "Gym Artist",
+            "thumbnail_url": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            "duration_text": "3:30",
+            "duration_seconds": 210,
+            "age_restricted": False,
+        },
+    )
+    register_device(staff, "staff-music-auto", "android")
+    with patch("notifications.services._send_fcm") as send_fcm:
+        with django_capture_on_commit_callbacks(execute=True):
+            result = add_song_to_queue(
+                member,
+                {"youtube_url": "https://www.youtube.com/watch?v=eVTXPUF4Oz4"},
+            )
+    assert result["item"]["status"] == "queued"
+    send_fcm.assert_not_called()
+    assert not MemberNotification.objects.filter(
+        user=staff, code="music_request"
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_music_approve_notifies_member_and_marks_staff_read(
+    member, staff, monkeypatch, django_capture_on_commit_callbacks
+):
+    from music.services import add_song_to_queue, approve_song_in_queue
+
+    monkeypatch.setattr(
+        "music.services.resolve_youtube_metadata",
+        lambda vid: {
+            "video_id": vid,
+            "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+            "title": f"Track {vid}",
+            "channel_title": "Gym Artist",
+            "thumbnail_url": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            "duration_text": "3:30",
+            "duration_seconds": 210,
+            "age_restricted": False,
+        },
+    )
+    register_device(member, "member-music-fcm", "android")
+    with django_capture_on_commit_callbacks(execute=True):
+        result = add_song_to_queue(
+            member,
+            {"youtube_url": "https://www.youtube.com/watch?v=eVTXPUF4Oz4"},
+        )
+    item_id = result["item"]["id"]
+    staff_notif = MemberNotification.objects.get(user=staff, code="music_request")
+    assert staff_notif.is_unread is True
+
+    with patch("notifications.services._send_fcm") as send_fcm:
+        with django_capture_on_commit_callbacks(execute=True):
+            approve_song_in_queue(staff, item_id)
+    staff_notif.refresh_from_db()
+    assert staff_notif.is_unread is False
+    member_notif = MemberNotification.objects.get(
+        user=member, code="music_request_approved"
+    )
+    assert member_notif.related_object_id == str(item_id)
+    send_fcm.assert_called()
+    kwargs = send_fcm.call_args.kwargs
+    assert kwargs["data"]["type"] == "music_request_approved"
+    assert kwargs["data"]["music_queue_item_id"] == str(item_id)
+    assert "member_id" not in kwargs["data"]
+
+
+@pytest.mark.django_db
+def test_music_staff_reject_notifies_member(
+    member, staff, monkeypatch, django_capture_on_commit_callbacks
+):
+    from music.services import add_song_to_queue, remove_song_from_queue
+
+    monkeypatch.setattr(
+        "music.services.resolve_youtube_metadata",
+        lambda vid: {
+            "video_id": vid,
+            "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+            "title": f"Track {vid}",
+            "channel_title": "Gym Artist",
+            "thumbnail_url": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            "duration_text": "3:30",
+            "duration_seconds": 210,
+            "age_restricted": False,
+        },
+    )
+    register_device(member, "member-music-rej", "android")
+    with django_capture_on_commit_callbacks(execute=True):
+        result = add_song_to_queue(
+            member,
+            {"youtube_url": "https://www.youtube.com/watch?v=eVTXPUF4Oz4"},
+        )
+    item_id = result["item"]["id"]
+    with patch("notifications.services._send_fcm") as send_fcm:
+        with django_capture_on_commit_callbacks(execute=True):
+            remove_song_from_queue(staff, item_id)
+    assert MemberNotification.objects.filter(
+        user=member, code="music_request_rejected"
+    ).exists()
+    staff_notif = MemberNotification.objects.get(user=staff, code="music_request")
+    assert staff_notif.is_unread is False
+    kwargs = send_fcm.call_args.kwargs
+    assert kwargs["data"]["type"] == "music_request_rejected"
+
+
+@pytest.mark.django_db
+def test_music_member_withdraw_marks_staff_read_without_member_push(
+    member, staff, monkeypatch, django_capture_on_commit_callbacks
+):
+    from music.services import add_song_to_queue, remove_song_from_queue
+
+    monkeypatch.setattr(
+        "music.services.resolve_youtube_metadata",
+        lambda vid: {
+            "video_id": vid,
+            "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+            "title": f"Track {vid}",
+            "channel_title": "Gym Artist",
+            "thumbnail_url": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            "duration_text": "3:30",
+            "duration_seconds": 210,
+            "age_restricted": False,
+        },
+    )
+    register_device(member, "member-withdraw-fcm", "android")
+    with django_capture_on_commit_callbacks(execute=True):
+        result = add_song_to_queue(
+            member,
+            {"youtube_url": "https://www.youtube.com/watch?v=eVTXPUF4Oz4"},
+        )
+    item_id = result["item"]["id"]
+    with patch("notifications.services._send_fcm") as send_fcm:
+        with django_capture_on_commit_callbacks(execute=True):
+            remove_song_from_queue(member, item_id)
+    assert not MemberNotification.objects.filter(
+        user=member, code="music_request_rejected"
+    ).exists()
+    staff_notif = MemberNotification.objects.get(user=staff, code="music_request")
+    assert staff_notif.is_unread is False
+    send_fcm.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_staff_can_register_fcm_device(client, staff):
     client.force_authenticate(staff)
     reg = client.post(
@@ -446,6 +683,12 @@ def test_catalog_critical_sms_defaults():
     assert CATALOG["fingerprint_ready"][4] is False
     assert CATALOG["membership_activated"][4] is False
     assert CATALOG["announcement"][4] is False
+    assert CATALOG["music_request"][4] is False
+    assert CATALOG["music_request_approved"][4] is False
+    assert CATALOG["music_request_rejected"][4] is False
+    assert CATALOG["music_request"][3] is True
+    assert CATALOG["music_request_approved"][3] is True
+    assert CATALOG["music_request_rejected"][3] is True
 
 
 @pytest.mark.django_db
