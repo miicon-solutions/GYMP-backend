@@ -934,6 +934,7 @@ def test_attendance_time_spent_exit_scan_auto_cap_and_motivation_streak(
     member.member_profile.profile_complete = True
     member.member_profile.save()
     receive_cash(staff, member.member_profile, plan.pk)
+    member.member_profile.refresh_from_db()
 
     # Check in and then scan on exit 75 minutes later (Suggestion 2)
     in_time = (timezone.now() - timedelta(minutes=75)).isoformat()

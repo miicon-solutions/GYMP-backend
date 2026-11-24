@@ -8,7 +8,7 @@ Staff APIs for member search/detail, phone link, fingerprint vault actions, and 
 
 ## Common operations
 
-- `GET /api/v1/admin/members/?q=&status=unpaid|active|expired`
+- `GET /api/v1/admin/members/?q=&status=unpaid|active|expired` — `q` matches the temporary `PFT-######` id before payment and the 9-digit serial after it (`PG-` on a serial is ignored)
 - `GET|PATCH /api/v1/admin/members/{id}/`
 - `POST …/phone/` — admin link member phone (OTP proof)
 - Fingerprint: templates list/delete, interactive enroll, pull/push

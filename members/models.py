@@ -8,7 +8,8 @@ class MemberProfile(Entity):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="member_profile"
     )
-    member_id = models.CharField(max_length=9, unique=True)
+    # PFT-###### until the first paid online or cash payment, then the 9-digit serial.
+    member_id = models.CharField(max_length=10, unique=True)
     emergency_name = models.CharField(max_length=200, blank=True)
     emergency_relationship = models.CharField(max_length=12, blank=True)
     emergency_phone_e164 = models.CharField(max_length=14, blank=True)

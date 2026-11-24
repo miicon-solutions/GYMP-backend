@@ -1,6 +1,17 @@
 from django.db import transaction
 
 MEMBER_ID_WIDTH = 9
+TEMPORARY_MEMBER_PREFIX = "PFT-"
+TEMPORARY_MEMBER_WIDTH = 6
+
+
+def is_temporary_member_id(value: str) -> bool:
+    body = (value or "")[len(TEMPORARY_MEMBER_PREFIX) :]
+    return (
+        (value or "").startswith(TEMPORARY_MEMBER_PREFIX)
+        and len(body) == TEMPORARY_MEMBER_WIDTH
+        and body.isdigit()
+    )
 
 
 def strip_member_id_prefix(value: str) -> str:
@@ -23,4 +34,6 @@ def next_display(kind):
     sequence.save(update_fields=["value"])
     if kind == "staff":
         return f"ADM-{sequence.value:04d}"
+    if kind == "member_temporary":
+        return f"{TEMPORARY_MEMBER_PREFIX}{sequence.value:0{TEMPORARY_MEMBER_WIDTH}d}"
     return f"{sequence.value:0{MEMBER_ID_WIDTH}d}"

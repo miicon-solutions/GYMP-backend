@@ -208,11 +208,14 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
     member.member_profile.profile_complete = True
     member.member_profile.save()
     url = "/api/v1/internal/attendance/check-in/"
-    body = {"member_id": member.member_profile.member_id, "checked_in_at": "2026-11-14T20:30:00Z"}
+    temporary = member.member_profile.member_id
+    unpaid_body = {"member_id": temporary, "checked_in_at": "2026-11-14T20:30:00Z"}
     # Unpaid / pending_payment members cannot check in (no calendar row).
-    unpaid = client.post(url, body, format="json", HTTP_X_DEVICE_KEY="test-device-key")
+    unpaid = client.post(url, unpaid_body, format="json", HTTP_X_DEVICE_KEY="test-device-key")
     assert unpaid.status_code == 403
     receive_cash(staff, member.member_profile, plan.pk)
+    member.member_profile.refresh_from_db()
+    body = {"member_id": member.member_profile.member_id, "checked_in_at": "2026-11-14T20:30:00Z"}
     assert client.post(url, body, format="json").status_code == 401
     response = client.post(url, body, format="json", HTTP_X_DEVICE_KEY="test-device-key")
     assert response.status_code == 200
@@ -282,29 +285,34 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
     )
 
 
-def test_member_id_is_9_digit_numeric_without_prefix(client, member, staff, plan):
-    raw_id = member.member_profile.member_id
-    assert len(raw_id) == 9
-    assert raw_id.isdigit()
-    assert not raw_id.startswith("PG-")
+def test_payment_replaces_temporary_member_id_with_serial(client, member, staff, plan):
+    profile = member.member_profile
+    temporary = profile.member_id
+    assert temporary == "PFT-000001"
 
-    member.member_profile.profile_complete = True
-    member.member_profile.save()
-    _, payment = receive_cash(staff, member.member_profile, plan.pk)
+    profile.profile_complete = True
+    profile.save()
+    _, payment = receive_cash(staff, profile, plan.pk)
+    profile.refresh_from_db()
+    serial = profile.member_id
+    assert len(serial) == 9 and serial.isdigit()
+    assert serial == "000000001"
 
     client.force_authenticate(staff)
-    by_raw = client.get("/api/v1/admin/members/", {"q": raw_id})
-    by_prefixed = client.get("/api/v1/admin/members/", {"q": f"PG-{raw_id}"})
-    assert by_raw.status_code == 200 and by_raw.data["results"][0]["member_id"] == raw_id
-    assert by_prefixed.status_code == 200 and by_prefixed.data["results"][0]["member_id"] == raw_id
+    by_serial = client.get("/api/v1/admin/members/", {"q": serial})
+    by_prefixed = client.get("/api/v1/admin/members/", {"q": f"PG-{serial}"})
+    by_temporary = client.get("/api/v1/admin/members/", {"q": temporary})
+    assert by_serial.status_code == 200 and by_serial.data["results"][0]["member_id"] == serial
+    assert by_prefixed.status_code == 200 and by_prefixed.data["results"][0]["member_id"] == serial
+    assert by_temporary.data["results"] == []
 
-    activity = client.get("/api/v1/admin/activity/", {"q": f"PG-{raw_id}"})
+    activity = client.get("/api/v1/admin/activity/", {"q": f"PG-{serial}"})
     assert activity.status_code == 200 and len(activity.data["results"]) >= 1
-    assert activity.data["results"][0]["summary_params"]["member_id"] == raw_id
+    assert activity.data["results"][0]["summary_params"]["member_id"] == serial
 
     too_long = client.post(
         "/api/v1/internal/attendance/check-in/",
-        {"member_id": f"PG-{raw_id}"},
+        {"member_id": f"PG-{serial}"},
         format="json",
         HTTP_X_DEVICE_KEY="test-device-key",
     )
@@ -313,4 +321,18 @@ def test_member_id_is_9_digit_numeric_without_prefix(client, member, staff, plan
     client.force_authenticate(member)
     receipt = client.get(f"/api/v1/member/payments/{payment.pk}/receipt.html/")
     assert receipt.status_code == 200
-    assert f"PG-{raw_id}".encode() in receipt.content
+    assert f"PG-{serial}".encode() in receipt.content
+
+
+def test_renewal_keeps_serial_member_id(member, staff, plan):
+    from payments.services import activate
+
+    profile = member.member_profile
+    profile.profile_complete = True
+    profile.save()
+    receive_cash(staff, profile, plan.pk)
+    profile.refresh_from_db()
+    serial = profile.member_id
+    activate(profile, plan, profile.expires_on)
+    profile.refresh_from_db()
+    assert profile.member_id == serial

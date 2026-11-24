@@ -357,9 +357,10 @@ def test_sms_failure_invalidates_challenge(settings):
     assert Challenge.objects.get().consumed_at is not None
 
 
-def test_member_display_id_is_nine_digits(client):
+def test_signup_member_id_is_temporary():
     from accounts.services import new_member
 
-    member = new_member("+8801712555666")
-    member_id = member.member_profile.member_id
-    assert len(member_id) == 9 and member_id.isdigit()
+    first = new_member("+8801712555666")
+    second = new_member("+8801712555667")
+    assert first.member_profile.member_id == "PFT-000001"
+    assert second.member_profile.member_id == "PFT-000002"

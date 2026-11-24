@@ -65,7 +65,7 @@ def throttle(key, limit, seconds):
 @transaction.atomic
 def new_member(phone, **values):
     user = User.objects.create_user(phone, role="member", **values)
-    MemberProfile.objects.create(user=user, member_id=next_display("member"))
+    MemberProfile.objects.create(user=user, member_id=next_display("member_temporary"))
     return user
 
 

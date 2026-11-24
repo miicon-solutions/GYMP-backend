@@ -248,6 +248,12 @@ def settle(session, result):
 
 
 def activate(member, plan, expires):
+    from accounts.identifiers import is_temporary_member_id, next_display
+
+    # First successful online settle or cash payment replaces PFT-######.
+    # Later renewals keep the 9-digit serial already stored.
+    if is_temporary_member_id(member.member_id):
+        member.member_id = next_display("member")
     member.plan, member.expires_on, member.membership_status = plan, expires, "active"
     if member.fingerprint_status == "not_required":
         member.fingerprint_status = "pending"

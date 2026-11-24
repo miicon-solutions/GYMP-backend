@@ -54,7 +54,7 @@ _TOKEN_RESPONSE = [
             "expires_in_sec": 3600,
             "member": {
                 "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-                "member_id": "PF-0001",
+                "member_id": "PFT-000001",
                 "phone_e164": "+8801712345678",
                 "full_name": "",
                 "email": None,
