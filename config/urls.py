@@ -1176,8 +1176,6 @@ urlpatterns = [
     path("api/", include(api)),
     path("admin/", admin.site.urls),
     path("", public.landing),
-    path("terms/", public.legal, {"page": "terms"}),
-    path("privacy/", public.legal, {"page": "privacy"}),
     path("health/", public.health),
     path("health/live/", public.live),
     path("docs/", DocsUIView.as_view(), name="docs"),

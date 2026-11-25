@@ -150,8 +150,6 @@ Placeholders such as `{id}` are UUIDs except `{tranId}` (merchant transaction re
 | GET | `/` | `/` |
 | GET | `/docs` | `/docs/` |
 | GET | `/docs/` | `/docs/` |
-| GET | `/terms` | `/terms/` |
-| GET | `/privacy` | `/privacy/` |
 | GET | `/openapi.yaml` | `/openapi.yaml` |
 | GET | `/v1/admin/gym-hours` | `/api/v1/admin/gym-hours/` |
 | PUT | `/v1/admin/gym-hours/week` | `/api/v1/admin/gym-hours/week/` |
@@ -197,4 +195,4 @@ Placeholders such as `{id}` are UUIDs except `{tranId}` (merchant transaction re
 | POST | `/v1/admin/staff/:id/deactivate` | `/api/v1/admin/staff/{id}/deactivate/` |
 | GET | `/api/v1/welcome` | `/api/v1/welcome/` |
 
-The machine-readable [route map](route-map.json) is checked against generated Django API operations by the test suite. Public HTML/legal/media views and health probes are exercised separately.
+The machine-readable [route map](route-map.json) is checked against generated Django API operations by the test suite. Public HTML/media views and health probes are exercised separately.

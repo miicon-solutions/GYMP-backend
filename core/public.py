@@ -15,11 +15,6 @@ def landing(request):
 
 
 @require_GET
-def legal(request, page):
-    return render(request, page + ".html")
-
-
-@require_GET
 def health(request):
     try:
         with transaction.atomic(), connection.cursor() as cursor:

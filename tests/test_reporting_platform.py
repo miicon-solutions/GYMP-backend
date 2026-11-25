@@ -251,8 +251,6 @@ def test_cursor_pagination_limits_and_stability(client, member):
     "path",
     [
         "/",
-        "/terms/",
-        "/privacy/",
         "/docs/",
         "/health/",
         "/health/live/",

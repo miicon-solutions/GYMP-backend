@@ -156,16 +156,6 @@
   },
   {
     "method": "GET",
-    "old": "/terms",
-    "new": "/terms/"
-  },
-  {
-    "method": "GET",
-    "old": "/privacy",
-    "new": "/privacy/"
-  },
-  {
-    "method": "GET",
     "old": "/openapi.yaml",
     "new": "/openapi.yaml"
   },
