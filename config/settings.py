@@ -1,3 +1,5 @@
+import json
+import tomllib
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
@@ -8,6 +10,38 @@ from django.core.exceptions import ImproperlyConfigured
 BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / ".env", overwrite=False)
+
+
+def _load_build_meta() -> dict[str, str]:
+    path = BASE_DIR / "build_meta.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        "version": str(data.get("version") or "").strip(),
+        "built_at": str(data.get("built_at") or "").strip(),
+    }
+
+
+def _pyproject_version() -> str:
+    path = BASE_DIR / "pyproject.toml"
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return "1.0.0"
+    version = str((data.get("project") or {}).get("version") or "").strip()
+    return version or "1.0.0"
+
+
+_BUILD_META = _load_build_meta()
+APP_VERSION = env(
+    "APP_VERSION",
+    default=_BUILD_META.get("version") or _pyproject_version(),
+)
+APP_BUILT_AT = env("APP_BUILT_AT", default=_BUILD_META.get("built_at") or "")
 APP_ENV = env("APP_ENV", default="local").lower()
 if APP_ENV not in {"local", "dev", "prod"}:
     raise ImproperlyConfigured("APP_ENV must be local, dev, or prod.")
@@ -235,7 +269,7 @@ SIMPLE_JWT = {
 }
 API_DOC_VERSIONS = ("v1",)
 DEFAULT_API_DOC_VERSION = "v1"
-API_DOC_VERSION_LABEL = "1.0.0"
+API_DOC_VERSION_LABEL = APP_VERSION
 SPECTACULAR_SETTINGS = {
     "TITLE": "GYMP API",
     "VERSION": API_DOC_VERSION_LABEL,

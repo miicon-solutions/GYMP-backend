@@ -11,7 +11,15 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 @require_GET
 def landing(request):
-    return render(request, "index.html")
+    return render(
+        request,
+        "index.html",
+        {
+            "version": settings.APP_VERSION,
+            "built_at": settings.APP_BUILT_AT,
+            "environment": settings.APP_ENV,
+        },
+    )
 
 
 @require_GET

@@ -36,6 +36,11 @@ COPY --from=dependencies /app/.venv /app/.venv
 COPY --from=infisical /bin/infisical /usr/local/bin/infisical
 COPY . .
 
+ARG APP_VERSION=1.0.0
+ARG APP_BUILT_AT=
+ENV APP_VERSION=$APP_VERSION \
+    APP_BUILT_AT=$APP_BUILT_AT
+
 # Dependencies are already installed; remove unused pip and its bootstrap wheels.
 RUN /usr/local/bin/python -m pip uninstall --yes pip \
     && rm -rf /usr/local/lib/python3.14/ensurepip

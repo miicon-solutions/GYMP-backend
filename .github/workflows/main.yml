@@ -1,0 +1,66 @@
+name: (Main) Bump Version
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    name: Bump pyproject + build_meta
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version and stamp build_meta
+        id: bump
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          root = Path(".")
+          pyproject = root / "pyproject.toml"
+          text = pyproject.read_text(encoding="utf-8")
+          match = re.search(
+              r'(?m)^(version\s*=\s*")(\d+)\.(\d+)\.(\d+)(")',
+              text,
+          )
+          if not match:
+              raise SystemExit("Could not find [project] version in pyproject.toml")
+          major, minor, patch = (int(match.group(i)) for i in (2, 3, 4))
+          new_version = f"{major}.{minor}.{patch + 1}"
+          pyproject.write_text(
+              text[: match.start(2)] + new_version + text[match.end(4) :],
+              encoding="utf-8",
+          )
+          built_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+          meta = {"version": new_version, "built_at": built_at}
+          (root / "build_meta.json").write_text(
+              json.dumps(meta, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"version={new_version}\n")
+          print(f"Bumped to {new_version} at {built_at}")
+          PY
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml build_meta.json
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git push

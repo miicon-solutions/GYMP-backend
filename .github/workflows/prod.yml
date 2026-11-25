@@ -36,6 +36,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Stamp build time
+        run: echo "BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -52,6 +55,9 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:${{ env.TAG }}
+          build-args: |
+            APP_VERSION=${{ env.TAG }}
+            APP_BUILT_AT=${{ env.BUILT_AT }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -92,4 +98,5 @@ jobs:
             **Branch:** `${{ github.ref_name }}`
             **Pushed by:** `${{ github.actor }}`
             **Commit:** `${{ github.sha }}`
+            **Tag:** `${{ env.TAG }}`
             **Message:** ${{ github.event.head_commit.message }}
