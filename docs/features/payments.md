@@ -14,7 +14,7 @@ Pricing snapshots charge an admission fee when `requires_admission_fee` is true:
 3. **Expired within 180 days** of payment-backed `expires_on` → no admission on renew / change plan.
 4. **Expired ≥ 180 calendar days** after that `expires_on` → re-admission on the next pay.
 
-Membership validity and `expires_on` are written only when payment succeeds (admin cash confirm / cash-request accept, or online IPN settle). That same activation replaces a temporary `PFT-######` member id with the next 9-digit serial. Renewals and plan changes leave an existing serial unchanged. The 180-day grace starts at that payment-backed expiry — never at registration, OTP, or profile-complete.
+Membership validity and `expires_on` are written only when payment succeeds (admin cash confirm / cash-request accept, or online IPN settle). That same activation replaces a temporary `PFT-####` member id with `PF-####`. Renewals and plan changes leave an existing paid id unchanged. The 180-day grace starts at that payment-backed expiry — never at registration, OTP, or profile-complete.
 
 - Online kinds stay `first_purchase` | `renew` | `change_plan`; cash kinds stay `first_payment` | `renewal` | `plan_change`.
 - `is_first_payment=True` only for the member’s first ever paid payment (true join). Re-admission after lapse keeps `is_first_payment=False` so first-N offer seats are not burned; admission reports still count charged/waived admission via line items / `admission_waived_taka`.

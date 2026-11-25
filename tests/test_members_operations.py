@@ -288,40 +288,40 @@ def test_attendance_device_and_member_dashboard(client, member, staff, plan):
 def test_payment_replaces_temporary_member_id_with_serial(client, member, staff, plan):
     profile = member.member_profile
     temporary = profile.member_id
-    assert temporary == "PFT-000001"
+    assert temporary == "PFT-0001"
 
     profile.profile_complete = True
     profile.save()
     _, payment = receive_cash(staff, profile, plan.pk)
     profile.refresh_from_db()
     serial = profile.member_id
-    assert len(serial) == 9 and serial.isdigit()
-    assert serial == "000000001"
+    assert serial == "PF-0001"
 
     client.force_authenticate(staff)
     by_serial = client.get("/api/v1/admin/members/", {"q": serial})
-    by_prefixed = client.get("/api/v1/admin/members/", {"q": f"PG-{serial}"})
+    by_legacy_pg = client.get("/api/v1/admin/members/", {"q": "PG-0001"})
     by_temporary = client.get("/api/v1/admin/members/", {"q": temporary})
     assert by_serial.status_code == 200 and by_serial.data["results"][0]["member_id"] == serial
-    assert by_prefixed.status_code == 200 and by_prefixed.data["results"][0]["member_id"] == serial
+    assert by_legacy_pg.status_code == 200 and by_legacy_pg.data["results"][0]["member_id"] == serial
     assert by_temporary.data["results"] == []
 
-    activity = client.get("/api/v1/admin/activity/", {"q": f"PG-{serial}"})
+    activity = client.get("/api/v1/admin/activity/", {"q": "PG-0001"})
     assert activity.status_code == 200 and len(activity.data["results"]) >= 1
     assert activity.data["results"][0]["summary_params"]["member_id"] == serial
 
-    too_long = client.post(
+    unknown = client.post(
         "/api/v1/internal/attendance/check-in/",
-        {"member_id": f"PG-{serial}"},
+        {"member_id": "PF-NOPE"},
         format="json",
         HTTP_X_DEVICE_KEY="test-device-key",
     )
-    assert too_long.status_code == 400
+    assert unknown.status_code == 404
 
     client.force_authenticate(member)
     receipt = client.get(f"/api/v1/member/payments/{payment.pk}/receipt.html/")
     assert receipt.status_code == 200
-    assert f"PG-{serial}".encode() in receipt.content
+    assert serial.encode() in receipt.content
+    assert b"PG-" not in receipt.content
 
 
 def test_renewal_keeps_serial_member_id(member, staff, plan):

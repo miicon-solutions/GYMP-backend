@@ -1,8 +1,9 @@
 from django.db import transaction
 
-MEMBER_ID_WIDTH = 9
+PAID_MEMBER_PREFIX = "PF-"
+PAID_MEMBER_WIDTH = 4
 TEMPORARY_MEMBER_PREFIX = "PFT-"
-TEMPORARY_MEMBER_WIDTH = 6
+TEMPORARY_MEMBER_WIDTH = 4
 
 
 def is_temporary_member_id(value: str) -> bool:
@@ -15,8 +16,10 @@ def is_temporary_member_id(value: str) -> bool:
 
 
 def strip_member_id_prefix(value: str) -> str:
+    """Strip legacy PG- or paid PF- decoration for search; leave PFT- intact."""
     cleaned = (value or "").strip()
-    if cleaned[:3].upper() == "PG-" and cleaned[3:].isdigit():
+    prefix = cleaned[:3].upper()
+    if prefix in ("PG-", "PF-") and cleaned[3:].isdigit():
         return cleaned[3:]
     return cleaned
 
@@ -36,4 +39,4 @@ def next_display(kind):
         return f"ADM-{sequence.value:04d}"
     if kind == "member_temporary":
         return f"{TEMPORARY_MEMBER_PREFIX}{sequence.value:0{TEMPORARY_MEMBER_WIDTH}d}"
-    return f"{sequence.value:0{MEMBER_ID_WIDTH}d}"
+    return f"{PAID_MEMBER_PREFIX}{sequence.value:0{PAID_MEMBER_WIDTH}d}"

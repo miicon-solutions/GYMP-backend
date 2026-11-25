@@ -8,7 +8,7 @@ class MemberProfile(Entity):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="member_profile"
     )
-    # PFT-###### until the first paid online or cash payment, then the 9-digit serial.
+    # PFT-#### until the first paid online or cash payment, then PF-####.
     member_id = models.CharField(max_length=10, unique=True)
     emergency_name = models.CharField(max_length=200, blank=True)
     emergency_relationship = models.CharField(max_length=12, blank=True)
@@ -39,7 +39,7 @@ class MemberProfile(Entity):
     )
     device_pin_enc = models.TextField(blank=True)
     device_pin_updated_at = models.DateTimeField(null=True, blank=True)
-    # Optional digits-only ZK user id. The scanner user id is the 9-digit member_id.
+    # Optional digits-only ZK user id (keypad); display member_id stays PF-/PFT-.
     device_keypad_id = models.CharField(max_length=16, blank=True, db_index=True)
     recovery_sent_at = models.DateTimeField(null=True, blank=True)
     push_enabled = models.BooleanField(default=True)

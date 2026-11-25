@@ -59,7 +59,7 @@ Content-Type: application/json
   "expires_in_sec": 3600,
   "member": {
     "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "member_id": "PFT-000001",
+    "member_id": "PFT-0001",
     "phone_e164": "+8801712345678",
     "profile_complete": false,
     "membership_status": "none"
@@ -69,7 +69,7 @@ Content-Type: application/json
 
 Use code `000000` only when the server reports `dev_bypass` (local/dev). Production SMS delivers a random code.
 
-A new member’s `member_id` is a temporary id, `PFT-000001`, `PFT-000002`, and so on. The first successful online or cash payment replaces it with the 9-digit serial (`000000001`). Later renewals keep that serial. The serial is the scanner user id.
+A new member’s `member_id` is a temporary id, `PFT-0001`, `PFT-0002`, and so on. The first successful online or cash payment replaces it with `PF-0001`. Later renewals keep that id. The scanner keypad uses digits-only `device_keypad_id`, not the `PF-` display id.
 
 ## Google
 

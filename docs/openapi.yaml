@@ -3,7 +3,7 @@
 openapi: 3.0.3
 info:
   title: GYMP API
-  version: 1.0.2
+  version: 1.0.4
   description: GYMP membership platform API. Use feature packs at `/docs/features/{feature}/`
     or filtered OpenAPI at `/openapi/v1/{feature}.yaml` to wire one feature at a time.
 paths:
@@ -2294,7 +2294,7 @@ paths:
                     expires_in_sec: 3600
                     member:
                       id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
-                      member_id: PFT-000001
+                      member_id: PFT-0001
                       phone_e164: '+8801712345678'
                       full_name: ''
                       email: null
@@ -2343,7 +2343,7 @@ paths:
                     expires_in_sec: 3600
                     member:
                       id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
-                      member_id: PFT-000001
+                      member_id: PFT-0001
                       phone_e164: '+8801712345678'
                       full_name: ''
                       email: null

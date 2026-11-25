@@ -366,5 +366,5 @@ def test_signup_member_id_is_temporary():
 
     first = new_member("+8801712555666")
     second = new_member("+8801712555667")
-    assert first.member_profile.member_id == "PFT-000001"
-    assert second.member_profile.member_id == "PFT-000002"
+    assert first.member_profile.member_id == "PFT-0001"
+    assert second.member_profile.member_id == "PFT-0002"
