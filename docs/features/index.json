@@ -54,6 +54,7 @@
         "admin_link_member_phone",
         "admin_list_cash_requests",
         "admin_member_cash_requests",
+        "admin_member_device_pin_regenerate",
         "admin_member_fingerprint",
         "admin_member_fingerprint_enroll",
         "admin_member_fingerprint_pull",
@@ -280,11 +281,19 @@
       "operations": [
         "api_v1_music_blocks_create",
         "api_v1_music_blocks_destroy",
+        "api_v1_music_playlists_gym_enqueue_create",
+        "api_v1_music_playlists_gym_retrieve",
         "api_v1_music_queue_approve_create",
         "api_v1_music_queue_complete_create",
         "api_v1_music_queue_create",
         "api_v1_music_queue_destroy",
+        "api_v1_music_queue_history_destroy",
+        "api_v1_music_queue_history_destroy_2",
+        "api_v1_music_queue_history_play_create",
         "api_v1_music_queue_play_create",
+        "api_v1_music_queue_play_create_2",
+        "api_v1_music_queue_playback_create",
+        "api_v1_music_queue_reorder_create",
         "api_v1_music_queue_report_create",
         "api_v1_music_queue_restore_create",
         "api_v1_music_queue_retrieve",
@@ -322,6 +331,7 @@
       "operations": [
         "admin_ops_alerts_settings_get",
         "admin_ops_alerts_settings_put",
+        "public_config",
         "public_welcome"
       ]
     }

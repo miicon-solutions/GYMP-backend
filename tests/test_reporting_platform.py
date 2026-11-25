@@ -358,9 +358,7 @@ def test_admin_can_delete_user_with_related_profile(client, super_admin, member,
     staff_id = staff.pk
     client.force_login(super_admin)
 
-    member_delete = client.post(
-        f"/admin/accounts/user/{member_id}/delete/", {"post": "yes"}
-    )
+    member_delete = client.post(f"/admin/accounts/user/{member_id}/delete/", {"post": "yes"})
     assert member_delete.status_code == 302
     assert not User.objects.filter(pk=member_id).exists()
     assert not MemberProfile.objects.filter(user_id=member_id).exists()
@@ -437,5 +435,10 @@ def test_bootstrap_admin_creates_hashed_one_time_setup_and_no_fixed_password():
     raw = stream.getvalue().splitlines()[-1]
     assert user.staff_profile.setup_token_hash == digest(raw)
     assert raw not in user.staff_profile.setup_token_hash
-    with pytest.raises(CommandError):
-        call_command("bootstrap_admin", phone="+8801812345678", name="Other", stdout=StringIO())
+    assert user.staff_profile.short_id == "SADM-7400"
+    call_command("bootstrap_admin", phone="+8801812345678", name="Other", stdout=StringIO())
+    other = User.objects.get(phone_e164="+8801812345678")
+    assert other.is_superuser is True
+    assert other.staff_profile.short_id != "SADM-7400"
+    with pytest.raises(CommandError, match="already registered"):
+        call_command("bootstrap_admin", phone="+8801712345678", name="Dup", stdout=StringIO())

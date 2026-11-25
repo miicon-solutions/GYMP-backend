@@ -103,6 +103,53 @@ def test_normalize_permissions_dedupes_and_sorts():
     ]
 
 
+def test_super_can_add_another_super_and_last_active_stays(client, super_admin):
+    client.force_authenticate(super_admin)
+    created = client.post(
+        "/api/v1/admin/staff/",
+        {"name": "Second Super", "phone_e164": "+8801911223344", "is_super": True},
+        format="json",
+    )
+    assert created.status_code == 201
+    assert created.data["is_super"] is True
+    second_id = created.data["id"]
+    second = User.objects.get(pk=second_id)
+    assert second.is_superuser is True
+    assert second.staff_profile.short_id != super_admin.staff_profile.short_id
+
+    assert (
+        client.post(f"/api/v1/admin/staff/{second_id}/deactivate/", {}, format="json").status_code
+        == 200
+    )
+    assert (
+        client.post(
+            f"/api/v1/admin/staff/{super_admin.pk}/deactivate/", {}, format="json"
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(f"/api/v1/admin/staff/{second_id}/activate/", {}, format="json").status_code
+        == 200
+    )
+    demoted = client.patch(f"/api/v1/admin/staff/{second_id}/", {"is_super": False}, format="json")
+    assert demoted.status_code == 200
+    assert demoted.data["is_super"] is False
+    assert (
+        client.patch(
+            f"/api/v1/admin/staff/{super_admin.pk}/", {"is_super": False}, format="json"
+        ).status_code
+        == 403
+    )
+    assert (
+        client.patch(f"/api/v1/admin/staff/{second_id}/", {"is_super": True}, format="json").data[
+            "is_super"
+        ]
+        is True
+    )
+    assert client.delete(f"/api/v1/admin/staff/{second_id}/").status_code == 204
+    assert client.delete(f"/api/v1/admin/staff/{super_admin.pk}/").status_code == 403
+
+
 def test_permissions_catalog_super_only(client, staff, super_admin):
     client.force_authenticate(staff)
     assert client.get("/api/v1/admin/staff/permissions/catalog/").status_code == 403

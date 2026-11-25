@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GYMP API
-  version: 1.0.0
+  version: 1.0.2
   description: GYMP membership platform API. Use feature packs at `/docs/features/{feature}/`
     or filtered OpenAPI at `/openapi/v1/{feature}.yaml` to wire one feature at a time.
 paths:
@@ -714,6 +714,28 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CashPaymentRequest'
+          description: ''
+  /api/v1/admin/members/{id}/device-pin/regenerate/:
+    post:
+      operationId: admin_member_device_pin_regenerate
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin-members
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePinOutput'
           description: ''
   /api/v1/admin/members/{id}/fingerprint/:
     post:
@@ -2733,7 +2755,7 @@ paths:
             examples:
               DeviceCheck-in:
                 value:
-                  member_id: PFT-000001
+                  member_id: PF-0001
                   source: device
                   checked_in_at: null
                 summary: Device check-in
@@ -4009,6 +4031,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/MusicQueueStateOutput'
           description: ''
+  /api/v1/music/playlists/gym/:
+    get:
+      operationId: api_v1_music_playlists_gym_retrieve
+      description: Curated high-energy gym floor playlist for staff to preview.
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicPlaylistOutput'
+          description: ''
+  /api/v1/music/playlists/gym/enqueue/:
+    post:
+      operationId: api_v1_music_playlists_gym_enqueue_create
+      description: Staff queues the curated gym playlist (full mix or selected tracks).
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicPlaylistEnqueueInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicPlaylistEnqueueInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicPlaylistEnqueueInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicPlaylistEnqueueOutput'
+          description: ''
   /api/v1/music/queue/:
     get:
       operationId: api_v1_music_queue_retrieve
@@ -4082,6 +4147,30 @@ paths:
       operationId: api_v1_music_queue_approve_create
       description: Staff action to approve a pending member song so it enters the
         playback queue.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/{id}/play/:
+    post:
+      operationId: api_v1_music_queue_play_create_2
+      description: Staff plays a specific queued song now and rotates the remaining
+        list.
       parameters:
       - in: path
         name: id
@@ -4187,12 +4276,131 @@ paths:
               schema:
                 $ref: '#/components/schemas/MusicQueueStateOutput'
           description: ''
+  /api/v1/music/queue/history/:
+    delete:
+      operationId: api_v1_music_queue_history_destroy
+      description: Staff clears all recently played / skipped history entries.
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/history/{id}/:
+    delete:
+      operationId: api_v1_music_queue_history_destroy_2
+      description: Staff removes one recently played / skipped history entry.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/history/{id}/play/:
+    post:
+      operationId: api_v1_music_queue_history_play_create
+      description: Staff replays a recently played / skipped track immediately.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
   /api/v1/music/queue/play/:
     post:
       operationId: api_v1_music_queue_play_create
       description: Staff starts playback of the head of the playable FloorCue queue.
       tags:
       - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/playback/:
+    post:
+      operationId: api_v1_music_queue_playback_create
+      description: Staff reports gym-floor speaker play/pause for member FloorCue
+        UI.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicPlaybackInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicPlaybackInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicPlaybackInput'
+        required: true
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/reorder/:
+    post:
+      operationId: api_v1_music_queue_reorder_create
+      description: Staff drag-sorts the queued FloorCue list.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicQueueReorderInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicQueueReorderInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicQueueReorderInput'
+        required: true
       security:
       - bearerAuth: []
       - jwtAuth: []
@@ -4805,6 +5013,22 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/public/config/:
+    get:
+      operationId: public_config
+      tags:
+      - public
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicConfigOutput'
+          description: ''
   /api/v1/public/plans/:
     get:
       operationId: api_v1_public_plans_list
@@ -6282,13 +6506,13 @@ components:
         device_keypad_id:
           type: string
           nullable: true
-          description: Owner-only digits-only scanner keypad id (no leading zeros).
-            Omitted from admin member detail.
+          description: Admin-only digits-only scanner keypad id (no leading zeros).
+            Omitted from member self profile.
         device_pin:
           type: string
           nullable: true
-          description: Owner-only plaintext 4-digit device PIN for fingerprint-fail
-            unlock. Omitted from admin member detail.
+          description: Admin-only plaintext 4-digit device PIN (single-use). Omitted
+            from member self profile.
         fingerprint_status:
           type: string
         plan:
@@ -6372,13 +6596,13 @@ components:
         device_keypad_id:
           type: string
           nullable: true
-          description: Owner-only digits-only scanner keypad id (no leading zeros).
-            Omitted from admin member detail.
+          description: Admin-only digits-only scanner keypad id (no leading zeros).
+            Omitted from member self profile.
         device_pin:
           type: string
           nullable: true
-          description: Owner-only plaintext 4-digit device PIN for fingerprint-fail
-            unlock. Omitted from admin member detail.
+          description: Admin-only plaintext 4-digit device PIN (single-use). Omitted
+            from member self profile.
         fingerprint_status:
           type: string
         plan:
@@ -7076,7 +7300,7 @@ components:
       properties:
         member_id:
           type: string
-          maxLength: 24
+          maxLength: 10
         checked_in_at:
           type: string
           format: date-time
@@ -7106,6 +7330,9 @@ components:
             * `manual` - manual'
           x-spec-enum-id: 3f6c9d8a25471a9b
           default: device
+        verify_method:
+          type: integer
+          nullable: true
       required:
       - member_id
     CheckInOutput:
@@ -7638,6 +7865,7 @@ components:
         device_pin:
           type: string
           description: New random 4-digit PIN (first digit 1–9); written as ZK password.
+            Staff-only; each PIN unlocks once then rotates.
         pushed:
           type: boolean
           description: True when the new PIN was enqueued/pushed to the scanner.
@@ -8961,6 +9189,9 @@ components:
           - announcement
           - admin_enrollment
           - admin_daily_enrollments
+          - music_request
+          - music_request_approved
+          - music_request_rejected
           type: string
           description: '* `payment_received` - payment_received
 
@@ -8980,8 +9211,14 @@ components:
 
             * `admin_enrollment` - admin_enrollment
 
-            * `admin_daily_enrollments` - admin_daily_enrollments'
-          x-spec-enum-id: 74bca9db1511ab26
+            * `admin_daily_enrollments` - admin_daily_enrollments
+
+            * `music_request` - music_request
+
+            * `music_request_approved` - music_request_approved
+
+            * `music_request_rejected` - music_request_rejected'
+          x-spec-enum-id: fdf647cc1d2ed65e
           readOnly: true
         title_key:
           type: string
@@ -9262,6 +9499,87 @@ components:
       - member_code
       - reason
       - user_id
+    MusicPlaybackInput:
+      type: object
+      properties:
+        is_playback_active:
+          type: boolean
+      required:
+      - is_playback_active
+    MusicPlaylistEnqueueInput:
+      type: object
+      properties:
+        video_ids:
+          type: array
+          items:
+            type: string
+            maxLength: 16
+          maxItems: 40
+    MusicPlaylistEnqueueOutput:
+      type: object
+      properties:
+        added:
+          type: integer
+        skipped_existing:
+          type: integer
+        skipped_filtered:
+          type: integer
+        queue_state:
+          $ref: '#/components/schemas/MusicQueueStateOutput'
+      required:
+      - added
+      - queue_state
+      - skipped_existing
+      - skipped_filtered
+    MusicPlaylistOutput:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MusicPlaylistTrack'
+      required:
+      - description
+      - id
+      - title
+      - tracks
+    MusicPlaylistTrack:
+      type: object
+      properties:
+        video_id:
+          type: string
+        youtube_url:
+          type: string
+          format: uri
+        title:
+          type: string
+        channel_title:
+          type: string
+        thumbnail_url:
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
+        duration_text:
+          type: string
+        duration_seconds:
+          type: integer
+          nullable: true
+      required:
+      - channel_title
+      - duration_seconds
+      - duration_text
+      - thumbnail_url
+      - title
+      - video_id
+      - youtube_url
     MusicQueueAddInput:
       type: object
       properties:
@@ -9406,12 +9724,25 @@ components:
       - title
       - video_id
       - youtube_url
+    MusicQueueReorderInput:
+      type: object
+      properties:
+        item_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Queued item IDs in the desired play order.
+      required:
+      - item_ids
     MusicQueueStateOutput:
       type: object
       properties:
         is_enabled:
           type: boolean
         require_approval:
+          type: boolean
+        is_playback_active:
           type: boolean
         max_songs_per_user:
           type: integer
@@ -10821,6 +11152,9 @@ components:
         is_active:
           type: boolean
           default: true
+        is_super:
+          type: boolean
+          default: false
         permissions:
           type: array
           items:
@@ -11198,13 +11532,13 @@ components:
         device_keypad_id:
           type: string
           nullable: true
-          description: Owner-only digits-only scanner keypad id (no leading zeros).
-            Omitted from admin member detail.
+          description: Admin-only digits-only scanner keypad id (no leading zeros).
+            Omitted from member self profile.
         device_pin:
           type: string
           nullable: true
-          description: Owner-only plaintext 4-digit device PIN for fingerprint-fail
-            unlock. Omitted from admin member detail.
+          description: Admin-only plaintext 4-digit device PIN (single-use). Omitted
+            from member self profile.
       required:
       - blood_group
       - email
@@ -11241,6 +11575,13 @@ components:
       - phone_e164
       - phone_proof_token
       - proof_kind
+    PublicConfigOutput:
+      type: object
+      properties:
+        google_sign_in:
+          type: boolean
+      required:
+      - google_sign_in
     ReceiptURL:
       type: object
       properties:
@@ -12183,6 +12524,9 @@ components:
         is_active:
           type: boolean
           default: true
+        is_super:
+          type: boolean
+          default: false
         permissions:
           type: array
           items:
