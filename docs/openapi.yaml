@@ -3,3806 +3,10 @@
 openapi: 3.0.3
 info:
   title: GYMP API
-  version: 1.0.0
+  version: 1.0.2
   description: GYMP membership platform API. Use feature packs at `/docs/features/{feature}/`
     or filtered OpenAPI at `/openapi/v1/{feature}.yaml` to wire one feature at a time.
 paths:
-  /api/admin/activity/:
-    get:
-      operationId: api_admin_activity_list
-      parameters:
-      - in: query
-        name: action
-        schema:
-          type: string
-      - in: query
-        name: admin_id
-        schema:
-          type: string
-      - in: query
-        name: area
-        schema:
-          type: string
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - in: query
-        name: from
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: query
-        name: q
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: sort
-        schema:
-          type: string
-      - in: query
-        name: to
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedActivityList'
-          description: ''
-  /api/admin/costs/:
-    get:
-      operationId: api_admin_costs_list
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - in: query
-        name: include_archived
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedCostList'
-          description: ''
-    post:
-      operationId: api_admin_costs_create
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Cost'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Cost'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Cost'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Cost'
-          description: ''
-  /api/admin/costs/{id}/:
-    patch:
-      operationId: api_admin_costs_partial_update
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedCost'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedCost'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedCost'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Cost'
-          description: ''
-    delete:
-      operationId: api_admin_costs_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/admin/costs/{id}/archive/:
-    post:
-      operationId: admin_cost_archive
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Cost'
-          description: ''
-  /api/admin/device/status/:
-    get:
-      operationId: admin_device_status
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeviceStatusOutput'
-          description: ''
-  /api/admin/gym-hours/:
-    get:
-      operationId: admin_gym_hours
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GymHoursOutput'
-          description: ''
-  /api/admin/gym-hours/holidays/:
-    get:
-      operationId: api_admin_gym_hours_holidays_list
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedHolidayList'
-          description: ''
-    post:
-      operationId: api_admin_gym_hours_holidays_create
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Holiday'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Holiday'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Holiday'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Holiday'
-          description: ''
-  /api/admin/gym-hours/holidays/{id}/:
-    patch:
-      operationId: api_admin_gym_hours_holidays_partial_update
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedHoliday'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedHoliday'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedHoliday'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Holiday'
-          description: ''
-    delete:
-      operationId: api_admin_gym_hours_holidays_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/admin/gym-hours/week/:
-    put:
-      operationId: admin_gym_week_update
-      tags:
-      - admin
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WeekInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/WeekInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/WeekInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GymHoursOutput'
-          description: ''
-  /api/admin/members/:
-    get:
-      operationId: api_admin_members_list
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: query
-        name: q
-        schema:
-          type: string
-          maxLength: 200
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: status
-        schema:
-          enum:
-          - unpaid
-          - active
-          - expired
-          type: string
-          minLength: 1
-        description: |-
-          * `unpaid` - unpaid
-          * `active` - active
-          * `expired` - expired
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedAdminMemberList'
-          description: ''
-  /api/admin/members/{id}/:
-    get:
-      operationId: api_admin_members_retrieve
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminMember'
-          description: ''
-  /api/admin/members/{id}/cash-payments/:
-    post:
-      operationId: admin_cash_payment
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PlanInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PlanInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PlanInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CashReceive'
-          description: ''
-  /api/admin/members/{id}/cash-preview/:
-    get:
-      operationId: admin_cash_preview
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: query
-        name: plan_id
-        schema:
-          type: string
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CashPreviewOutput'
-          description: ''
-  /api/admin/members/{id}/fingerprint/:
-    post:
-      operationId: admin_member_fingerprint
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FingerprintInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/FingerprintInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/FingerprintInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminMemberOutput'
-          description: ''
-  /api/admin/members/{id}/fingerprint/enroll/:
-    post:
-      operationId: admin_member_fingerprint_enroll
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EnrollPrepareInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/EnrollPrepareInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/EnrollPrepareInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EnrollPrepareOutput'
-          description: ''
-  /api/admin/members/{id}/fingerprint/pull/:
-    post:
-      operationId: admin_member_fingerprint_pull
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VaultSyncOutput'
-          description: ''
-  /api/admin/members/{id}/fingerprint/push/:
-    post:
-      operationId: admin_member_fingerprint_push
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VaultSyncOutput'
-          description: ''
-  /api/admin/members/{id}/phone/:
-    post:
-      operationId: admin_link_member_phone
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VerifyInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/VerifyInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/VerifyInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminMemberOutput'
-          description: ''
-  /api/admin/plans/:
-    get:
-      operationId: api_admin_plans_list
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedPlanList'
-          description: ''
-    post:
-      operationId: api_admin_plans_create
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Plan'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Plan'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Plan'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Plan'
-          description: ''
-  /api/admin/plans/{id}/:
-    patch:
-      operationId: api_admin_plans_partial_update
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedPlanInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedPlanInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedPlanInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Plan'
-          description: ''
-    delete:
-      operationId: api_admin_plans_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/admin/plans/{id}/offers/:
-    get:
-      operationId: api_admin_plans_offers_list
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedOfferList'
-          description: ''
-    post:
-      operationId: api_admin_plans_offers_create
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Offer'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Offer'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Offer'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Offer'
-          description: ''
-  /api/admin/plans/{id}/offers/{offer_id}/:
-    patch:
-      operationId: api_admin_plans_offers_partial_update
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: offer_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedOffer'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedOffer'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedOffer'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Offer'
-          description: ''
-    delete:
-      operationId: api_admin_plans_offers_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: offer_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/admin/revenue/:
-    get:
-      operationId: admin_revenue
-      parameters:
-      - in: query
-        name: channel
-        schema:
-          type: string
-      - in: query
-        name: date
-        schema:
-          type: string
-      - in: query
-        name: dates
-        schema:
-          type: string
-      - in: query
-        name: from
-        schema:
-          type: string
-      - in: query
-        name: limit
-        schema:
-          type: string
-      - in: query
-        name: member_id
-        schema:
-          type: string
-      - in: query
-        name: range
-        schema:
-          type: string
-      - in: query
-        name: to
-        schema:
-          type: string
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RevenueOutput'
-          description: ''
-  /api/admin/staff/:
-    get:
-      operationId: api_admin_staff_list
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedStaffList'
-          description: ''
-    post:
-      operationId: api_admin_staff_create
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StaffInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/StaffInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/StaffInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Staff'
-          description: ''
-  /api/admin/staff/{id}/:
-    patch:
-      operationId: api_admin_staff_partial_update
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedStaffInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedStaffInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedStaffInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Staff'
-          description: ''
-    delete:
-      operationId: api_admin_staff_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/admin/staff/{id}/activate/:
-    post:
-      operationId: admin_staff_activate
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Staff'
-          description: ''
-  /api/admin/staff/{id}/deactivate/:
-    post:
-      operationId: admin_staff_deactivate
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Staff'
-          description: ''
-  /api/admin/staff/{id}/mfa/enroll/:
-    post:
-      operationId: admin_staff_mfa_enroll
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - admin
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MFAEnrollOutput'
-          description: ''
-  /api/auth/admin/mfa/confirm/:
-    post:
-      operationId: auth_admin_mfa_confirm
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConfirmInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ConfirmInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ConfirmInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenOutput'
-          description: ''
-  /api/auth/admin/mfa/setup/:
-    post:
-      operationId: auth_admin_mfa_setup
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SetupInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/SetupInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/SetupInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MFAOutput'
-          description: ''
-  /api/auth/admin/unlock/:
-    post:
-      operationId: auth_admin_unlock
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UnlockInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/UnlockInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/UnlockInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenOutput'
-          description: ''
-  /api/auth/google/:
-    post:
-      operationId: auth_google
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GoogleInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GoogleInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GoogleInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GoogleSignIn'
-          description: ''
-  /api/auth/google/link-phone/:
-    post:
-      operationId: auth_google_link_phone
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GoogleLinkInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GoogleLinkInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GoogleLinkInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenOutput'
-          description: ''
-  /api/auth/login/:
-    post:
-      operationId: auth_login
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/LoginInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/LoginInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthTokenOutput'
-          description: ''
-  /api/auth/logout/:
-    post:
-      operationId: auth_logout
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RefreshInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RefreshInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/RefreshInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
-  /api/auth/otp/send/:
-    post:
-      operationId: auth_otp_send
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OTPInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OTPInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OTPInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OTPOutput'
-          description: ''
-  /api/auth/otp/verify/:
-    post:
-      operationId: auth_otp_verify
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VerifyInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/VerifyInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/VerifyInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OTPVerification'
-          description: ''
-  /api/auth/refresh/:
-    post:
-      operationId: auth_refresh
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RefreshInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RefreshInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/RefreshInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenOutput'
-          description: ''
-  /api/auth/register/:
-    post:
-      operationId: auth_register
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RegisterInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/RegisterInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthTokenOutput'
-          description: ''
-  /api/auth/resolve-phone/:
-    post:
-      operationId: auth_resolve_phone
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PhoneInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PhoneInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PhoneInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PhoneOutput'
-          description: ''
-  /api/feed/articles/:
-    get:
-      operationId: api_feed_articles_list
-      description: Fitness knowledge hub & educational article feed. Staff can publish
-        & manage articles; members can read & save.
-      parameters:
-      - in: query
-        name: category
-        schema:
-          type: string
-          enum:
-          - injury_prevention
-          - lifestyle
-          - nutrition
-          - recovery
-          - science
-          - training
-        description: |-
-          * `training` - Training & Hypertrophy
-          * `nutrition` - Nutrition & Diet
-          * `recovery` - Recovery & Sleep
-          * `injury_prevention` - Injury Prevention & Form
-          * `science` - Sports Science & Research
-          * `lifestyle` - Gym Lifestyle & Motivation
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - in: query
-        name: is_pinned
-        schema:
-          type: boolean
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedArticleList'
-          description: ''
-    post:
-      operationId: api_feed_articles_create
-      description: Fitness knowledge hub & educational article feed. Staff can publish
-        & manage articles; members can read & save.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ArticleInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ArticleInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ArticleInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ArticleInput'
-          description: ''
-  /api/feed/articles/{id}/:
-    get:
-      operationId: api_feed_articles_retrieve
-      description: Fitness knowledge hub & educational article feed. Staff can publish
-        & manage articles; members can read & save.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this article.
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Article'
-          description: ''
-    put:
-      operationId: api_feed_articles_update
-      description: Fitness knowledge hub & educational article feed. Staff can publish
-        & manage articles; members can read & save.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this article.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ArticleInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ArticleInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ArticleInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ArticleInput'
-          description: ''
-    patch:
-      operationId: api_feed_articles_partial_update
-      description: Fitness knowledge hub & educational article feed. Staff can publish
-        & manage articles; members can read & save.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this article.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedArticleInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedArticleInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedArticleInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ArticleInput'
-          description: ''
-    delete:
-      operationId: api_feed_articles_destroy
-      description: Fitness knowledge hub & educational article feed. Staff can publish
-        & manage articles; members can read & save.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this article.
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/feed/articles/{id}/save/:
-    post:
-      operationId: api_feed_articles_save_create
-      description: Fitness knowledge hub & educational article feed. Staff can publish
-        & manage articles; members can read & save.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this article.
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SaveArticleOutput'
-          description: ''
-  /api/feed/articles/{id}/unsave/:
-    post:
-      operationId: api_feed_articles_unsave_create
-      description: Fitness knowledge hub & educational article feed. Staff can publish
-        & manage articles; members can read & save.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this article.
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SaveArticleOutput'
-          description: ''
-  /api/feed/articles/saved/:
-    get:
-      operationId: api_feed_articles_saved_list
-      description: Fitness knowledge hub & educational article feed. Staff can publish
-        & manage articles; members can read & save.
-      parameters:
-      - in: query
-        name: category
-        schema:
-          type: string
-          enum:
-          - injury_prevention
-          - lifestyle
-          - nutrition
-          - recovery
-          - science
-          - training
-        description: |-
-          * `training` - Training & Hypertrophy
-          * `nutrition` - Nutrition & Diet
-          * `recovery` - Recovery & Sleep
-          * `injury_prevention` - Injury Prevention & Form
-          * `science` - Sports Science & Research
-          * `lifestyle` - Gym Lifestyle & Motivation
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - in: query
-        name: is_pinned
-        schema:
-          type: boolean
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedSavedArticleList'
-          description: ''
-  /api/internal/attendance/check-in/:
-    post:
-      operationId: attendance_check_in
-      tags:
-      - attendance
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CheckInInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CheckInInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CheckInInput'
-        required: true
-      security:
-      - deviceKey: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CheckInOutput'
-          description: ''
-  /api/internal/attendance/check-out/:
-    post:
-      operationId: attendance_check_out
-      tags:
-      - attendance
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CheckInInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CheckInInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CheckInInput'
-        required: true
-      security:
-      - deviceKey: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CheckInOutput'
-          description: ''
-  /api/internal/biometrics/vault-members/:
-    get:
-      operationId: internal_vault_members
-      tags:
-      - internal
-      security:
-      - deviceKey: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VaultMembersOutput'
-          description: ''
-  /api/internal/biometrics/vault-push/:
-    post:
-      operationId: internal_vault_push
-      tags:
-      - internal
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VaultBulkPushInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/VaultBulkPushInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/VaultBulkPushInput'
-        required: true
-      security:
-      - deviceKey: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VaultBulkPushOutput'
-          description: ''
-  /api/journal/entries/:
-    get:
-      operationId: api_journal_entries_list
-      description: List paginated gym journal entries with subjective ratings and
-        tags, or log a new reflection.
-      parameters:
-      - in: query
-        name: cns_drive
-        schema:
-          type: string
-          enum:
-          - fatigued
-          - fired_up
-          - normal
-        description: |-
-          * `fired_up` - Fired Up
-          * `normal` - Normal
-          * `fatigued` - Fatigued
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - in: query
-        name: date_from
-        schema:
-          type: string
-          format: date
-      - in: query
-        name: date_to
-        schema:
-          type: string
-          format: date
-      - in: query
-        name: energy_level
-        schema:
-          type: integer
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - in: query
-        name: muscle_soreness
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: sleep_quality
-        schema:
-          type: string
-          enum:
-          - deep_rem
-          - nominal
-          - restless
-        description: |-
-          * `deep_rem` - Deep REM
-          * `nominal` - Nominal
-          * `restless` - Restless
-      - in: query
-        name: tag
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedGymJournalEntryList'
-          description: ''
-    post:
-      operationId: api_journal_entries_create
-      description: List paginated gym journal entries with subjective ratings and
-        tags, or log a new reflection.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GymJournalEntryInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GymJournalEntryInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GymJournalEntryInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GymJournalEntry'
-          description: ''
-  /api/journal/entries/{id}/:
-    get:
-      operationId: api_journal_entries_retrieve
-      description: Retrieve or update a specific gym journal entry.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GymJournalEntry'
-          description: ''
-    put:
-      operationId: api_journal_entries_update
-      description: Retrieve or update a specific gym journal entry.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GymJournalEntryInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GymJournalEntryInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GymJournalEntryInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GymJournalEntry'
-          description: ''
-    patch:
-      operationId: api_journal_entries_partial_update
-      description: Retrieve or update a specific gym journal entry.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedGymJournalEntryInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedGymJournalEntryInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedGymJournalEntryInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GymJournalEntry'
-          description: ''
-  /api/journal/entries/today/:
-    get:
-      operationId: api_journal_entries_today_retrieve
-      description: Retrieve or initialize today's readiness score and reflection entry.
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GymJournalEntry'
-          description: ''
-    post:
-      operationId: api_journal_entries_today_create
-      description: Retrieve or initialize today's readiness score and reflection entry.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GymJournalEntryInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GymJournalEntryInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GymJournalEntryInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GymJournalEntry'
-          description: ''
-  /api/member/attendance/:
-    get:
-      operationId: member_attendance
-      parameters:
-      - in: query
-        name: month
-        schema:
-          type: string
-      - in: query
-        name: year
-        schema:
-          type: string
-      tags:
-      - member
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MonthOutput'
-          description: ''
-  /api/member/attendance/session/:
-    post:
-      operationId: member_attendance_session_adjust
-      tags:
-      - member
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MemberSessionAdjustInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MemberSessionAdjustInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MemberSessionAdjustInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MonthOutput'
-          description: ''
-  /api/member/dashboard/:
-    get:
-      operationId: member_dashboard
-      tags:
-      - member
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DashboardOutput'
-          description: ''
-  /api/member/gym-status/:
-    get:
-      operationId: member_gym_status
-      tags:
-      - member
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GymStatusOutput'
-          description: ''
-  /api/member/payments/:
-    get:
-      operationId: api_member_payments_list
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedPaymentList'
-          description: ''
-  /api/member/payments/{id}/:
-    get:
-      operationId: api_member_payments_retrieve
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Payment'
-          description: ''
-  /api/member/payments/{id}/receipt/:
-    get:
-      operationId: payments_receipt_url
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - payments
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReceiptURL'
-          description: ''
-  /api/member/payments/{id}/receipt.html/:
-    get:
-      operationId: payments_receipt_html
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - payments
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            text/html:
-              schema:
-                type: string
-          description: ''
-  /api/member/payments/sessions/:
-    post:
-      operationId: payments_create_session
-      tags:
-      - payments
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SessionInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/SessionInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/SessionInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Session'
-          description: ''
-  /api/member/payments/sessions/{tran_id}/:
-    get:
-      operationId: payments_get_session
-      parameters:
-      - in: path
-        name: tran_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - payments
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Session'
-          description: ''
-  /api/member/payments/sessions/{tran_id}/confirm/:
-    post:
-      operationId: payments_confirm_session
-      parameters:
-      - in: path
-        name: tran_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - payments
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Session'
-          description: ''
-  /api/member/plans/:
-    get:
-      operationId: api_member_plans_list
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedPlanList'
-          description: ''
-  /api/member/plans/{id}/:
-    get:
-      operationId: api_member_plans_retrieve
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Plan'
-          description: ''
-  /api/member/profile/:
-    get:
-      operationId: api_member_profile_retrieve
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileOutput'
-          description: ''
-    put:
-      operationId: api_member_profile_update
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProfileInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProfileInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProfileInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileOutput'
-          description: ''
-  /api/member/profile/complete/:
-    post:
-      operationId: member_complete_profile
-      tags:
-      - member
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProfileInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProfileInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProfileInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileOutput'
-          description: ''
-  /api/member/profile/link-google/:
-    post:
-      operationId: member_link_google
-      tags:
-      - member
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GoogleInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GoogleInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GoogleInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MemberOutput'
-          description: ''
-  /api/member/profile/phone/change/:
-    post:
-      operationId: member_change_phone
-      tags:
-      - member
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProofInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProofInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProofInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileOutput'
-          description: ''
-  /api/member/profile/phone/recover-email/:
-    post:
-      operationId: member_recover_email
-      tags:
-      - member
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RecoveryOutput'
-          description: ''
-  /api/member/profile/photo/:
-    post:
-      operationId: api_member_profile_photo_create
-      tags:
-      - api
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PhotoInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PhotoInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileOutput'
-          description: ''
-    delete:
-      operationId: api_member_profile_photo_destroy
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/music/blocks/:
-    post:
-      operationId: api_music_blocks_create
-      description: Staff action to block a member from adding songs to the gym music
-        queue.
-      tags:
-      - music
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MusicBlockUserInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MusicBlockUserInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MusicBlockUserInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-  /api/music/blocks/{user_id}/:
-    delete:
-      operationId: api_music_blocks_destroy
-      description: Staff action to unblock a member so they can add songs again.
-      parameters:
-      - in: path
-        name: user_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - music
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-  /api/music/queue/:
-    get:
-      operationId: api_music_queue_retrieve
-      description: Retrieve the gym music queue state or add a YouTube song to the
-        queue.
-      tags:
-      - music
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-    post:
-      operationId: api_music_queue_create
-      description: Retrieve the gym music queue state or add a YouTube song to the
-        queue.
-      tags:
-      - music
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MusicQueueAddInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MusicQueueAddInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MusicQueueAddInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueAddOutput'
-          description: ''
-  /api/music/queue/{id}/:
-    delete:
-      operationId: api_music_queue_destroy
-      description: Remove a song from the gym music queue (staff can remove any song;
-        members can remove their own).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - music
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-  /api/music/queue/{id}/approve/:
-    post:
-      operationId: api_music_queue_approve_create
-      description: Staff action to approve a pending member song so it enters the
-        playback queue.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - music
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-  /api/music/queue/{id}/report/:
-    post:
-      operationId: api_music_queue_report_create
-      description: Member or staff action to flag a bad song, hiding it until admin
-        reviews it.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - music
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MusicReportInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MusicReportInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MusicReportInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-  /api/music/queue/{id}/restore/:
-    post:
-      operationId: api_music_queue_restore_create
-      description: Staff action to dismiss a report on a song and restore it to the
-        active queue.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - music
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-  /api/music/queue/complete/:
-    post:
-      operationId: api_music_queue_complete_create
-      description: Advance the gym player on /admin/music to the next song in queue
-        when the current song finishes playing.
-      tags:
-      - music
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MusicQueueCompleteInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MusicQueueCompleteInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MusicQueueCompleteInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-  /api/music/queue/skip/:
-    post:
-      operationId: api_music_queue_skip_create
-      description: Staff action to skip the currently playing song and advance to
-        the next song in queue.
-      tags:
-      - music
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-  /api/music/search/:
-    get:
-      operationId: api_music_search_retrieve
-      description: Search YouTube for songs or resolve a pasted YouTube link.
-      parameters:
-      - in: query
-        name: q
-        schema:
-          type: string
-      tags:
-      - music
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/YouTubeSearchOutput'
-          description: ''
-  /api/music/settings/:
-    post:
-      operationId: api_music_settings_create
-      description: Staff action to configure the gym music queue (enable/disable,
-        require approval, max songs per user).
-      tags:
-      - music
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MusicSettingsInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MusicSettingsInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MusicSettingsInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-    patch:
-      operationId: api_music_settings_partial_update
-      description: Staff action to configure the gym music queue (enable/disable,
-        require approval, max songs per user).
-      tags:
-      - music
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedMusicSettingsInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedMusicSettingsInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedMusicSettingsInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MusicQueueStateOutput'
-          description: ''
-  /api/nutrition/custom-synthesizer/:
-    post:
-      operationId: api_nutrition_custom_synthesizer_create
-      description: Save custom macro/meal formulation synthesized from raw ingredients.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CustomSynthesizerInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CustomSynthesizerInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CustomSynthesizerInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RecipeDetail'
-          description: ''
-  /api/nutrition/hydration/quick-add/:
-    post:
-      operationId: api_nutrition_hydration_quick_add_create
-      description: Quick-tap water intake logger (e.g. +250ml, +500ml).
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/HydrationQuickAddInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/HydrationQuickAddInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/HydrationQuickAddInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HydrationSummary'
-          description: ''
-  /api/nutrition/hydration/today/:
-    get:
-      operationId: api_nutrition_hydration_today_retrieve
-      description: Retrieve today's hydration intake and quota progress.
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HydrationSummary'
-          description: ''
-  /api/nutrition/logs/:
-    get:
-      operationId: api_nutrition_logs_list
-      description: List or log meal entries. Staff can view all members' meal logs
-        and log meals for members.
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedMealLogList'
-          description: ''
-    post:
-      operationId: api_nutrition_logs_create
-      description: List or log meal entries. Staff can view all members' meal logs
-        and log meals for members.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MealLogInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MealLogInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MealLogInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MealLogInput'
-          description: ''
-  /api/nutrition/logs/{id}/:
-    get:
-      operationId: api_nutrition_logs_retrieve
-      description: Retrieve, update, or delete a specific meal log. Staff can manage
-        any meal log.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MealLog'
-          description: ''
-    put:
-      operationId: api_nutrition_logs_update
-      description: Retrieve, update, or delete a specific meal log. Staff can manage
-        any meal log.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MealLogUpdate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MealLogUpdate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MealLogUpdate'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MealLogUpdate'
-          description: ''
-    patch:
-      operationId: api_nutrition_logs_partial_update
-      description: Retrieve, update, or delete a specific meal log. Staff can manage
-        any meal log.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedMealLogUpdate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedMealLogUpdate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedMealLogUpdate'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MealLogUpdate'
-          description: ''
-    delete:
-      operationId: api_nutrition_logs_destroy
-      description: Retrieve, update, or delete a specific meal log. Staff can manage
-        any meal log.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/nutrition/logs/{id}/confirm-intake/:
-    patch:
-      operationId: api_nutrition_logs_confirm_intake_partial_update
-      description: Confirm consumption of a planned meal log.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MealLog'
-          description: ''
-  /api/nutrition/logs/today/:
-    get:
-      operationId: api_nutrition_logs_today_retrieve
-      description: Daily nutrition summary (targets vs logged calories/macros) and
-        meal logger.
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DailyNutritionSummary'
-          description: ''
-    post:
-      operationId: api_nutrition_logs_today_create
-      description: Daily nutrition summary (targets vs logged calories/macros) and
-        meal logger.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MealLogInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/MealLogInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/MealLogInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MealLog'
-          description: ''
-  /api/nutrition/recipes/:
-    get:
-      operationId: api_nutrition_recipes_list
-      description: List predefined and user-created custom recipes. Staff can add
-        new system or custom recipes.
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - in: query
-        name: is_predefined
-        schema:
-          type: boolean
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: tag
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedRecipeDetailList'
-          description: ''
-    post:
-      operationId: api_nutrition_recipes_create
-      description: List predefined and user-created custom recipes. Staff can add
-        new system or custom recipes.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RecipeDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RecipeDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/RecipeDetail'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RecipeDetail'
-          description: ''
-  /api/nutrition/recipes/{id}/:
-    get:
-      operationId: api_nutrition_recipes_retrieve
-      description: Retrieve, edit, or delete full recipe details. Staff can manage
-        all recipes.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RecipeDetail'
-          description: ''
-    put:
-      operationId: api_nutrition_recipes_update
-      description: Retrieve, edit, or delete full recipe details. Staff can manage
-        all recipes.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RecipeDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RecipeDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/RecipeDetail'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RecipeDetail'
-          description: ''
-    patch:
-      operationId: api_nutrition_recipes_partial_update
-      description: Retrieve, edit, or delete full recipe details. Staff can manage
-        all recipes.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedRecipeDetail'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedRecipeDetail'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedRecipeDetail'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RecipeDetail'
-          description: ''
-    delete:
-      operationId: api_nutrition_recipes_destroy
-      description: Retrieve, edit, or delete full recipe details. Staff can manage
-        all recipes.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/public/config/:
-    get:
-      operationId: public_config
-      tags:
-      - public
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PublicConfigOutput'
-          description: ''
-  /api/public/plans/:
-    get:
-      operationId: api_public_plans_list
-      description: The published catalogue contains pricing only, never member data.
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedPlanList'
-          description: ''
-  /api/schedules/active-cycle/:
-    get:
-      operationId: api_schedules_active_cycle_retrieve
-      description: Retrieve or configure the user's active periodization / split planner
-        cycle.
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SplitPlannerCycle'
-          description: ''
-    post:
-      operationId: api_schedules_active_cycle_create
-      description: Retrieve or configure the user's active periodization / split planner
-        cycle.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateCycleInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CreateCycleInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CreateCycleInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SplitPlannerCycle'
-          description: ''
-    patch:
-      operationId: api_schedules_active_cycle_partial_update
-      description: Retrieve or configure the user's active periodization / split planner
-        cycle.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedCreateCycleInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedCreateCycleInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedCreateCycleInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SplitPlannerCycle'
-          description: ''
-  /api/schedules/active-cycle/auto-populate/:
-    post:
-      operationId: api_schedules_active_cycle_auto_populate_create
-      description: Auto-fill active cycle days with matching routines based on split
-        templates (PPL, Upper/Lower, Full Body).
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AutoPopulateInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AutoPopulateInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AutoPopulateInput'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SplitPlannerCycle'
-          description: ''
-  /api/schedules/active-cycle/days/{day_index}/:
-    put:
-      operationId: api_schedules_active_cycle_days_update
-      description: Assign or swap a routine on a specific day of the active microcycle.
-      parameters:
-      - in: path
-        name: day_index
-        schema:
-          type: integer
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ScheduledDayUpdate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ScheduledDayUpdate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ScheduledDayUpdate'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SplitPlannerCycle'
-          description: ''
-  /api/users/anthropometry/:
-    get:
-      operationId: api_users_anthropometry_list
-      description: List historical anthropometry records or log a new weigh-in/body
-        check.
-      parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedAnthropometryLogList'
-          description: ''
-    post:
-      operationId: api_users_anthropometry_create
-      description: List historical anthropometry records or log a new weigh-in/body
-        check.
-      tags:
-      - api
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AnthropometryInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AnthropometryInput'
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AnthropometryInput'
-        required: true
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AnthropometryLog'
-          description: ''
-  /api/users/profile/:
-    get:
-      operationId: api_users_profile_retrieve
-      description: Retrieve or update the user's fitness profile and targets. Staff
-        can manage any member's targets.
-      tags:
-      - api
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FitnessProfile'
-          description: ''
-    put:
-      operationId: api_users_profile_update
-      description: Retrieve or update the user's fitness profile and targets. Staff
-        can manage any member's targets.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FitnessProfile'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/FitnessProfile'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/FitnessProfile'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FitnessProfile'
-          description: ''
-    patch:
-      operationId: api_users_profile_partial_update
-      description: Retrieve or update the user's fitness profile and targets. Staff
-        can manage any member's targets.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedFitnessProfile'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedFitnessProfile'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedFitnessProfile'
-      security:
-      - bearerAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FitnessProfile'
-          description: ''
   /api/v1/admin/activity/:
     get:
       operationId: api_v1_admin_activity_list
@@ -4512,6 +716,28 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CashPaymentRequest'
+          description: ''
+  /api/v1/admin/members/{id}/device-pin/regenerate/:
+    post:
+      operationId: admin_member_device_pin_regenerate
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin-members
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePinOutput'
           description: ''
   /api/v1/admin/members/{id}/fingerprint/:
     post:
@@ -6531,7 +2757,7 @@ paths:
             examples:
               DeviceCheck-in:
                 value:
-                  member_id: PFT-000001
+                  member_id: PF-0001
                   source: device
                   checked_in_at: null
                 summary: Device check-in
@@ -7807,6 +4033,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/MusicQueueStateOutput'
           description: ''
+  /api/v1/music/playlists/gym/:
+    get:
+      operationId: api_v1_music_playlists_gym_retrieve
+      description: Curated high-energy gym floor playlist for staff to preview.
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicPlaylistOutput'
+          description: ''
+  /api/v1/music/playlists/gym/enqueue/:
+    post:
+      operationId: api_v1_music_playlists_gym_enqueue_create
+      description: Staff queues the curated gym playlist (full mix or selected tracks).
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicPlaylistEnqueueInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicPlaylistEnqueueInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicPlaylistEnqueueInput'
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicPlaylistEnqueueOutput'
+          description: ''
   /api/v1/music/queue/:
     get:
       operationId: api_v1_music_queue_retrieve
@@ -7880,6 +4149,30 @@ paths:
       operationId: api_v1_music_queue_approve_create
       description: Staff action to approve a pending member song so it enters the
         playback queue.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/{id}/play/:
+    post:
+      operationId: api_v1_music_queue_play_create_2
+      description: Staff plays a specific queued song now and rotates the remaining
+        list.
       parameters:
       - in: path
         name: id
@@ -7985,12 +4278,131 @@ paths:
               schema:
                 $ref: '#/components/schemas/MusicQueueStateOutput'
           description: ''
+  /api/v1/music/queue/history/:
+    delete:
+      operationId: api_v1_music_queue_history_destroy
+      description: Staff clears all recently played / skipped history entries.
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/history/{id}/:
+    delete:
+      operationId: api_v1_music_queue_history_destroy_2
+      description: Staff removes one recently played / skipped history entry.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/history/{id}/play/:
+    post:
+      operationId: api_v1_music_queue_history_play_create
+      description: Staff replays a recently played / skipped track immediately.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
   /api/v1/music/queue/play/:
     post:
       operationId: api_v1_music_queue_play_create
       description: Staff starts playback of the head of the playable FloorCue queue.
       tags:
       - music
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/playback/:
+    post:
+      operationId: api_v1_music_queue_playback_create
+      description: Staff reports gym-floor speaker play/pause for member FloorCue
+        UI.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicPlaybackInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicPlaybackInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicPlaybackInput'
+        required: true
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicQueueStateOutput'
+          description: ''
+  /api/v1/music/queue/reorder/:
+    post:
+      operationId: api_v1_music_queue_reorder_create
+      description: Staff drag-sorts the queued FloorCue list.
+      tags:
+      - music
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicQueueReorderInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MusicQueueReorderInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MusicQueueReorderInput'
+        required: true
       security:
       - bearerAuth: []
       - jwtAuth: []
@@ -8605,7 +5017,7 @@ paths:
           description: No response body
   /api/v1/public/config/:
     get:
-      operationId: public_config_2
+      operationId: public_config
       tags:
       - public
       security:
@@ -10096,13 +6508,13 @@ components:
         device_keypad_id:
           type: string
           nullable: true
-          description: Owner-only digits-only scanner keypad id (no leading zeros).
-            Omitted from admin member detail.
+          description: Admin-only digits-only scanner keypad id (no leading zeros).
+            Omitted from member self profile.
         device_pin:
           type: string
           nullable: true
-          description: Owner-only plaintext 4-digit device PIN for fingerprint-fail
-            unlock. Omitted from admin member detail.
+          description: Admin-only plaintext 4-digit device PIN (single-use). Omitted
+            from member self profile.
         fingerprint_status:
           type: string
         plan:
@@ -10186,13 +6598,13 @@ components:
         device_keypad_id:
           type: string
           nullable: true
-          description: Owner-only digits-only scanner keypad id (no leading zeros).
-            Omitted from admin member detail.
+          description: Admin-only digits-only scanner keypad id (no leading zeros).
+            Omitted from member self profile.
         device_pin:
           type: string
           nullable: true
-          description: Owner-only plaintext 4-digit device PIN for fingerprint-fail
-            unlock. Omitted from admin member detail.
+          description: Admin-only plaintext 4-digit device PIN (single-use). Omitted
+            from member self profile.
         fingerprint_status:
           type: string
         plan:
@@ -10890,7 +7302,7 @@ components:
       properties:
         member_id:
           type: string
-          maxLength: 24
+          maxLength: 10
         checked_in_at:
           type: string
           format: date-time
@@ -10920,6 +7332,9 @@ components:
             * `manual` - manual'
           x-spec-enum-id: 3f6c9d8a25471a9b
           default: device
+        verify_method:
+          type: integer
+          nullable: true
       required:
       - member_id
     CheckInOutput:
@@ -11452,6 +7867,7 @@ components:
         device_pin:
           type: string
           description: New random 4-digit PIN (first digit 1–9); written as ZK password.
+            Staff-only; each PIN unlocks once then rotates.
         pushed:
           type: boolean
           description: True when the new PIN was enqueued/pushed to the scanner.
@@ -12775,6 +9191,9 @@ components:
           - announcement
           - admin_enrollment
           - admin_daily_enrollments
+          - music_request
+          - music_request_approved
+          - music_request_rejected
           type: string
           description: '* `payment_received` - payment_received
 
@@ -12794,8 +9213,14 @@ components:
 
             * `admin_enrollment` - admin_enrollment
 
-            * `admin_daily_enrollments` - admin_daily_enrollments'
-          x-spec-enum-id: 74bca9db1511ab26
+            * `admin_daily_enrollments` - admin_daily_enrollments
+
+            * `music_request` - music_request
+
+            * `music_request_approved` - music_request_approved
+
+            * `music_request_rejected` - music_request_rejected'
+          x-spec-enum-id: fdf647cc1d2ed65e
           readOnly: true
         title_key:
           type: string
@@ -13076,6 +9501,87 @@ components:
       - member_code
       - reason
       - user_id
+    MusicPlaybackInput:
+      type: object
+      properties:
+        is_playback_active:
+          type: boolean
+      required:
+      - is_playback_active
+    MusicPlaylistEnqueueInput:
+      type: object
+      properties:
+        video_ids:
+          type: array
+          items:
+            type: string
+            maxLength: 16
+          maxItems: 40
+    MusicPlaylistEnqueueOutput:
+      type: object
+      properties:
+        added:
+          type: integer
+        skipped_existing:
+          type: integer
+        skipped_filtered:
+          type: integer
+        queue_state:
+          $ref: '#/components/schemas/MusicQueueStateOutput'
+      required:
+      - added
+      - queue_state
+      - skipped_existing
+      - skipped_filtered
+    MusicPlaylistOutput:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MusicPlaylistTrack'
+      required:
+      - description
+      - id
+      - title
+      - tracks
+    MusicPlaylistTrack:
+      type: object
+      properties:
+        video_id:
+          type: string
+        youtube_url:
+          type: string
+          format: uri
+        title:
+          type: string
+        channel_title:
+          type: string
+        thumbnail_url:
+          oneOf:
+          - type: string
+            format: uri
+          - type: string
+            maxLength: 0
+        duration_text:
+          type: string
+        duration_seconds:
+          type: integer
+          nullable: true
+      required:
+      - channel_title
+      - duration_seconds
+      - duration_text
+      - thumbnail_url
+      - title
+      - video_id
+      - youtube_url
     MusicQueueAddInput:
       type: object
       properties:
@@ -13220,12 +9726,25 @@ components:
       - title
       - video_id
       - youtube_url
+    MusicQueueReorderInput:
+      type: object
+      properties:
+        item_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Queued item IDs in the desired play order.
+      required:
+      - item_ids
     MusicQueueStateOutput:
       type: object
       properties:
         is_enabled:
           type: boolean
         require_approval:
+          type: boolean
+        is_playback_active:
           type: boolean
         max_songs_per_user:
           type: integer
@@ -14635,6 +11154,9 @@ components:
         is_active:
           type: boolean
           default: true
+        is_super:
+          type: boolean
+          default: false
         permissions:
           type: array
           items:
@@ -15012,13 +11534,13 @@ components:
         device_keypad_id:
           type: string
           nullable: true
-          description: Owner-only digits-only scanner keypad id (no leading zeros).
-            Omitted from admin member detail.
+          description: Admin-only digits-only scanner keypad id (no leading zeros).
+            Omitted from member self profile.
         device_pin:
           type: string
           nullable: true
-          description: Owner-only plaintext 4-digit device PIN for fingerprint-fail
-            unlock. Omitted from admin member detail.
+          description: Admin-only plaintext 4-digit device PIN (single-use). Omitted
+            from member self profile.
       required:
       - blood_group
       - email
@@ -15062,18 +11584,6 @@ components:
           type: boolean
       required:
       - google_sign_in
-    PurposeEnum:
-      enum:
-      - onboarding
-      - confirmCurrentPhone
-      - changePhone
-      - adminLinkMemberPhone
-      type: string
-      description: |-
-        * `onboarding` - onboarding
-        * `confirmCurrentPhone` - confirmCurrentPhone
-        * `changePhone` - changePhone
-        * `adminLinkMemberPhone` - adminLinkMemberPhone
     ReceiptURL:
       type: object
       properties:
@@ -16016,6 +12526,9 @@ components:
         is_active:
           type: boolean
           default: true
+        is_super:
+          type: boolean
+          default: false
         permissions:
           type: array
           items:

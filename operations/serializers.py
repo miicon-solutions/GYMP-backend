@@ -8,6 +8,7 @@ class StaffInput(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     phone_e164 = PhoneField()
     is_active = serializers.BooleanField(default=True)
+    is_super = serializers.BooleanField(required=False, default=False)
     permissions = serializers.ListField(
         child=serializers.CharField(), required=False, allow_empty=True
     )

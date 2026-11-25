@@ -79,10 +79,14 @@ core/             # shared API helpers, middleware, permissions
   `gym-pm` / `GYM-PM-7400` (`is_staff`). `resolve-phone` → `kind: staff`; member
   OTP → 409. Reclaims that phone if it was OTP-onboarded as a bare member. Local
   Compose runs `seed_dev` after migrate. **Production:** no fixed seed — use
-  `bootstrap_admin --phone …` only.
+  `bootstrap_admin --phone …` only (repeat for each additional super admin;
+  first free short id is `SADM-7400`, later ones are `ADM-…`). An existing
+  super can also create or promote others with `is_super: true` on
+  `/api/v1/admin/staff/`. The last active super cannot be deactivated,
+  demoted, or deleted. Super admin phones cannot be changed through that API.
 - **Staff feature permissions:** `StaffProfile.permissions` is a list of
-  `feature.action` codes (`accounts/staff_permissions.py`). Super
-  (`is_superuser` / `SADM-7400`) always has the full catalog. Non-super staff
+  `feature.action` codes (`accounts/staff_permissions.py`). Every
+  `is_superuser` always has the full catalog. Non-super staff
   need an explicit grant; empty list → no admin feature APIs. Staff identity
   mutations (create/update/delete/activate/MFA enroll) stay **SuperOnly**.
   Unlock/refresh `staff.permissions` returns effective grants. Catalog:

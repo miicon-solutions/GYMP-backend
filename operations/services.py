@@ -32,6 +32,16 @@ def record(actor, area, action, key, params=None):
     )
 
 
+def _another_active_super(user) -> bool:
+    supers = User.objects.select_for_update().filter(role="admin", is_superuser=True).order_by("pk")
+    return any(row.is_active and row.pk != user.pk for row in supers)
+
+
+def _require_another_active_super(user, message):
+    if user.is_superuser and not _another_active_super(user):
+        raise PermissionDenied(message)
+
+
 @transaction.atomic
 def save_staff(actor, data, instance=None):
     from accounts.staff_permissions import normalize_permissions
@@ -40,21 +50,26 @@ def save_staff(actor, data, instance=None):
     created = instance is None
     if instance:
         instance = User.objects.select_for_update().get(pk=instance.pk, role="admin")
-        if instance.is_superuser and (
-            data.get("phone_e164", instance.phone_e164) != instance.phone_e164
-            or data.get("is_active") is False
-        ):
-            raise PermissionDenied(
-                "Cannot change the super admin phone or deactivate this account."
-            )
     phone = normalize_phone(data.get("phone_e164", instance.phone_e164 if instance else ""))
+    if instance and instance.is_superuser and phone != instance.phone_e164:
+        raise PermissionDenied("Cannot change a super admin phone.")
+    if instance and data.get("is_active") is False:
+        _require_another_active_super(instance, "Cannot deactivate the last active super admin.")
+    if instance and "is_super" in data and instance.is_superuser and not data["is_super"]:
+        _require_another_active_super(
+            instance, "Cannot remove super admin access from the last active super admin."
+        )
     if User.objects.filter(phone_e164=phone).exclude(pk=getattr(instance, "pk", None)).exists():
         raise Conflict("Phone number is already registered.")
     perms_provided = "permissions" in data
     permissions = normalize_permissions(data.get("permissions")) if perms_provided else None
     if not instance:
         instance = User.objects.create_user(
-            phone, role="admin", full_name=data["name"], is_active=data.get("is_active", True)
+            phone,
+            role="admin",
+            full_name=data["name"],
+            is_active=data.get("is_active", True),
+            is_superuser=bool(data.get("is_super")),
         )
         StaffProfile.objects.create(
             user=instance,
@@ -65,6 +80,8 @@ def save_staff(actor, data, instance=None):
         instance.full_name = data.get("name", instance.full_name)
         instance.phone_e164 = phone
         instance.is_active = data.get("is_active", instance.is_active)
+        if "is_super" in data:
+            instance.is_superuser = bool(data["is_super"])
         instance.save()
         if permissions is not None and not instance.is_superuser:
             profile = instance.staff_profile
@@ -84,8 +101,8 @@ def save_staff(actor, data, instance=None):
 def set_staff_active(actor, user, active):
     require_admin(actor, True)
     user = User.objects.select_for_update().get(pk=user.pk, role="admin")
-    if user.is_superuser and not active:
-        raise PermissionDenied("Cannot deactivate the super admin.")
+    if not active:
+        _require_another_active_super(user, "Cannot deactivate the last active super admin.")
     if user.is_active != active:
         user.is_active = active
         user.save()
@@ -103,8 +120,7 @@ def set_staff_active(actor, user, active):
 def delete_staff(actor, user):
     require_admin(actor, True)
     user = User.objects.select_for_update().get(pk=user.pk, role="admin")
-    if user.is_superuser:
-        raise PermissionDenied("Cannot remove the super admin.")
+    _require_another_active_super(user, "Cannot remove the last active super admin.")
     record(
         actor,
         "staff",

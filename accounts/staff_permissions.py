@@ -1,6 +1,6 @@
 """Feature + CRUD permission catalog for admin-app staff.
 
-``is_superuser`` (seed ``SADM-7400``) always has every code. Non-super staff
+Every ``is_superuser`` always has every code. Non-super staff
 carry an explicit list of ``feature.action`` strings on ``StaffProfile.permissions``.
 Staff identity mutations (create / update / delete / activate / MFA enroll) stay
 super-only and are not grantable.
@@ -29,8 +29,13 @@ STAFF_PERMISSION_CATALOG: dict[str, tuple[str, ...]] = {
     "music": ("view", "update"),
 }
 
+
 def all_permission_codes() -> list[str]:
-    return [f"{feature}.{action}" for feature, actions in STAFF_PERMISSION_CATALOG.items() for action in actions]
+    return [
+        f"{feature}.{action}"
+        for feature, actions in STAFF_PERMISSION_CATALOG.items()
+        for action in actions
+    ]
 
 
 def catalog_payload() -> list[dict]:
@@ -69,9 +74,7 @@ def normalize_permissions(raw) -> list[str]:
             seen.add(item)
             out.append(item)
     if invalid:
-        raise ValidationError(
-            {"permissions": f"Unknown permission code(s): {', '.join(invalid)}."}
-        )
+        raise ValidationError({"permissions": f"Unknown permission code(s): {', '.join(invalid)}."})
     return sorted(out)
 
 

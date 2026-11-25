@@ -23,3 +23,24 @@ Authorization: Bearer <super_access_token>
 ```
 
 `StaffProfile.permissions` is a list of `feature.action` codes. Empty list → no admin feature APIs for non-super staff.
+
+## Multiple super admins
+
+`POST /api/v1/admin/staff/` and `PATCH /api/v1/admin/staff/{id}/` accept optional `is_super`.
+Only an existing super admin can call those mutations. `is_super: true` creates or promotes
+another super admin (full permission catalog; stored `permissions` are ignored while super).
+`is_super` omitted on create means a normal staff account.
+
+The last **active** super admin cannot be deactivated, demoted (`is_super: false`), or deleted.
+A super admin phone cannot be changed through this API. Browser `/admin/` login is still
+separate: `bootstrap_admin --browser-access` (repeat the command for each additional super admin).
+
+### Sample — create another super admin
+
+```http
+POST /api/v1/admin/staff/
+Authorization: Bearer <super_access_token>
+Content-Type: application/json
+
+{"name": "Second Super", "phone_e164": "+8801911223344", "is_super": true}
+```
