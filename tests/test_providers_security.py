@@ -155,6 +155,68 @@ def test_firebase_verifies_revocation(settings):
         assert verifier.call_args.kwargs["check_revoked"] is True
 
 
+def test_google_sign_in_enabled_from_json_or_file(settings):
+    settings.FIREBASE_CREDENTIALS_FILE = ""
+    settings.FIREBASE_CREDENTIALS_JSON = ""
+    assert providers.google_sign_in_enabled() is False
+    settings.FIREBASE_CREDENTIALS_JSON = '{"type":"service_account"}'
+    assert providers.google_sign_in_enabled() is True
+    settings.FIREBASE_CREDENTIALS_JSON = ""
+    settings.FIREBASE_CREDENTIALS_FILE = "/configured.json"
+    assert providers.google_sign_in_enabled() is True
+
+
+def test_firebase_app_prefers_json_over_file(settings):
+    settings.FIREBASE_CREDENTIALS_JSON = json.dumps(
+        {
+            "type": "service_account",
+            "project_id": "demo",
+            "private_key_id": "k",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----\n",
+            "client_email": "demo@demo.iam.gserviceaccount.com",
+            "client_id": "1",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+    )
+    settings.FIREBASE_CREDENTIALS_FILE = "/should-not-be-used.json"
+    providers.firebase_app.cache_clear()
+    cert = object()
+    app = object()
+    with (
+        patch("firebase_admin.credentials.Certificate", return_value=cert) as certificate,
+        patch("firebase_admin.initialize_app", return_value=app) as initialize,
+    ):
+        assert providers.firebase_app() is app
+        assert certificate.call_args.args[0] == json.loads(settings.FIREBASE_CREDENTIALS_JSON)
+        assert initialize.call_args.kwargs["name"] == "gyma"
+    providers.firebase_app.cache_clear()
+
+
+def test_firebase_app_uses_file_when_json_empty(settings):
+    settings.FIREBASE_CREDENTIALS_JSON = ""
+    settings.FIREBASE_CREDENTIALS_FILE = "/configured.json"
+    providers.firebase_app.cache_clear()
+    cert = object()
+    app = object()
+    with (
+        patch("firebase_admin.credentials.Certificate", return_value=cert) as certificate,
+        patch("firebase_admin.initialize_app", return_value=app) as initialize,
+    ):
+        assert providers.firebase_app() is app
+        assert certificate.call_args.args[0] == "/configured.json"
+        assert initialize.call_args.kwargs["name"] == "gyma"
+    providers.firebase_app.cache_clear()
+
+
+def test_firebase_app_rejects_invalid_json(settings):
+    settings.FIREBASE_CREDENTIALS_JSON = "{not-json"
+    settings.FIREBASE_CREDENTIALS_FILE = ""
+    providers.firebase_app.cache_clear()
+    with pytest.raises(RuntimeError, match="Firebase credentials JSON is invalid"):
+        providers.firebase_app()
+    providers.firebase_app.cache_clear()
+
+
 @pytest.mark.parametrize(
     "key", ["x" * 32, "00" * 32, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="]
 )
@@ -207,20 +269,23 @@ def production_env():
 
 def test_production_starts_without_firebase():
     env = production_env()
-    env.pop("FIREBASE_CREDENTIALS_FILE", None)
-    env.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+    # Empty strings must stay set so .env (overwrite=False) cannot refill them.
+    env["FIREBASE_CREDENTIALS_FILE"] = ""
+    env["FIREBASE_CREDENTIALS_JSON"] = ""
+    env["GOOGLE_APPLICATION_CREDENTIALS"] = ""
     result = subprocess.run(
         [
             sys.executable,
             "-c",
-            "from config import settings as s; print(repr(s.FIREBASE_CREDENTIALS_FILE))",
+            "from config import settings as s; "
+            "print(repr(s.FIREBASE_CREDENTIALS_FILE), repr(s.FIREBASE_CREDENTIALS_JSON))",
         ],
         env=env,
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "''"
+    assert result.stdout.strip() == "'' ''"
 
 
 def test_production_starts_without_sslcommerz():

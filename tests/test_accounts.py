@@ -213,6 +213,7 @@ def test_google_onboarding_and_link(client, member, settings):
 
 def test_google_hidden_without_firebase(client, member, settings):
     settings.FIREBASE_CREDENTIALS_FILE = ""
+    settings.FIREBASE_CREDENTIALS_JSON = ""
     config = client.get("/api/v1/public/config/")
     assert config.status_code == 200
     assert config.data == {"google_sign_in": False}
@@ -236,6 +237,9 @@ def test_google_hidden_without_firebase(client, member, settings):
     assert profile.status_code == 404
     assert profile.data["detail"] == "Google sign-in is not available."
     settings.FIREBASE_CREDENTIALS_FILE = "/configured.json"
+    assert client.get("/api/v1/public/config/").data == {"google_sign_in": True}
+    settings.FIREBASE_CREDENTIALS_FILE = ""
+    settings.FIREBASE_CREDENTIALS_JSON = '{"type":"service_account"}'
     assert client.get("/api/v1/public/config/").data == {"google_sign_in": True}
 
 

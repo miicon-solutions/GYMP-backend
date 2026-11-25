@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 
 import httpx
@@ -38,7 +39,7 @@ def send_sms(phone, code):
 
 
 def google_sign_in_enabled():
-    return bool(settings.FIREBASE_CREDENTIALS_FILE)
+    return bool(settings.FIREBASE_CREDENTIALS_JSON or settings.FIREBASE_CREDENTIALS_FILE)
 
 
 @lru_cache(maxsize=1)
@@ -46,6 +47,15 @@ def firebase_app():
     import firebase_admin
     from firebase_admin import credentials
 
+    raw_json = settings.FIREBASE_CREDENTIALS_JSON
+    if raw_json:
+        try:
+            cert = json.loads(raw_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Firebase credentials JSON is invalid.") from exc
+        if not isinstance(cert, dict):
+            raise RuntimeError("Firebase credentials JSON must be an object.")
+        return firebase_admin.initialize_app(credentials.Certificate(cert), name="gyma")
     path = settings.FIREBASE_CREDENTIALS_FILE
     if not path:
         raise RuntimeError("Firebase credentials are not configured.")

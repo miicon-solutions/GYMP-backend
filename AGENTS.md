@@ -69,7 +69,7 @@ core/             # shared API helpers, middleware, permissions
 
 ## Auth and providers
 
-- Members: phone OTP (sms.net.bd), or Firebase Google when `FIREBASE_CREDENTIALS_FILE` is set (otherwise Google sign-in is hidden); Bearer HS256 access JWT +
+- Members: phone OTP (sms.net.bd), or Firebase Google when `FIREBASE_CREDENTIALS_JSON` or `FIREBASE_CREDENTIALS_FILE` is set (otherwise Google sign-in is hidden); Bearer HS256 access JWT +
   opaque refresh rotation.
 - Staff: TOTP MFA; browser operator console uses Django sessions when provisioned
   and allows CRUD on registered models (secrets stay off forms).
@@ -118,8 +118,9 @@ core/             # shared API helpers, middleware, permissions
   `accounts.providers.send_sms_message` (sms.net.bd; needs
   `SMS_NET_BD_API_KEY`). OTP uses `send_sms` only — `OTP_DEV_BYPASS` skips
   OTP texts, never notification/announcement SMS. System SMS bodies are fixed
-  English plain text. FCM uses `FIREBASE_CREDENTIALS_FILE` (same project as
-  Google auth). Android payloads set
+  English plain text. FCM uses `FIREBASE_CREDENTIALS_JSON` or
+  `FIREBASE_CREDENTIALS_FILE` (same project as Google auth; Infisical/prod
+  prefers the JSON secret). Android payloads set
   `AndroidNotification.channel_id=pure_fitness_push` (must match the mobile
   app channel). iOS needs an APNs auth key on the Firebase iOS app whose
   bundle id matches the shipping app. Invalid/unregistered tokens are
