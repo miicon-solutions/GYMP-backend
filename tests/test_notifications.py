@@ -529,6 +529,114 @@ def test_expiry_batch_idempotent(member, plan):
 
 
 @pytest.mark.django_db
+def test_expiry_batch_7d_and_1d_push_sms_flags(
+    member, other_member, plan, django_capture_on_commit_callbacks
+):
+    today = timezone.localdate()
+    for user, days in ((member, 7), (other_member, 1)):
+        profile = user.member_profile
+        profile.membership_status = "active"
+        profile.plan = plan
+        profile.expires_on = today + timedelta(days=days)
+        profile.push_enabled = True
+        profile.sms_enabled = True
+        profile.save()
+        register_device(user, f"tok-expiring-{days}", "android")
+
+    with patch("notifications.services.send_fcm_for_notification") as send_fcm:
+        with patch("notifications.services.send_sms_for_notification") as send_sms:
+            with django_capture_on_commit_callbacks(execute=True):
+                result = notify_membership_expiry_batch(today=today)
+
+    assert result["expiring_7"] == 1
+    assert result["expiring_1"] == 1
+    for user, days in ((member, 7), (other_member, 1)):
+        notif = MemberNotification.objects.get(user=user, code="membership_expiring")
+        assert notif.send_push is True
+        assert notif.send_sms is True
+        assert notif.dedupe_key == (
+            f"expiring:{days}:{(today + timedelta(days=days)).isoformat()}"
+        )
+        assert notif.body_params["days"] == days
+    assert send_fcm.call_count == 2
+    assert send_sms.call_count == 2
+
+
+@pytest.mark.django_db
+def test_expiry_batch_past_due_expired_push_and_revoke(
+    member, plan, django_capture_on_commit_callbacks
+):
+    today = timezone.localdate()
+    expired_on = today - timedelta(days=2)
+    profile = member.member_profile
+    profile.membership_status = "active"
+    profile.plan = plan
+    profile.expires_on = expired_on
+    profile.push_enabled = True
+    profile.save()
+    register_device(member, "tok-expired", "android")
+
+    with patch(
+        "biometrics.services.revoke_member_device_access",
+        return_value={"revoked": True, "queued": True, "job_id": "x"},
+    ) as revoke:
+        with patch("notifications.services.send_fcm_for_notification") as send_fcm:
+            with patch("notifications.services.send_sms_for_notification"):
+                with django_capture_on_commit_callbacks(execute=True):
+                    result = notify_membership_expiry_batch(today=today)
+
+    profile.refresh_from_db()
+    assert profile.membership_status == "expired"
+    assert result["expired"] == 1
+    assert result["device_revoked"] == 1
+    revoke.assert_called_once()
+    notif = MemberNotification.objects.get(user=member, code="membership_expired")
+    assert notif.send_push is True
+    assert notif.send_sms is True
+    assert notif.dedupe_key == f"expired:{expired_on.isoformat()}"
+    send_fcm.assert_called_once_with(notif.pk)
+
+    second = notify_membership_expiry_batch(today=today)
+    assert second["expired"] == 0
+    assert (
+        MemberNotification.objects.filter(
+            user=member, code="membership_expired"
+        ).count()
+        == 1
+    )
+
+
+@pytest.mark.django_db
+def test_expiry_batch_already_expired_catchup_older_than_yesterday(
+    member, plan, django_capture_on_commit_callbacks
+):
+    """Reconcile-first or multi-day lag: still create membership_expired once."""
+    today = timezone.localdate()
+    expired_on = today - timedelta(days=5)
+    profile = member.member_profile
+    profile.membership_status = "expired"
+    profile.plan = plan
+    profile.expires_on = expired_on
+    profile.push_enabled = True
+    profile.save()
+    register_device(member, "tok-catchup", "android")
+
+    with patch("notifications.services.send_fcm_for_notification") as send_fcm:
+        with patch("notifications.services.send_sms_for_notification"):
+            with django_capture_on_commit_callbacks(execute=True):
+                first = notify_membership_expiry_batch(today=today)
+
+    assert first["expired"] == 1
+    assert first["device_revoked"] == 0
+    notif = MemberNotification.objects.get(user=member, code="membership_expired")
+    assert notif.dedupe_key == f"expired:{expired_on.isoformat()}"
+    send_fcm.assert_called_once_with(notif.pk)
+
+    second = notify_membership_expiry_batch(today=today)
+    assert second["expired"] == 0
+
+
+@pytest.mark.django_db
 def test_admin_announcement_campaign_crud(client, member, staff, plan):
     profile = member.member_profile
     profile.membership_status = "active"

@@ -1191,19 +1191,24 @@ def notify_membership_expiry_batch(*, today=None) -> dict:
                 "expire revoke unexpected failure member=%s", profile.member_id
             )
 
-    # Already-expired whose expiry day was yesterday: ensure the daily notif exists
-    # (no second revoke — reconcile handles device sync).
-    expired_day = today - timedelta(days=1)
-    already_expired = MemberProfile.objects.filter(
-        membership_status="expired",
-        expires_on=expired_day,
-    ).select_related("user")
+    # Already-expired (e.g. reconcile flipped first, or cron lagged >1 day):
+    # ensure membership_expired exists for expires_on < today. Dedupe key is
+    # per expiry date so re-runs stay idempotent; no second revoke here.
+    already_expired = (
+        MemberProfile.objects.filter(
+            membership_status="expired",
+            expires_on__lt=today,
+        )
+        .exclude(expires_on__isnull=True)
+        .select_related("user")
+    )
     for profile in already_expired:
+        expired_on = profile.expires_on
         notif = create_notification(
             profile.user,
             code="membership_expired",
-            body_params={"expiresOn": expired_day.isoformat()},
-            dedupe_key=f"expired:{expired_day.isoformat()}",
+            body_params={"expiresOn": expired_on.isoformat()},
+            dedupe_key=f"expired:{expired_on.isoformat()}",
         )
         if notif:
             created["expired"] += 1

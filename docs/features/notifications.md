@@ -53,13 +53,37 @@ System SMS bodies are fixed **English** plain text (no member locale on the API)
 | `music_request_rejected` | Staff rejects pending FloorCue song | yes | no |
 | `fingerprint_ready` | Enroll/pull or manual status → ready | yes | no |
 | `membership_expiring` | Cron 7d and 1d before expiry | yes | **yes** |
-| `membership_expired` | Cron day after expiry | yes | **yes** |
+| `membership_expired` | Cron when past `expires_on` (flip + catch-up) | yes | **yes** |
 
-Run expiry batch: `python manage.py notify_membership_expiry` (daily cron, Asia/Dhaka).
-Flips **all** still-`active` members with `expires_on < today` (catch-up, not
-only yesterday) and enqueues scanner `revoke_access` (soft-delete; vault kept).
-Follow with `python manage.py reconcile_device_access` for drift (failed jobs,
-past-due lag, missing restores).
+### Membership expiry cron (host, Asia/Dhaka)
+
+No in-process scheduler. Ops must run the daily chain on the host (or
+equivalent):
+
+```bash
+make cron-expiry
+# same as: make notify-expiry && make reconcile-access
+# or: python manage.py notify_membership_expiry
+#     python manage.py reconcile_device_access
+```
+
+Example crontab (~06:00 Asia/Dhaka wall clock; set `CRON_TZ` or run on a
+Dhaka-local host):
+
+```cron
+CRON_TZ=Asia/Dhaka
+0 6 * * * cd /path/to/GYMP-backend && make cron-expiry >> /var/log/gymp-expiry.log 2>&1
+```
+
+`notify_membership_expiry` creates 7d/1d `membership_expiring` rows, flips
+**all** still-`active` members with `expires_on < today` to `expired`, creates
+`membership_expired`, and enqueues scanner `revoke_access` (soft-delete; vault
+kept). Then `reconcile_device_access` repairs drift (failed jobs, past-due lag,
+missing restores).
+
+**Push delivery deps:** `FIREBASE_CREDENTIALS_JSON` or `FIREBASE_CREDENTIALS_FILE`,
+registered FCM device tokens, and member `push_enabled` (SMS also needs
+`SMS_NET_BD_API_KEY` + `sms_enabled`).
 
 ## Admin ops alerts (cron)
 

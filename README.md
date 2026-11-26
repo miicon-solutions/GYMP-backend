@@ -226,4 +226,4 @@ Tests use an isolated PostgreSQL test database, fake provider boundaries, and te
 
 ## Organization
 
-Django apps separate accounts, members, plans, payments, operations, attendance, and reporting. Serializers validate transport inputs; services own business operations and transactions; views enforce endpoint permissions and delegate to services. Django migrations own the fresh schema. No Celery, Redis, scheduler, or legacy database compatibility layer is required.
+Django apps separate accounts, members, plans, payments, operations, attendance, and reporting. Serializers validate transport inputs; services own business operations and transactions; views enforce endpoint permissions and delegate to services. Django migrations own the fresh schema. No Celery, Redis, or in-process scheduler is required; ops must host-cron management commands (e.g. `make cron-expiry` for membership expiry push/SMS + device reconcile). No legacy database compatibility layer is required.

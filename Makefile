@@ -1,4 +1,4 @@
-.PHONY: install run migrate test check lint format schema
+.PHONY: install run migrate test check lint format schema notify-expiry reconcile-access cron-expiry
 install:
 	uv sync --locked
 run:
@@ -20,3 +20,9 @@ test:
 schema:
 	uv run python manage.py spectacular --file docs/openapi/v1.yaml --validate --fail-on-warn
 	uv run python manage.py build_api_docs
+# Daily host cron (Asia/Dhaka): membership expiring/expired push+SMS, then device access reconcile.
+notify-expiry:
+	uv run python manage.py notify_membership_expiry
+reconcile-access:
+	uv run python manage.py reconcile_device_access
+cron-expiry: notify-expiry reconcile-access

@@ -58,7 +58,9 @@ scanner. Vault rows stay encrypted in GYMP for restore.
 | Payment `activate(...)` | Enqueue `push_user` from vault when templates exist / status `ready` |
 | `python manage.py reconcile_device_access` | Catch-up flip past-due; revoke `expired` (vault or `ready`); restore `active`+`ready` missing sync |
 
-Ops (Asia/Dhaka cron): run `notify_membership_expiry`, then `reconcile_device_access`.
+Ops (Asia/Dhaka host cron): `make cron-expiry` (runs `notify_membership_expiry`,
+then `reconcile_device_access`). Example: `0 6 * * *` with `CRON_TZ=Asia/Dhaka`
+— see `docs/features/notifications.md`.
 
 Bridge worker handles `revoke_access` → `DeviceClient.soft_delete_by_user_id`.
 Staff / device-controller pins are never revoked by membership expiry.
