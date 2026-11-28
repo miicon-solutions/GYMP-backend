@@ -1,3 +1,5 @@
+import json
+import logging
 import secrets
 from datetime import UTC, timedelta
 from urllib.parse import urljoin
@@ -12,7 +14,7 @@ from rest_framework.exceptions import PermissionDenied, Throttled, ValidationErr
 
 from accounts import providers
 from accounts.crypto import normalize_phone
-from accounts.models import User
+from accounts.models import Challenge, User
 from accounts.services import (
     bind_google,
     check_proof,
@@ -25,6 +27,11 @@ from core.api import BadGateway, Conflict, require_admin
 from core.images import read_image
 from members.models import MemberProfile
 from operations.services import DHAKA, gym_status, record
+
+log = logging.getLogger(__name__)
+
+# App/API hard-delete allowlist only. Django /admin/ stays unrestricted.
+ALLOWED_HARD_DELETE_PHONE = "+8801307482200"
 
 
 def owned_profile(user):
@@ -243,6 +250,109 @@ def set_fingerprint(actor, profile, status):
 
         notify_fingerprint_ready(profile.user)
     return admin_member_data(get_member(profile.user_id))
+
+
+def _scrub_member_soft_refs(
+    *,
+    user_id,
+    user_id_str: str,
+    phone: str,
+    display_ids: set[str],
+    keypad_ids: set[str],
+    keep_activity_ids: set,
+) -> None:
+    """Remove soft references that survive User CASCADE (scoped to one member)."""
+    from biometrics.models import BridgeDeviceJob
+    from notifications.models import StaffAnnouncement
+    from operations.models import Activity
+
+    if phone:
+        Challenge.objects.filter(phone_e164=phone).delete()
+
+    StaffAnnouncement.objects.filter(member_id=user_id).delete()
+
+    tokens = {user_id_str, *display_ids, *keypad_ids}
+    tokens.discard("")
+
+    activity_ids = []
+    for row in Activity.objects.exclude(pk__in=keep_activity_ids).iterator():
+        params = row.summary_params if isinstance(row.summary_params, dict) else {}
+        blob = json.dumps(params, default=str)
+        if any(token in blob for token in tokens):
+            activity_ids.append(row.pk)
+    if activity_ids:
+        Activity.objects.filter(pk__in=activity_ids).delete()
+
+    job_ids = []
+    for job in BridgeDeviceJob.objects.all().iterator():
+        blob = json.dumps(
+            {"payload": job.payload or {}, "result": job.result or {}},
+            default=str,
+        )
+        if any(token in blob for token in tokens):
+            job_ids.append(job.pk)
+    if job_ids:
+        BridgeDeviceJob.objects.filter(pk__in=job_ids).delete()
+
+
+def hard_delete_member(actor, profile: MemberProfile) -> None:
+    """Super-only app hard-delete for the allowlisted phone only.
+
+    Revokes scanner access, scrubs soft refs, then cascades the User. Django
+    admin delete is separate and unrestricted.
+    """
+    require_admin(actor, super_only=True)
+    user = User.objects.select_related("member_profile").get(pk=profile.user_id)
+    if user.role != "member":
+        raise PermissionDenied()
+    phone = user.phone_e164 or ""
+    if phone != ALLOWED_HARD_DELETE_PHONE:
+        raise PermissionDenied("This member cannot be deleted from the app.")
+
+    profile = user.member_profile
+    user_id = user.pk
+    user_id_str = str(user_id)
+    member_id = (profile.member_id or "").strip()
+    keypad_id = (profile.device_keypad_id or "").strip()
+    full_name = user.full_name or ""
+
+    audit = record(
+        actor,
+        "member",
+        "delete",
+        "adminActivityMemberDeleted",
+        {"name": full_name, "memberId": member_id, "phone": phone},
+    )
+
+    from biometrics.services import revoke_member_device_access
+
+    revoke_result = revoke_member_device_access(profile, wait=True)
+    if not revoke_result.get("revoked"):
+        log.warning(
+            "hard_delete revoke incomplete member=%s result=%s",
+            member_id or user_id_str,
+            revoke_result,
+        )
+
+    photo_name = profile.photo.name if profile.photo else ""
+    photo_storage = profile.photo.storage if profile.photo else None
+
+    with transaction.atomic():
+        _scrub_member_soft_refs(
+            user_id=user_id,
+            user_id_str=user_id_str,
+            phone=phone,
+            display_ids={member_id} if member_id else set(),
+            keypad_ids={keypad_id} if keypad_id else set(),
+            keep_activity_ids={audit.pk},
+        )
+        User.objects.filter(pk=user_id, role="member").delete()
+
+    if photo_name and photo_storage is not None:
+        try:
+            photo_storage.delete(photo_name)
+        except Exception:  # noqa: BLE001
+            log.warning("hard_delete photo cleanup failed name=%s", photo_name)
 
 
 def recover_email(user):

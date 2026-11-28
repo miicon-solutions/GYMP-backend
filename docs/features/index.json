@@ -62,6 +62,7 @@
         "admin_member_fingerprint_template_delete",
         "admin_member_fingerprint_templates",
         "admin_reject_cash_request",
+        "api_v1_admin_members_destroy",
         "api_v1_admin_members_list",
         "api_v1_admin_members_retrieve"
       ]

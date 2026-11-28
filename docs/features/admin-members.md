@@ -9,7 +9,8 @@ Staff APIs for member search/detail, phone link, fingerprint vault actions, and 
 ## Common operations
 
 - `GET /api/v1/admin/members/?q=&status=unpaid|active|expired` — `q` matches temporary `PFT-####` before payment and `PF-####` after it (`PF-` / legacy `PG-` decoration on digits is ignored)
-- `GET|PATCH /api/v1/admin/members/{id}/`
+- `GET /api/v1/admin/members/{id}/`
+- `DELETE /api/v1/admin/members/{id}/` — **super only**; hard-deletes **only** the member whose phone is `+8801307482200` (device revoke + related data). Any other member → 403. Django `/admin/` User delete stays unrestricted for any member.
 - `POST …/phone/` — admin link member phone (OTP proof)
 - Fingerprint: templates list/delete, interactive enroll, pull/push
 - Cash: preview, legacy cash-payments, cash-requests accept/reject
@@ -26,3 +27,5 @@ Returns `{ "request", "member", "payment" }` and activates membership using the 
 ## Permissions
 
 Non-super staff need grants such as `members.view` / `members.update`. Cash-request list needs `cash_requests.view`; accept/reject need `cash_requests.update`. Catalog: `GET /api/v1/admin/staff/permissions/catalog/` (staff feature).
+
+Member account hard-delete via the app API is **super-only** and phone-allowlisted (`+8801307482200`). Having `members.delete` alone is not enough (that code still gates fingerprint template delete only).

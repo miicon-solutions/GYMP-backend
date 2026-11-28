@@ -4,7 +4,7 @@ from rest_framework import generics, serializers
 from rest_framework.response import Response
 
 from accounts.identifiers import strip_member_id_prefix
-from core.api import MemberOnly, StaffPermission
+from core.api import MemberOnly, StaffPermission, SuperOnly
 from members import services
 from members.models import MemberProfile
 from members.serializers import AdminMemberOutput, ProfileInput, ProfileOutput
@@ -60,11 +60,21 @@ class AdminMemberList(generics.ListAPIView):
 
 
 class AdminMemberDetail(generics.GenericAPIView):
-    permission_classes = [StaffPermission("members.view")]
     serializer_class = AdminMemberSerializer
+
+    def get_permissions(self):
+        if self.request.method == "DELETE":
+            return [SuperOnly()]
+        return [StaffPermission("members.view")()]
 
     def get(self, request, pk):
         return Response(services.admin_member_data(services.get_member(pk)))
+
+    @extend_schema(responses={204: None})
+    def delete(self, request, pk):
+        """Hard-delete allowlisted member only (+8801307482200). Super admin app path."""
+        services.hard_delete_member(request.user, services.get_member(pk))
+        return Response(status=204)
 
 
 class PhotoView(generics.GenericAPIView):

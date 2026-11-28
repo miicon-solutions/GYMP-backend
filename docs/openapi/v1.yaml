@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GYMP API
-  version: 1.0.4
+  version: 1.0.7
   description: GYMP membership platform API. Use feature packs at `/docs/features/{feature}/`
     or filtered OpenAPI at `/openapi/v1/{feature}.yaml` to wire one feature at a time.
 paths:
@@ -631,6 +631,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminMember'
           description: ''
+    delete:
+      operationId: api_v1_admin_members_destroy
+      description: Hard-delete allowlisted member only (+8801307482200). Super admin
+        app path.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin-members
+      security:
+      - bearerAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/admin/members/{id}/cash-payments/:
     post:
       operationId: admin_cash_payment
