@@ -8170,6 +8170,15 @@ components:
 
             * `android` - android'
           x-spec-enum-id: 1adac1a0e8d1116f
+        language:
+          enum:
+          - bn
+          - en
+          type: string
+          description: '* `bn` - bn
+
+            * `en` - en'
+          x-spec-enum-id: 69a4ce086269a58d
       required:
       - platform
       - token

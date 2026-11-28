@@ -22,12 +22,14 @@ Resource fields: `id`, `kind` (`membership` \| `payment` \| `attendance` \| `gen
 
 | Method | Path | Body |
 |---|---|---|
-| `POST` | `/api/v1/member/devices/fcm/` | `{ token, platform: ios\|android }` |
+| `POST` | `/api/v1/member/devices/fcm/` | `{ token, platform: ios\|android, language?: en\|bn }` |
 | `DELETE` | `/api/v1/member/devices/fcm/` | `{ token }` |
 
 Members **and staff** register on this path (same Firebase project). Staff tokens receive operational pushes (e.g. new cash payment request). Invalid / unregistered tokens are dropped on send; APNs credential or sender-id misconfig must **not** delete tokens. iOS requires an APNs auth key on the matching Firebase iOS app bundle id. Android FCM uses channel `pure_fitness_push` (high importance); the mobile app creates that channel and shows local notifications while foregrounded.
 
-System FCM title/body are fixed **Bangla** plain text (tray copy; no member locale on the API). System SMS is always **English**. In-app feed still stores ARB `title_key` / `body_key` for client localization. Announcement pushes use staff free-text as-is.
+Optional `language` (`en` \| `bn`) updates `User.preferred_language` (default **`bn`**). The mobile app sends the current `LocaleCubit` language on register and again when the user toggles language.
+
+System FCM title/body follow **`preferred_language`** (Bangla or English tray copy; amounts use Indian comma grouping and locale digits, e.g. `৳1,50,000` / `৳১,৫০,০০০`). Missing/invalid language → `bn`. System SMS wording stays **English** (amounts still comma-formatted in EN). In-app feed still stores ARB `title_key` / `body_key` for client localization. Announcement pushes use staff free-text as-is.
 
 Member opt-out: `MemberProfile.push_enabled` (default true). SMS opt-out: `MemberProfile.sms_enabled` (default true).
 

@@ -118,7 +118,10 @@ core/             # shared API helpers, middleware, permissions
   `accounts.providers.send_sms_message` (sms.net.bd; needs
   `SMS_NET_BD_API_KEY`). OTP uses `send_sms` only — `OTP_DEV_BYPASS` skips
   OTP texts, never notification/announcement SMS. System SMS bodies are fixed
-  English plain text. FCM uses `FIREBASE_CREDENTIALS_JSON` or
+  English plain text (amounts comma-formatted). FCM tray copy follows
+  `User.preferred_language` (`en`|`bn`, default `bn`; set via optional
+  `language` on `POST …/devices/fcm/`); amounts use Indian commas + locale
+  digits. FCM uses `FIREBASE_CREDENTIALS_JSON` or
   `FIREBASE_CREDENTIALS_FILE` (same project as Google auth; Infisical/prod
   prefers the JSON secret). Android payloads set
   `AndroidNotification.channel_id=pure_fitness_push` (must match the mobile

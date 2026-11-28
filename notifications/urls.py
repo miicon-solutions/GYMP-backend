@@ -50,7 +50,12 @@ class FcmDeviceView(APIView):
         serializer = FcmDeviceInput(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        device = services.register_device(request.user, data["token"], data["platform"])
+        device = services.register_device(
+            request.user,
+            data["token"],
+            data["platform"],
+            language=data.get("language"),
+        )
         return Response({"id": str(device.pk), "platform": device.platform})
 
     @extend_schema(

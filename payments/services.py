@@ -349,8 +349,12 @@ def cash_preview(actor, member, plan_id):
     return cash_details(member, get_plan(plan_id))[0]
 
 
+_LATIN_DIGITS = "0123456789"
+_BANGLA_DIGITS = "০১২৩৪৫৬৭৮৯"
+
+
 def format_taka(amount):
-    raw = str(abs(amount))
+    raw = str(abs(int(amount)))
     if len(raw) <= 3:
         return "৳" + raw
     leading, last = raw[:-3], raw[-3:]
@@ -359,6 +363,21 @@ def format_taka(amount):
         groups.insert(0, leading[-2:])
         leading = leading[:-2]
     return "৳" + ",".join(groups + [last])
+
+
+def to_localized_digits(value: str, language: str = "bn") -> str:
+    """Map ASCII digits to Bangla when language is bn; leave other chars intact."""
+    if language != "bn":
+        return value
+    return "".join(
+        _BANGLA_DIGITS[_LATIN_DIGITS.index(ch)] if ch in _LATIN_DIGITS else ch for ch in value
+    )
+
+
+def format_taka_localized(amount, language: str = "bn") -> str:
+    """Indian-comma ৳ amount with locale digits (en=ASCII, bn=Bangla)."""
+    lang = language if language in ("en", "bn") else "bn"
+    return to_localized_digits(format_taka(amount), lang)
 
 
 def _cash_audit(actor, member, plan, payment, kind, previous_plan_name):

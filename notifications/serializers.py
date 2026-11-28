@@ -26,6 +26,9 @@ class MemberNotificationSerializer(serializers.ModelSerializer):
 class FcmDeviceInput(serializers.Serializer):
     token = serializers.CharField(max_length=512)
     platform = serializers.ChoiceField(choices=DEVICE_PLATFORMS)
+    language = serializers.ChoiceField(
+        choices=[("bn", "bn"), ("en", "en")], required=False
+    )
 
 
 class FcmDeviceDeleteInput(serializers.Serializer):

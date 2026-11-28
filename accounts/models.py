@@ -33,6 +33,12 @@ class User(Entity, AbstractBaseUser, PermissionsMixin):
     full_name = models.CharField(max_length=200, blank=True)
     email = models.EmailField(blank=True)
     firebase_uid = models.CharField(max_length=128, null=True, blank=True, unique=True)
+    # App UI + FCM tray language (synced from mobile LocaleCubit via FCM register).
+    preferred_language = models.CharField(
+        max_length=2,
+        choices=[("bn", "Bangla"), ("en", "English")],
+        default="bn",
+    )
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)  # Browser operator access is explicit.
     USERNAME_FIELD = "phone_e164"
@@ -54,6 +60,10 @@ class User(Entity, AbstractBaseUser, PermissionsMixin):
             models.CheckConstraint(
                 condition=models.Q(role="admin") | models.Q(is_staff=False, is_superuser=False),
                 name="operator_requires_admin",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(preferred_language__in=["bn", "en"]),
+                name="valid_preferred_language",
             ),
         ]
 

@@ -144,7 +144,9 @@ def test_cash_request_pushes_staff(
     profile.membership_status = "none"
     profile.profile_complete = True
     profile.save()
-    register_device(staff, "staff-fcm-token", "android")
+    staff.preferred_language = "en"
+    staff.save(update_fields=["preferred_language", "updated_at"])
+    register_device(staff, "staff-fcm-token", "android", language="en")
     with patch(
         "notifications.services._send_fcm",
     ) as send_fcm:
@@ -846,7 +848,7 @@ def test_format_sms_templates(member):
         push=False,
         sms=False,
     )
-    assert "৳3000" in format_sms(payment)
+    assert "৳3,000" in format_sms(payment)
     announce = create_notification(
         member,
         code="announcement",
@@ -884,7 +886,7 @@ def test_format_push_never_returns_arb_keys(member):
     )
     pay_title, pay_body = format_push(payment)
     assert pay_title == "পেমেন্ট গৃহীত"
-    assert "৳3000" in pay_body
+    assert "৳৩,০০০" in pay_body
     assert "notifPaymentReceived" not in pay_title
 
     announce = create_notification(
@@ -897,6 +899,55 @@ def test_format_push_never_returns_arb_keys(member):
         sms=False,
     )
     assert format_push(announce) == ("Closed", "Friday off")
+
+
+@pytest.mark.django_db
+def test_format_push_respects_preferred_language_and_comma_amount(member):
+    from payments.services import format_taka_localized
+
+    assert format_taka_localized(150000, "en") == "৳1,50,000"
+    assert format_taka_localized(150000, "bn") == "৳১,৫০,০০০"
+
+    member.preferred_language = "en"
+    member.save(update_fields=["preferred_language", "updated_at"])
+    payment = create_notification(
+        member,
+        code="payment_received",
+        body_params={"amount": 150000},
+        related_object_id="pay-en",
+        push=False,
+        sms=False,
+    )
+    title, body = format_push(payment)
+    assert title == "Payment received"
+    assert "৳1,50,000" in body
+
+    member.preferred_language = "bn"
+    member.save(update_fields=["preferred_language", "updated_at"])
+    payment_bn = create_notification(
+        member,
+        code="payment_received",
+        body_params={"amount": 150000},
+        related_object_id="pay-bn",
+        push=False,
+        sms=False,
+    )
+    bn_title, bn_body = format_push(payment_bn)
+    assert bn_title == "পেমেন্ট গৃহীত"
+    assert "৳১,৫০,০০০" in bn_body
+
+
+@pytest.mark.django_db
+def test_fcm_register_persists_preferred_language(client, member):
+    client.force_authenticate(member)
+    response = client.post(
+        "/api/v1/member/devices/fcm/",
+        {"token": "tok-lang", "platform": "android", "language": "en"},
+        format="json",
+    )
+    assert response.status_code == 200
+    member.refresh_from_db()
+    assert member.preferred_language == "en"
 
 
 @pytest.mark.django_db

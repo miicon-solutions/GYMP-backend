@@ -111,9 +111,9 @@ CATALOG = {
     ),
 }
 
-# English plain-text SMS bodies (always EN; no member locale on API).
+# English plain-text SMS bodies (always EN wording). {amount} is full ৳… string.
 SMS_TEMPLATES = {
-    "payment_received": "Pure Fitness: We received your payment of ৳{amount}. Thank you!",
+    "payment_received": "Pure Fitness: We received your payment of {amount}. Thank you!",
     "payment_received_fallback": "Pure Fitness: We received your membership payment. Thank you!",
     "cash_request_rejected": (
         "Pure Fitness: Your cash payment request was not approved. "
@@ -133,74 +133,182 @@ SMS_TEMPLATES = {
     ),
 }
 
-# Bangla FCM title/body (parity with mobile app_bn.arb). Tray text cannot use ARB keys.
-# code → (title, body) or body variants with _fallback suffix where params are optional.
+# FCM tray title/body by preferred_language (parity with app_en.arb / app_bn.arb).
+# {amount} is a full format_taka_localized string (includes ৳).
 PUSH_TEMPLATES = {
-    "payment_received": (
-        "পেমেন্ট গৃহীত",
-        "মেম্বারশিপ পেমেন্ট হিসেবে ৳{amount} গৃহীত হয়েছে।",
-    ),
-    "payment_received_fallback": (
-        "পেমেন্ট গৃহীত",
-        "আপনার মেম্বারশিপ পেমেন্ট গৃহীত হয়েছে।",
-    ),
-    "cash_request_rejected": (
-        "নগদ পেমেন্ট প্রত্যাখ্যান",
-        "রিসেপশন আপনার নগদ পেমেন্ট নিশ্চিত করতে পারেনি। মেম্বারশিপ থেকে আবার চেষ্টা করুন।",
-    ),
-    "membership_activated": (
-        "মেম্বারশিপ সক্রিয়",
-        "আপনার মেম্বারশিপ সক্রিয়। ওয়ার্কআউট উপভোগ করুন।",
-    ),
-    "fingerprint_ready": (
-        "ফিঙ্গারপ্রিন্ট প্রস্তুত",
-        "স্টাফ আপনার ফিঙ্গারপ্রিন্ট নিশ্চিত করেছে। আপনি Pure Fitness-এ চেক ইন করতে পারেন।",
-    ),
-    "membership_expiring": (
-        "নবায়নের অনুস্মারক",
-        "আপনার প্ল্যানের মেয়াদ {days} দিনের মধ্যে শেষ। সক্রিয় থাকতে যেকোনো সময় নবায়ন করুন।",
-    ),
-    "membership_expiring_fallback": (
-        "নবায়নের অনুস্মারক",
-        "আপনার প্ল্যানের মেয়াদ শীঘ্রই শেষ। সক্রিয় থাকতে যেকোনো সময় নবায়ন করুন।",
-    ),
-    "membership_expired": (
-        "মেম্বারশিপের মেয়াদ শেষ",
-        "আপনার প্ল্যানের মেয়াদ {expiresOn}-এ শেষ হয়েছে। চালিয়ে যেতে নবায়ন করুন।",
-    ),
-    "membership_expired_fallback": (
-        "মেম্বারশিপের মেয়াদ শেষ",
-        "আপনার মেম্বারশিপের মেয়াদ শেষ। চালিয়ে যেতে নবায়ন করুন।",
-    ),
-    "admin_enrollment": (
-        "নতুন মেম্বার",
-        "{plan} — ৳{amount}। আজ {count} জন নতুন।",
-    ),
-    "admin_daily_enrollments": (
-        "আজকের এনরোলমেন্ট",
-        "আজ ({tz}) {count} জন মেম্বার এনরোল, মোট ৳{amount}।",
-    ),
-    "music_request": (
-        "নতুন FloorCue অনুরোধ",
-        "{memberName} · {title}",
-    ),
-    "music_request_approved": (
-        "গান অনুমোদিত",
-        "আপনার অনুরোধ করা গান কিউতে যোগ হয়েছে: {title}",
-    ),
-    "music_request_approved_fallback": (
-        "গান অনুমোদিত",
-        "আপনার অনুরোধ করা গান কিউতে যোগ হয়েছে।",
-    ),
-    "music_request_rejected": (
-        "গান প্রত্যাখ্যান",
-        "স্টাফ আপনার গানের অনুরোধ গ্রহণ করেনি: {title}",
-    ),
-    "music_request_rejected_fallback": (
-        "গান প্রত্যাখ্যান",
-        "স্টাফ আপনার গানের অনুরোধ গ্রহণ করেনি।",
-    ),
+    "bn": {
+        "payment_received": (
+            "পেমেন্ট গৃহীত",
+            "মেম্বারশিপ পেমেন্ট হিসেবে {amount} গৃহীত হয়েছে।",
+        ),
+        "payment_received_fallback": (
+            "পেমেন্ট গৃহীত",
+            "আপনার মেম্বারশিপ পেমেন্ট গৃহীত হয়েছে।",
+        ),
+        "cash_request": (
+            "নগদ পেমেন্ট অনুরোধ",
+            "{memberName} · {amount} · রিসেপশনের অপেক্ষায়",
+        ),
+        "cash_request_rejected": (
+            "নগদ পেমেন্ট প্রত্যাখ্যান",
+            "রিসেপশন আপনার নগদ পেমেন্ট নিশ্চিত করতে পারেনি। মেম্বারশিপ থেকে আবার চেষ্টা করুন।",
+        ),
+        "membership_activated": (
+            "মেম্বারশিপ সক্রিয়",
+            "আপনার মেম্বারশিপ সক্রিয়। ওয়ার্কআউট উপভোগ করুন।",
+        ),
+        "fingerprint_ready": (
+            "ফিঙ্গারপ্রিন্ট প্রস্তুত",
+            "স্টাফ আপনার ফিঙ্গারপ্রিন্ট নিশ্চিত করেছে। আপনি Pure Fitness-এ চেক ইন করতে পারেন।",
+        ),
+        "membership_expiring": (
+            "নবায়নের অনুস্মারক",
+            "আপনার প্ল্যানের মেয়াদ {days} দিনের মধ্যে শেষ। সক্রিয় থাকতে যেকোনো সময় নবায়ন করুন।",
+        ),
+        "membership_expiring_fallback": (
+            "নবায়নের অনুস্মারক",
+            "আপনার প্ল্যানের মেয়াদ শীঘ্রই শেষ। সক্রিয় থাকতে যেকোনো সময় নবায়ন করুন।",
+        ),
+        "membership_expired": (
+            "মেম্বারশিপের মেয়াদ শেষ",
+            "আপনার প্ল্যানের মেয়াদ {expiresOn}-এ শেষ হয়েছে। চালিয়ে যেতে নবায়ন করুন।",
+        ),
+        "membership_expired_fallback": (
+            "মেম্বারশিপের মেয়াদ শেষ",
+            "আপনার মেম্বারশিপের মেয়াদ শেষ। চালিয়ে যেতে নবায়ন করুন।",
+        ),
+        "admin_enrollment": (
+            "নতুন মেম্বার",
+            "{plan} — {amount}। আজ {count} জন নতুন।",
+        ),
+        "admin_daily_enrollments": (
+            "আজকের এনরোলমেন্ট",
+            "আজ ({tz}) {count} জন মেম্বার এনরোল, মোট {amount}।",
+        ),
+        "music_request": (
+            "নতুন FloorCue অনুরোধ",
+            "{memberName} · {title}",
+        ),
+        "music_request_approved": (
+            "গান অনুমোদিত",
+            "আপনার অনুরোধ করা গান কিউতে যোগ হয়েছে: {title}",
+        ),
+        "music_request_approved_fallback": (
+            "গান অনুমোদিত",
+            "আপনার অনুরোধ করা গান কিউতে যোগ হয়েছে।",
+        ),
+        "music_request_rejected": (
+            "গান প্রত্যাখ্যান",
+            "স্টাফ আপনার গানের অনুরোধ গ্রহণ করেনি: {title}",
+        ),
+        "music_request_rejected_fallback": (
+            "গান প্রত্যাখ্যান",
+            "স্টাফ আপনার গানের অনুরোধ গ্রহণ করেনি।",
+        ),
+    },
+    "en": {
+        "payment_received": (
+            "Payment received",
+            "We received {amount} for your membership payment.",
+        ),
+        "payment_received_fallback": (
+            "Payment received",
+            "We received your membership payment.",
+        ),
+        "cash_request": (
+            "Cash payment request",
+            "{memberName} · {amount} · awaiting reception",
+        ),
+        "cash_request_rejected": (
+            "Cash payment declined",
+            "Reception could not confirm your cash payment. You can try again from membership.",
+        ),
+        "membership_activated": (
+            "Membership activated",
+            "Your membership is active. Enjoy your workouts.",
+        ),
+        "fingerprint_ready": (
+            "Fingerprint ready",
+            "Staff confirmed your fingerprint. You can check in at Pure Fitness.",
+        ),
+        "membership_expiring": (
+            "Renewal reminder",
+            "Your plan expires in {days} days. Renew anytime to stay active.",
+        ),
+        "membership_expiring_fallback": (
+            "Renewal reminder",
+            "Your plan is ending soon. Renew anytime to stay active.",
+        ),
+        "membership_expired": (
+            "Membership expired",
+            "Your plan expired on {expiresOn}. Renew to keep training.",
+        ),
+        "membership_expired_fallback": (
+            "Membership expired",
+            "Your membership has expired. Renew to keep training.",
+        ),
+        "admin_enrollment": (
+            "New member enrolled",
+            "{plan} — {amount}. {count} new today.",
+        ),
+        "admin_daily_enrollments": (
+            "Today's enrollments",
+            "Today ({tz}): {count} members enrolled, {amount} total.",
+        ),
+        "music_request": (
+            "New FloorCue request",
+            "{memberName} · {title}",
+        ),
+        "music_request_approved": (
+            "Song approved",
+            "Your request is in the queue: {title}",
+        ),
+        "music_request_approved_fallback": (
+            "Song approved",
+            "Your song request was approved and added to the queue.",
+        ),
+        "music_request_rejected": (
+            "Song declined",
+            "Staff did not approve your song request: {title}",
+        ),
+        "music_request_rejected_fallback": (
+            "Song declined",
+            "Staff did not approve your song request.",
+        ),
+    },
 }
+
+
+def _user_language(user) -> str:
+    lang = getattr(user, "preferred_language", None) or "bn"
+    return lang if lang in ("en", "bn") else "bn"
+
+
+def _push_pair(language: str, code: str) -> tuple[str, str]:
+    templates = PUSH_TEMPLATES.get(language) or PUSH_TEMPLATES["bn"]
+    return templates[code]
+
+
+def _format_amount_param(raw, language: str) -> str | None:
+    if raw is None or raw == "":
+        return None
+    from payments.services import format_taka_localized
+
+    try:
+        return format_taka_localized(int(raw), language)
+    except (TypeError, ValueError):
+        # Already a formatted string (or non-int) — localize digits only for bn.
+        from payments.services import to_localized_digits
+
+        return to_localized_digits(str(raw), language)
+
+
+def _localize_number_param(raw, language: str) -> str:
+    from payments.services import to_localized_digits
+
+    if raw is None or raw == "":
+        return to_localized_digits("0", language) if language == "bn" else "0"
+    return to_localized_digits(str(raw), language)
 
 
 def has_unread(user) -> bool:
@@ -324,8 +432,8 @@ def format_sms(notif: MemberNotification) -> str:
             return f"{title}: {body}"
         return body or title or "Pure Fitness"
     if code == "payment_received":
-        amount = params.get("amount")
-        if amount is not None and amount != "":
+        amount = _format_amount_param(params.get("amount"), "en")
+        if amount:
             return SMS_TEMPLATES["payment_received"].format(amount=amount)
         return SMS_TEMPLATES["payment_received_fallback"]
     if code == "cash_request_rejected":
@@ -355,48 +463,62 @@ def format_push(notif: MemberNotification) -> tuple[str, str]:
     if free_title or free_body:
         return free_title or "Pure Fitness", free_body
 
+    lang = _user_language(notif.user)
     params = dict(notif.body_params or {})
     code = notif.code
     if code == "payment_received":
-        amount = params.get("amount")
-        if amount is not None and amount != "":
-            title, body = PUSH_TEMPLATES["payment_received"]
+        amount = _format_amount_param(params.get("amount"), lang)
+        if amount:
+            title, body = _push_pair(lang, "payment_received")
             return title, body.format(amount=amount)
-        return PUSH_TEMPLATES["payment_received_fallback"]
+        return _push_pair(lang, "payment_received_fallback")
+    if code == "cash_request":
+        title, body = _push_pair(lang, "cash_request")
+        amount = _format_amount_param(params.get("amount"), lang) or "—"
+        return title, body.format(
+            memberName=params.get("memberName") or "Member",
+            amount=amount,
+        )
     if code == "cash_request_rejected":
-        return PUSH_TEMPLATES["cash_request_rejected"]
+        return _push_pair(lang, "cash_request_rejected")
     if code == "membership_activated":
-        return PUSH_TEMPLATES["membership_activated"]
+        return _push_pair(lang, "membership_activated")
     if code == "fingerprint_ready":
-        return PUSH_TEMPLATES["fingerprint_ready"]
+        return _push_pair(lang, "fingerprint_ready")
     if code == "membership_expiring":
         days = params.get("days")
         if days is not None and days != "":
-            title, body = PUSH_TEMPLATES["membership_expiring"]
-            return title, body.format(days=days)
-        return PUSH_TEMPLATES["membership_expiring_fallback"]
+            title, body = _push_pair(lang, "membership_expiring")
+            return title, body.format(days=_localize_number_param(days, lang))
+        return _push_pair(lang, "membership_expiring_fallback")
     if code == "membership_expired":
         expires_on = params.get("expiresOn")
         if expires_on:
-            title, body = PUSH_TEMPLATES["membership_expired"]
-            return title, body.format(expiresOn=expires_on)
-        return PUSH_TEMPLATES["membership_expired_fallback"]
+            title, body = _push_pair(lang, "membership_expired")
+            return title, body.format(
+                expiresOn=_localize_number_param(expires_on, lang)
+            )
+        return _push_pair(lang, "membership_expired_fallback")
     if code == "admin_enrollment":
-        title, body = PUSH_TEMPLATES["admin_enrollment"]
+        title, body = _push_pair(lang, "admin_enrollment")
+        amount = _format_amount_param(params.get("amount"), lang) or "—"
         return title, body.format(
             plan=params.get("plan") or "Plan",
-            amount=params.get("amount") or "—",
-            count=params.get("count") or "0",
+            amount=amount,
+            count=_localize_number_param(params.get("count"), lang),
         )
     if code == "admin_daily_enrollments":
-        title, body = PUSH_TEMPLATES["admin_daily_enrollments"]
+        title, body = _push_pair(lang, "admin_daily_enrollments")
+        amount = _format_amount_param(params.get("amount"), lang) or _format_amount_param(
+            0, lang
+        )
         return title, body.format(
             tz=params.get("tz") or params.get("tzLabel") or "Dhaka",
-            count=params.get("count") or "0",
-            amount=params.get("amount") or "0",
+            count=_localize_number_param(params.get("count"), lang),
+            amount=amount,
         )
     if code == "music_request":
-        title, body = PUSH_TEMPLATES["music_request"]
+        title, body = _push_pair(lang, "music_request")
         return title, body.format(
             memberName=params.get("memberName") or "Member",
             title=params.get("title") or "Song",
@@ -404,15 +526,15 @@ def format_push(notif: MemberNotification) -> tuple[str, str]:
     if code == "music_request_approved":
         track = params.get("title")
         if track:
-            title, body = PUSH_TEMPLATES["music_request_approved"]
+            title, body = _push_pair(lang, "music_request_approved")
             return title, body.format(title=track)
-        return PUSH_TEMPLATES["music_request_approved_fallback"]
+        return _push_pair(lang, "music_request_approved_fallback")
     if code == "music_request_rejected":
         track = params.get("title")
         if track:
-            title, body = PUSH_TEMPLATES["music_request_rejected"]
+            title, body = _push_pair(lang, "music_request_rejected")
             return title, body.format(title=track)
-        return PUSH_TEMPLATES["music_request_rejected_fallback"]
+        return _push_pair(lang, "music_request_rejected_fallback")
     return "Pure Fitness", ""
 
 
@@ -476,8 +598,6 @@ def notify_staff_cash_request(request_id) -> dict:
     member = req.member
     user = member.user
     name = (user.full_name or "").strip() or member.member_id or "Member"
-    title = "Cash payment request"
-    body = f"{name} · ৳{req.amount_taka} · awaiting reception"
     member_id = str(member.user_id)
     amount = req.amount_taka
     related = str(req.pk)
@@ -490,11 +610,10 @@ def notify_staff_cash_request(request_id) -> dict:
     sent = 0
     failed = 0
     for staff_user in recipients:
+        # No free-text title/body — format_push uses preferred_language templates.
         notif = create_notification(
             staff_user,
             code="cash_request",
-            title=title,
-            body=body,
             title_params={"memberId": member_id, "memberName": name},
             body_params={
                 "member_id": member_id,
@@ -884,7 +1003,12 @@ def notify_admin_daily_enrollments_all(*, for_date=None) -> list[dict]:
     ]
 
 
-def register_device(user, token: str, platform: str) -> MemberDeviceToken:
+def register_device(
+    user, token: str, platform: str, *, language: str | None = None
+) -> MemberDeviceToken:
+    if language in ("en", "bn") and getattr(user, "preferred_language", None) != language:
+        user.preferred_language = language
+        user.save(update_fields=["preferred_language", "updated_at"])
     existing = MemberDeviceToken.objects.filter(token=token).first()
     if existing:
         existing.user = user
