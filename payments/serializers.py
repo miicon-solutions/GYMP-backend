@@ -83,7 +83,9 @@ class CashRequestStatusFilter(serializers.Serializer):
 class CashPaymentRequestSerializer(serializers.ModelSerializer):
     plan_id = serializers.UUIDField(read_only=True)
     payment_id = serializers.UUIDField(read_only=True, allow_null=True)
-    member_id = serializers.UUIDField(read_only=True)
+    # Admin member routes key on User UUID (same as AdminMemberOutput.id /
+    # notify_staff_cash_request), not MemberProfile.pk.
+    member_id = serializers.UUIDField(source="member.user_id", read_only=True)
     member_display_id = serializers.CharField(source="member.member_id", read_only=True)
     member_name = serializers.CharField(source="member.user.full_name", read_only=True)
     member_phone_e164 = serializers.CharField(source="member.user.phone_e164", read_only=True)

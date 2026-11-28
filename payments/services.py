@@ -551,8 +551,9 @@ def list_admin_cash_requests(actor, status="pending", member_id=None):
     if status:
         rows = rows.filter(status=status)
     if member_id:
-        rows = rows.filter(member_id=member_id)
-    return list(rows[:100])
+        # Same User UUID as CashPaymentRequestSerializer.member_id / admin member detail.
+        rows = rows.filter(member__user_id=member_id)
+    return list(rows.order_by("-requested_at", "-id")[:100])
 
 
 def list_member_admin_cash_requests(actor, member):

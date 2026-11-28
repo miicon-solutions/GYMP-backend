@@ -371,6 +371,8 @@ def test_member_cash_request_create_poll_accept(client, staff, member, plan):
     pending = client.get("/api/v1/admin/cash-requests/", {"status": "pending"})
     assert pending.status_code == 200 and len(pending.data) == 1
     assert pending.data[0]["member_display_id"] == member.member_profile.member_id
+    # Admin routes key on User UUID (AdminMemberOutput.id), not MemberProfile.pk.
+    assert pending.data[0]["member_id"] == str(member.pk)
 
     accepted = client.post(f"/api/v1/admin/cash-requests/{request_id}/accept/", {}, format="json")
     assert accepted.status_code == 200
@@ -390,6 +392,34 @@ def test_member_cash_request_create_poll_accept(client, staff, member, plan):
         client.get(f"/api/v1/member/payments/cash-requests/{request_id}/").data["status"]
         == "accepted"
     )
+
+
+def test_admin_lists_all_pending_cash_requests(client, staff, member, other_member, plan):
+    complete(member)
+    complete(other_member)
+    client.force_authenticate(member)
+    first = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    )
+    assert first.status_code == 201
+    client.force_authenticate(other_member)
+    second = client.post(
+        "/api/v1/member/payments/cash-requests/",
+        {"plan_id": str(plan.pk)},
+        format="json",
+    )
+    assert second.status_code == 201
+
+    client.force_authenticate(staff)
+    pending = client.get("/api/v1/admin/cash-requests/", {"status": "pending"})
+    assert pending.status_code == 200
+    assert len(pending.data) == 2
+    member_ids = {row["member_id"] for row in pending.data}
+    assert member_ids == {str(member.pk), str(other_member.pk)}
+    assert str(member.member_profile.pk) not in member_ids
+    assert str(other_member.member_profile.pk) not in member_ids
 
 
 def test_cash_request_accept_requires_permission(client, member, plan):
