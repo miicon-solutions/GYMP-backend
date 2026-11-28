@@ -244,6 +244,118 @@ def test_cash_request_resolve_marks_staff_notif_read(member, staff, plan):
 
 
 @pytest.mark.django_db
+def test_cash_request_accept_notifies_actor_and_peer_staff(
+    member, staff, plan, django_capture_on_commit_callbacks
+):
+    from accounts.models import StaffProfile, User
+    from payments.services import accept_cash_request, create_cash_request
+
+    peer = User.objects.create_user(
+        "+8801911222333", role="admin", full_name="Peer Admin", is_superuser=True
+    )
+    StaffProfile.objects.create(user=peer, short_id="S-PEER")
+    limited = User.objects.create_user(
+        "+8801911444555", role="admin", full_name="No Cash View"
+    )
+    StaffProfile.objects.create(
+        user=limited, short_id="S-LIMIT", permissions=["members.view"]
+    )
+
+    profile = member.member_profile
+    profile.membership_status = "none"
+    profile.profile_complete = True
+    profile.save()
+    staff.full_name = "Acting Admin"
+    staff.save(update_fields=["full_name", "updated_at"])
+
+    with patch("notifications.services._send_fcm"):
+        with django_capture_on_commit_callbacks(execute=True):
+            req = create_cash_request(member, {"plan_id": plan.pk})
+        with django_capture_on_commit_callbacks(execute=True):
+            accept_cash_request(staff, req.pk)
+
+    actor_row = MemberNotification.objects.get(
+        user=staff, code="cash_request_accepted", related_object_id=str(req.pk)
+    )
+    peer_row = MemberNotification.objects.get(
+        user=peer, code="cash_request_accepted", related_object_id=str(req.pk)
+    )
+    assert actor_row.body_params.get("self") is True
+    assert actor_row.body_key == "notifCashRequestAcceptedSelfBody"
+    assert peer_row.body_params.get("self") is False
+    assert peer_row.body_params.get("adminName") == "Acting Admin"
+    assert peer_row.body_key == "notifCashRequestAcceptedPeerBody"
+    assert not MemberNotification.objects.filter(
+        user=limited, code="cash_request_accepted"
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_cash_request_reject_staff_peer_keeps_member_reject(
+    member, staff, plan, django_capture_on_commit_callbacks
+):
+    from accounts.models import StaffProfile, User
+    from payments.services import create_cash_request, reject_cash_request
+
+    peer = User.objects.create_user(
+        "+8801911666777", role="admin", full_name="Peer Reject", is_superuser=True
+    )
+    StaffProfile.objects.create(user=peer, short_id="S-REJ")
+
+    profile = member.member_profile
+    profile.membership_status = "none"
+    profile.profile_complete = True
+    profile.save()
+
+    with patch("notifications.services._send_fcm"):
+        with patch("notifications.services.send_sms_for_notification"):
+            with django_capture_on_commit_callbacks(execute=True):
+                req = create_cash_request(member, {"plan_id": plan.pk})
+            with django_capture_on_commit_callbacks(execute=True):
+                reject_cash_request(staff, req.pk)
+
+    assert MemberNotification.objects.filter(
+        user=member, code="cash_request_rejected"
+    ).exists()
+    assert MemberNotification.objects.filter(
+        user=staff, code="cash_request_staff_rejected", related_object_id=str(req.pk)
+    ).exists()
+    assert MemberNotification.objects.filter(
+        user=peer, code="cash_request_staff_rejected", related_object_id=str(req.pk)
+    ).exists()
+    actor = MemberNotification.objects.get(
+        user=staff, code="cash_request_staff_rejected"
+    )
+    assert actor.body_params.get("self") is True
+
+
+@pytest.mark.django_db
+def test_backfill_cash_request_notifications_skips_existing(
+    member, staff, plan, django_capture_on_commit_callbacks
+):
+    from django.core.management import call_command
+    from io import StringIO
+
+    from payments.services import create_cash_request
+
+    profile = member.member_profile
+    profile.membership_status = "none"
+    profile.profile_complete = True
+    profile.save()
+
+    with patch("notifications.services._send_fcm"):
+        with django_capture_on_commit_callbacks(execute=True):
+            create_cash_request(member, {"plan_id": plan.pk})
+
+    before = MemberNotification.objects.filter(code="cash_request").count()
+    out = StringIO()
+    call_command("backfill_cash_request_notifications", stdout=out)
+    after = MemberNotification.objects.filter(code="cash_request").count()
+    assert after == before
+    assert "skipped_existing=1" in out.getvalue()
+
+
+@pytest.mark.django_db
 def test_music_request_pushes_staff(
     member, staff, monkeypatch, django_capture_on_commit_callbacks
 ):
@@ -399,10 +511,69 @@ def test_music_approve_notifies_member_and_marks_staff_read(
     )
     assert member_notif.related_object_id == str(item_id)
     send_fcm.assert_called()
-    kwargs = send_fcm.call_args.kwargs
-    assert kwargs["data"]["type"] == "music_request_approved"
-    assert kwargs["data"]["music_queue_item_id"] == str(item_id)
-    assert "member_id" not in kwargs["data"]
+    member_push = next(
+        c.kwargs
+        for c in send_fcm.call_args_list
+        if c.kwargs.get("data", {}).get("type") == "music_request_approved"
+    )
+    assert member_push["data"]["music_queue_item_id"] == str(item_id)
+    assert "member_id" not in member_push["data"]
+    staff_resolved = MemberNotification.objects.get(
+        user=staff, code="music_request_staff_approved", related_object_id=str(item_id)
+    )
+    assert staff_resolved.body_params.get("self") is True
+
+
+@pytest.mark.django_db
+def test_music_approve_notifies_peer_staff(
+    member, staff, monkeypatch, django_capture_on_commit_callbacks
+):
+    from accounts.models import StaffProfile, User
+    from music.services import add_song_to_queue, approve_song_in_queue
+
+    peer = User.objects.create_user(
+        "+8801911888999", role="admin", full_name="Music Peer", is_superuser=True
+    )
+    StaffProfile.objects.create(user=peer, short_id="S-MUSPEER")
+    limited = User.objects.create_user(
+        "+8801911000111", role="admin", full_name="No Music View"
+    )
+    StaffProfile.objects.create(
+        user=limited, short_id="S-NMV", permissions=["members.view"]
+    )
+    monkeypatch.setattr(
+        "music.services.resolve_youtube_metadata",
+        lambda vid: {
+            "video_id": vid,
+            "youtube_url": f"https://www.youtube.com/watch?v={vid}",
+            "title": f"Track {vid}",
+            "channel_title": "Gym Artist",
+            "thumbnail_url": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            "duration_text": "3:30",
+            "duration_seconds": 210,
+            "age_restricted": False,
+        },
+    )
+    staff.full_name = "Approver Admin"
+    staff.save(update_fields=["full_name", "updated_at"])
+    with django_capture_on_commit_callbacks(execute=True):
+        result = add_song_to_queue(
+            member,
+            {"youtube_url": "https://www.youtube.com/watch?v=eVTXPUF4Oz4"},
+        )
+    item_id = result["item"]["id"]
+    with patch("notifications.services._send_fcm"):
+        with django_capture_on_commit_callbacks(execute=True):
+            approve_song_in_queue(staff, item_id)
+
+    peer_row = MemberNotification.objects.get(
+        user=peer, code="music_request_staff_approved", related_object_id=str(item_id)
+    )
+    assert peer_row.body_params.get("self") is False
+    assert peer_row.body_params.get("adminName") == "Approver Admin"
+    assert not MemberNotification.objects.filter(
+        user=limited, code="music_request_staff_approved"
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -439,8 +610,15 @@ def test_music_staff_reject_notifies_member(
     ).exists()
     staff_notif = MemberNotification.objects.get(user=staff, code="music_request")
     assert staff_notif.is_unread is False
-    kwargs = send_fcm.call_args.kwargs
-    assert kwargs["data"]["type"] == "music_request_rejected"
+    member_push = next(
+        c.kwargs
+        for c in send_fcm.call_args_list
+        if c.kwargs.get("data", {}).get("type") == "music_request_rejected"
+    )
+    assert member_push["data"]["type"] == "music_request_rejected"
+    assert MemberNotification.objects.filter(
+        user=staff, code="music_request_staff_rejected", related_object_id=str(item_id)
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -799,6 +977,11 @@ def test_catalog_critical_sms_defaults():
     assert CATALOG["music_request"][3] is True
     assert CATALOG["music_request_approved"][3] is True
     assert CATALOG["music_request_rejected"][3] is True
+    assert CATALOG["cash_request_accepted"][3] is True
+    assert CATALOG["cash_request_accepted"][4] is False
+    assert CATALOG["cash_request_staff_rejected"][3] is True
+    assert CATALOG["music_request_staff_approved"][3] is True
+    assert CATALOG["music_request_staff_rejected"][3] is True
 
 
 @pytest.mark.django_db

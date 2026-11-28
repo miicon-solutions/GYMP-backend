@@ -33,9 +33,9 @@ System FCM title/body follow **`preferred_language`** (Bangla or English tray co
 
 Member opt-out: `MemberProfile.push_enabled` (default true). SMS opt-out: `MemberProfile.sms_enabled` (default true).
 
-**Staff cash-request notify:** when a member creates `POST …/cash-requests/`, after commit the API creates a `MemberNotification` (`code=cash_request`, kind `payment`) for each active staff with `cash_requests.view` (super included) and FCM-pushes those users’ registered devices (`type=cash_request`, `member_id`, `cash_request_id`, `amount_taka`). Tap opens admin member detail. Accept / reject / cancel marks matching staff inbox rows (`related_object_id` = request id) as read. A later re-request creates a new unread row.
+**Staff cash-request notify:** when a member creates `POST …/cash-requests/`, after commit the API creates a `MemberNotification` (`code=cash_request`, kind `payment`) for each active staff with `cash_requests.view` (super included) and FCM-pushes those users’ registered devices (`type=cash_request`, `member_id`, `cash_request_id`, `amount_taka`). Tap opens admin member detail. Accept / reject / cancel marks matching staff inbox rows (`related_object_id` = request id) as read. Accept / reject also create peer staff resolution rows (`cash_request_accepted` / `cash_request_staff_rejected`) with actor vs peer copy + FCM. Ops can backfill missing pending inbox rows: `python manage.py backfill_cash_request_notifications [--dry-run]`. A later re-request creates a new unread row. Unpaid members still at `membership_status=none` (no cash request) do **not** get staff notifications.
 
-**Staff FloorCue music-request notify:** when a member `POST …/music/queue/` lands in `pending_approval`, after commit the API creates a `MemberNotification` (`code=music_request`, kind `general`) for each active staff with `music.view` and FCM-pushes (`type=music_request`, `music_queue_item_id` — **no** `member_id` in FCM data so taps open FloorCue, not member detail). Staff approve (`POST …/approve/`) or reject pending (`DELETE …/queue/{id}/`) marks those staff rows read and notifies the requesting member (`music_request_approved` / `music_request_rejected`, push only). Member self-withdraw of a pending item marks staff rows read without a member push. Auto-queue when `require_approval=false` (or staff add) does not fan out.
+**Staff FloorCue music-request notify:** when a member `POST …/music/queue/` lands in `pending_approval`, after commit the API creates a `MemberNotification` (`code=music_request`, kind `general`) for each active staff with `music.view` and FCM-pushes (`type=music_request`, `music_queue_item_id` — **no** `member_id` in FCM data so taps open FloorCue, not member detail). Staff approve (`POST …/approve/`) or reject pending (`DELETE …/queue/{id}/`) marks those staff rows read, notifies the requesting member (`music_request_approved` / `music_request_rejected`, push only), and fans out peer staff (`music_request_staff_approved` / `music_request_staff_rejected`). Member self-withdraw of a pending item marks staff rows read without a member or peer push. Auto-queue when `require_approval=false` (or staff add) does not fan out.
 
 ## SMS delivery
 
@@ -49,10 +49,14 @@ System SMS bodies are fixed **English** plain text (no member locale on the API)
 |---|---|---|---|
 | `payment_received` | Online settle / cash accept / receive cash | yes | **yes** |
 | `membership_activated` | First payment only | no | no |
-| `cash_request_rejected` | Staff rejects cash request | yes | **yes** |
+| `cash_request_rejected` | Staff rejects cash request (member) | yes | **yes** |
+| `cash_request_accepted` | Staff accepts cash request (staff peer fan-out) | yes | no |
+| `cash_request_staff_rejected` | Staff rejects cash request (staff peer fan-out) | yes | no |
 | `music_request` | Member song → `pending_approval` (staff inbox) | yes | no |
-| `music_request_approved` | Staff approves pending FloorCue song | yes | no |
-| `music_request_rejected` | Staff rejects pending FloorCue song | yes | no |
+| `music_request_approved` | Staff approves pending FloorCue song (member) | yes | no |
+| `music_request_rejected` | Staff rejects pending FloorCue song (member) | yes | no |
+| `music_request_staff_approved` | Staff approves FloorCue (staff peer fan-out) | yes | no |
+| `music_request_staff_rejected` | Staff rejects FloorCue (staff peer fan-out) | yes | no |
 | `fingerprint_ready` | Enroll/pull or manual status → ready | yes | no |
 | `membership_expiring` | Cron 7d and 1d before expiry | yes | **yes** |
 | `membership_expired` | Cron when past `expires_on` (flip + catch-up) | yes | **yes** |

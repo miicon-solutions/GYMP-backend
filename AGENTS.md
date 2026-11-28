@@ -107,13 +107,19 @@ core/             # shared API helpers, middleware, permissions
   `membership_expired` (not `fingerprint_ready` / `membership_activated`).
   Cash request create notifies staff with `cash_requests.view`
   (`notify_staff_cash_request`: inbox `code=cash_request` + FCM). Accept /
-  reject / cancel marks those staff rows read. FloorCue: member song →
+  reject / cancel marks those staff rows read. Accept / reject also fan out
+  peer staff rows (`cash_request_accepted` / `cash_request_staff_rejected`:
+  actor gets “You accepted/rejected…”, peers get “{admin} accepted/rejected…”)
+  + FCM. Backfill missing pending inbox rows with
+  `python manage.py backfill_cash_request_notifications` (`--dry-run` ok).
+  FloorCue: member song →
   `pending_approval` notifies staff with `music.view`
   (`notify_staff_music_request`: inbox `code=music_request` + FCM;
   `type=music_request`, `music_queue_item_id` — no `member_id` in FCM data).
-  Staff approve / reject-pending marks those rows read and notifies the
-  member (`music_request_approved` / `music_request_rejected`, push only;
-  self-withdraw marks read only). Member opt-out:
+  Staff approve / reject-pending marks those rows read, notifies the
+  member (`music_request_approved` / `music_request_rejected`, push only),
+  and fans out peer staff (`music_request_staff_approved` /
+  `music_request_staff_rejected`); self-withdraw marks read only. Member opt-out:
   `push_enabled` / `sms_enabled` on `MemberProfile`. SMS via
   `accounts.providers.send_sms_message` (sms.net.bd; needs
   `SMS_NET_BD_API_KEY`). OTP uses `send_sms` only — `OTP_DEV_BYPASS` skips

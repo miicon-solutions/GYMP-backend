@@ -45,6 +45,20 @@ CATALOG = {
         True,
         True,
     ),
+    "cash_request_accepted": (
+        "payment",
+        "notifCashRequestAcceptedTitle",
+        "notifCashRequestAcceptedPeerBody",
+        True,
+        False,
+    ),
+    "cash_request_staff_rejected": (
+        "payment",
+        "notifCashRequestStaffRejectedTitle",
+        "notifCashRequestStaffRejectedPeerBody",
+        True,
+        False,
+    ),
     "membership_activated": (
         "membership",
         "notifMembershipActiveTitle",
@@ -106,6 +120,20 @@ CATALOG = {
         "general",
         "notifMusicRequestRejectedTitle",
         "notifMusicRequestRejectedBody",
+        True,
+        False,
+    ),
+    "music_request_staff_approved": (
+        "general",
+        "notifMusicRequestStaffApprovedTitle",
+        "notifMusicRequestStaffApprovedPeerBody",
+        True,
+        False,
+    ),
+    "music_request_staff_rejected": (
+        "general",
+        "notifMusicRequestStaffRejectedTitle",
+        "notifMusicRequestStaffRejectedPeerBody",
         True,
         False,
     ),
@@ -205,6 +233,38 @@ PUSH_TEMPLATES = {
             "গান প্রত্যাখ্যান",
             "স্টাফ আপনার গানের অনুরোধ গ্রহণ করেনি।",
         ),
+        "cash_request_accepted_self": (
+            "নগদ অনুরোধ গৃহীত",
+            "আপনি {memberName} · {amount} গ্রহণ করেছেন।",
+        ),
+        "cash_request_accepted_peer": (
+            "নগদ অনুরোধ গৃহীত",
+            "{adminName} {memberName} · {amount} গ্রহণ করেছেন।",
+        ),
+        "cash_request_staff_rejected_self": (
+            "নগদ অনুরোধ প্রত্যাখ্যান",
+            "আপনি {memberName} · {amount} প্রত্যাখ্যান করেছেন।",
+        ),
+        "cash_request_staff_rejected_peer": (
+            "নগদ অনুরোধ প্রত্যাখ্যান",
+            "{adminName} {memberName} · {amount} প্রত্যাখ্যান করেছেন।",
+        ),
+        "music_request_staff_approved_self": (
+            "FloorCue অনুমোদিত",
+            "আপনি {title} অনুমোদন করেছেন।",
+        ),
+        "music_request_staff_approved_peer": (
+            "FloorCue অনুমোদিত",
+            "{adminName} {title} অনুমোদন করেছেন।",
+        ),
+        "music_request_staff_rejected_self": (
+            "FloorCue প্রত্যাখ্যান",
+            "আপনি {title} প্রত্যাখ্যান করেছেন।",
+        ),
+        "music_request_staff_rejected_peer": (
+            "FloorCue প্রত্যাখ্যান",
+            "{adminName} {title} প্রত্যাখ্যান করেছেন।",
+        ),
     },
     "en": {
         "payment_received": (
@@ -274,6 +334,38 @@ PUSH_TEMPLATES = {
         "music_request_rejected_fallback": (
             "Song declined",
             "Staff did not approve your song request.",
+        ),
+        "cash_request_accepted_self": (
+            "Cash request accepted",
+            "You accepted {memberName} · {amount}.",
+        ),
+        "cash_request_accepted_peer": (
+            "Cash request accepted",
+            "{adminName} accepted {memberName} · {amount}.",
+        ),
+        "cash_request_staff_rejected_self": (
+            "Cash request rejected",
+            "You rejected {memberName} · {amount}.",
+        ),
+        "cash_request_staff_rejected_peer": (
+            "Cash request rejected",
+            "{adminName} rejected {memberName} · {amount}.",
+        ),
+        "music_request_staff_approved_self": (
+            "FloorCue approved",
+            "You approved {title}.",
+        ),
+        "music_request_staff_approved_peer": (
+            "FloorCue approved",
+            "{adminName} approved {title}.",
+        ),
+        "music_request_staff_rejected_self": (
+            "FloorCue rejected",
+            "You rejected {title}.",
+        ),
+        "music_request_staff_rejected_peer": (
+            "FloorCue rejected",
+            "{adminName} rejected {title}.",
         ),
     },
 }
@@ -535,6 +627,21 @@ def format_push(notif: MemberNotification) -> tuple[str, str]:
             title, body = _push_pair(lang, "music_request_rejected")
             return title, body.format(title=track)
         return _push_pair(lang, "music_request_rejected_fallback")
+    if code in (
+        "cash_request_accepted",
+        "cash_request_staff_rejected",
+        "music_request_staff_approved",
+        "music_request_staff_rejected",
+    ):
+        suffix = "self" if params.get("self") in (True, "true", "1", 1) else "peer"
+        title, body = _push_pair(lang, f"{code}_{suffix}")
+        amount = _format_amount_param(params.get("amount"), lang) or "—"
+        return title, body.format(
+            adminName=params.get("adminName") or "Staff",
+            memberName=params.get("memberName") or "Member",
+            amount=amount,
+            title=params.get("title") or "Song",
+        )
     return "Pure Fitness", ""
 
 
@@ -593,6 +700,7 @@ def notify_staff_cash_request(request_id) -> dict:
             pk=request_id
         )
     except CashPaymentRequest.DoesNotExist:
+        logger.warning("Staff cash-request notify skipped: missing request %s", request_id)
         return {"sent": 0, "failed": 0, "skipped": "missing"}
 
     member = req.member
@@ -604,12 +712,21 @@ def notify_staff_cash_request(request_id) -> dict:
 
     recipients = _staff_with_cash_request_view()
     if not recipients:
-        logger.info("Staff cash-request notify skipped: no permitted staff")
+        logger.warning("Staff cash-request notify skipped: no permitted staff")
         return {"sent": 0, "failed": 0, "skipped": "no_recipients"}
 
     sent = 0
     failed = 0
+    no_device = 0
     for staff_user in recipients:
+        token_n = MemberDeviceToken.objects.filter(user=staff_user).count()
+        if token_n == 0:
+            no_device += 1
+            logger.warning(
+                "Staff cash-request FCM will skip user %s (%s): no device token",
+                staff_user.pk,
+                (staff_user.full_name or "").strip() or staff_user.pk,
+            )
         # No free-text title/body — format_push uses preferred_language templates.
         notif = create_notification(
             staff_user,
@@ -629,7 +746,91 @@ def notify_staff_cash_request(request_id) -> dict:
             continue
         # Push is queued via create_notification on_commit; count inbox rows.
         sent += 1
-    return {"sent": sent, "failed": failed, "skipped": None}
+    result = {
+        "sent": sent,
+        "failed": failed,
+        "skipped": None,
+        "no_device": no_device,
+    }
+    if sent == 0:
+        logger.warning("Staff cash-request notify sent=0 for %s: %s", request_id, result)
+    return result
+
+
+def notify_staff_cash_request_resolved(actor, request_id, *, accepted: bool) -> dict:
+    """Fan out accept/reject inbox + FCM to staff with cash_requests.view."""
+    from payments.models import CashPaymentRequest
+
+    try:
+        req = CashPaymentRequest.objects.select_related("member__user").get(pk=request_id)
+    except CashPaymentRequest.DoesNotExist:
+        logger.warning(
+            "Staff cash-request resolve notify skipped: missing request %s", request_id
+        )
+        return {"sent": 0, "failed": 0, "skipped": "missing"}
+
+    member = req.member
+    member_name = (member.user.full_name or "").strip() or member.member_id or "Member"
+    admin_name = (actor.full_name or "").strip() or "Staff"
+    member_id = str(member.user_id)
+    amount = req.amount_taka
+    related = str(req.pk)
+    code = "cash_request_accepted" if accepted else "cash_request_staff_rejected"
+    title_key = (
+        "notifCashRequestAcceptedTitle"
+        if accepted
+        else "notifCashRequestStaffRejectedTitle"
+    )
+
+    recipients = _staff_with_cash_request_view()
+    if not recipients:
+        logger.warning(
+            "Staff cash-request resolve notify skipped: no permitted staff (%s)", code
+        )
+        return {"sent": 0, "failed": 0, "skipped": "no_recipients"}
+
+    sent = 0
+    for staff_user in recipients:
+        is_self = staff_user.pk == actor.pk
+        body_key = (
+            ("notifCashRequestAcceptedSelfBody" if is_self else "notifCashRequestAcceptedPeerBody")
+            if accepted
+            else (
+                "notifCashRequestStaffRejectedSelfBody"
+                if is_self
+                else "notifCashRequestStaffRejectedPeerBody"
+            )
+        )
+        notif = create_notification(
+            staff_user,
+            code=code,
+            title_key=title_key,
+            body_key=body_key,
+            title_params={"memberId": member_id, "memberName": member_name},
+            body_params={
+                "member_id": member_id,
+                "memberId": member_id,
+                "memberName": member_name,
+                "adminName": admin_name,
+                "amount": amount,
+                "self": is_self,
+            },
+            related_object_id=related,
+            push=True,
+            sms=False,
+        )
+        if notif is None:
+            continue
+        sent += 1
+    result = {"sent": sent, "failed": 0, "skipped": None}
+    if sent == 0:
+        logger.warning(
+            "Staff cash-request resolve notify sent=0 for %s (%s): %s",
+            request_id,
+            code,
+            result,
+        )
+    return result
 
 
 def _staff_with_music_view():
@@ -674,12 +875,20 @@ def notify_staff_music_request(item_id) -> dict:
 
     recipients = _staff_with_music_view()
     if not recipients:
-        logger.info("Staff music-request notify skipped: no permitted staff")
+        logger.warning("Staff music-request notify skipped: no permitted staff")
         return {"sent": 0, "failed": 0, "skipped": "no_recipients"}
 
     sent = 0
     failed = 0
+    no_device = 0
     for staff_user in recipients:
+        if not MemberDeviceToken.objects.filter(user=staff_user).exists():
+            no_device += 1
+            logger.warning(
+                "Staff music-request FCM will skip user %s (%s): no device token",
+                staff_user.pk,
+                (staff_user.full_name or "").strip() or staff_user.pk,
+            )
         notif = create_notification(
             staff_user,
             code="music_request",
@@ -700,7 +909,15 @@ def notify_staff_music_request(item_id) -> dict:
         if notif is None:
             continue
         sent += 1
-    return {"sent": sent, "failed": failed, "skipped": None}
+    result = {
+        "sent": sent,
+        "failed": failed,
+        "skipped": None,
+        "no_device": no_device,
+    }
+    if sent == 0:
+        logger.warning("Staff music-request notify sent=0 for %s: %s", item_id, result)
+    return result
 
 
 def notify_music_request_approved(user, item) -> None:
@@ -725,6 +942,79 @@ def notify_music_request_rejected(user, item) -> None:
         push=True,
         sms=False,
     )
+
+
+def notify_staff_music_request_resolved(actor, item_id, *, approved: bool) -> dict:
+    """Fan out FloorCue approve/reject inbox + FCM to staff with music.view."""
+    from music.models import MusicQueueItem
+
+    try:
+        item = MusicQueueItem.objects.select_related("user").get(pk=item_id)
+    except MusicQueueItem.DoesNotExist:
+        logger.warning(
+            "Staff music-request resolve notify skipped: missing item %s", item_id
+        )
+        return {"sent": 0, "failed": 0, "skipped": "missing"}
+
+    track = (item.title or "").strip() or "Song"
+    admin_name = (actor.full_name or "").strip() or "Staff"
+    related = str(item.pk)
+    code = "music_request_staff_approved" if approved else "music_request_staff_rejected"
+    title_key = (
+        "notifMusicRequestStaffApprovedTitle"
+        if approved
+        else "notifMusicRequestStaffRejectedTitle"
+    )
+
+    recipients = _staff_with_music_view()
+    if not recipients:
+        logger.warning(
+            "Staff music-request resolve notify skipped: no permitted staff (%s)", code
+        )
+        return {"sent": 0, "failed": 0, "skipped": "no_recipients"}
+
+    sent = 0
+    for staff_user in recipients:
+        is_self = staff_user.pk == actor.pk
+        body_key = (
+            (
+                "notifMusicRequestStaffApprovedSelfBody"
+                if is_self
+                else "notifMusicRequestStaffApprovedPeerBody"
+            )
+            if approved
+            else (
+                "notifMusicRequestStaffRejectedSelfBody"
+                if is_self
+                else "notifMusicRequestStaffRejectedPeerBody"
+            )
+        )
+        notif = create_notification(
+            staff_user,
+            code=code,
+            title_key=title_key,
+            body_key=body_key,
+            body_params={
+                "adminName": admin_name,
+                "title": track,
+                "self": is_self,
+            },
+            related_object_id=related,
+            push=True,
+            sms=False,
+        )
+        if notif is None:
+            continue
+        sent += 1
+    result = {"sent": sent, "failed": 0, "skipped": None}
+    if sent == 0:
+        logger.warning(
+            "Staff music-request resolve notify sent=0 for %s (%s): %s",
+            item_id,
+            code,
+            result,
+        )
+    return result
 
 
 def notify_fingerprint_ready(user, *, related_object_id: str = "") -> None:
@@ -1368,9 +1658,13 @@ def send_fcm_for_notification(notification_id) -> dict:
         "title_key": notif.title_key,
         "body_key": notif.body_key,
     }
-    if notif.code == "cash_request":
+    if notif.code in (
+        "cash_request",
+        "cash_request_accepted",
+        "cash_request_staff_rejected",
+    ):
         params = dict(notif.body_params or {})
-        data["type"] = "cash_request"
+        data["type"] = notif.code
         data["cash_request_id"] = notif.related_object_id or ""
         member_id = params.get("member_id") or params.get("memberId") or ""
         if member_id:
@@ -1382,6 +1676,8 @@ def send_fcm_for_notification(notification_id) -> dict:
         "music_request",
         "music_request_approved",
         "music_request_rejected",
+        "music_request_staff_approved",
+        "music_request_staff_rejected",
     ):
         # Do not put member_id in FCM data — mobile open handler routes any
         # member_id to admin member detail before music codes.

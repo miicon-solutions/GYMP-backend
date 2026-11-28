@@ -14,6 +14,8 @@ NOTIFICATION_CODES = [
     ("payment_received", "payment_received"),
     ("cash_request", "cash_request"),
     ("cash_request_rejected", "cash_request_rejected"),
+    ("cash_request_accepted", "cash_request_accepted"),
+    ("cash_request_staff_rejected", "cash_request_staff_rejected"),
     ("membership_activated", "membership_activated"),
     ("fingerprint_ready", "fingerprint_ready"),
     ("membership_expiring", "membership_expiring"),
@@ -24,6 +26,8 @@ NOTIFICATION_CODES = [
     ("music_request", "music_request"),
     ("music_request_approved", "music_request_approved"),
     ("music_request_rejected", "music_request_rejected"),
+    ("music_request_staff_approved", "music_request_staff_approved"),
+    ("music_request_staff_rejected", "music_request_staff_rejected"),
 ]
 
 ANNOUNCEMENT_SCOPES = [

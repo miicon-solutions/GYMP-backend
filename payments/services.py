@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import UTC, timedelta
 from decimal import Decimal, InvalidOperation
@@ -15,6 +16,8 @@ from payments import gateway
 from payments.models import CashPaymentRequest, Payment, PaymentSession
 from plans.models import Plan
 from plans.services import active_offer, pricing
+
+logger = logging.getLogger(__name__)
 
 PACK_DAYS = {1: 30, 3: 90, 6: 180, 9: 270, 12: 365}
 READMISSION_LAPSE_DAYS = 180
@@ -519,7 +522,15 @@ def create_cash_request(user, data):
     def _push_staff():
         from notifications.services import notify_staff_cash_request
 
-        notify_staff_cash_request(req_id)
+        try:
+            result = notify_staff_cash_request(req_id)
+        except Exception:
+            logger.exception("Staff cash-request notify failed for %s", req_id)
+            return
+        if result.get("sent", 0) == 0:
+            logger.warning(
+                "Staff cash-request notify sent=0 for %s: %s", req_id, result
+            )
 
     transaction.on_commit(_push_staff, robust=True)
     return req
@@ -626,9 +637,32 @@ def accept_cash_request(actor, request_id):
     req.payment = payment
     req.save(update_fields=["status", "resolved_at", "resolved_by", "payment", "updated_at"])
     _notify_payment(member, payment)
-    from notifications.services import mark_staff_cash_request_notifications_read
+    from notifications.services import (
+        mark_staff_cash_request_notifications_read,
+        notify_staff_cash_request_resolved,
+    )
 
     mark_staff_cash_request_notifications_read(req.pk)
+    req_id = req.pk
+    actor_id = actor.pk
+
+    def _notify_staff_accepted():
+        from accounts.models import User
+
+        try:
+            acting = User.objects.get(pk=actor_id)
+            result = notify_staff_cash_request_resolved(acting, req_id, accepted=True)
+        except Exception:
+            logger.exception(
+                "Staff cash-request accept notify failed for %s", req_id
+            )
+            return
+        if result.get("sent", 0) == 0:
+            logger.warning(
+                "Staff cash-request accept notify sent=0 for %s: %s", req_id, result
+            )
+
+    transaction.on_commit(_notify_staff_accepted, robust=True)
     return req, payment, member
 
 
@@ -655,8 +689,29 @@ def reject_cash_request(actor, request_id):
     from notifications.services import (
         mark_staff_cash_request_notifications_read,
         notify_cash_rejected,
+        notify_staff_cash_request_resolved,
     )
 
     notify_cash_rejected(member.user, req.pk)
     mark_staff_cash_request_notifications_read(req.pk)
+    req_id = req.pk
+    actor_id = actor.pk
+
+    def _notify_staff_rejected():
+        from accounts.models import User
+
+        try:
+            acting = User.objects.get(pk=actor_id)
+            result = notify_staff_cash_request_resolved(acting, req_id, accepted=False)
+        except Exception:
+            logger.exception(
+                "Staff cash-request reject notify failed for %s", req_id
+            )
+            return
+        if result.get("sent", 0) == 0:
+            logger.warning(
+                "Staff cash-request reject notify sent=0 for %s: %s", req_id, result
+            )
+
+    transaction.on_commit(_notify_staff_rejected, robust=True)
     return req

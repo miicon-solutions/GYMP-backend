@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
@@ -18,6 +19,8 @@ from music.models import (
     MusicQueueItem,
     MusicSettings,
 )
+
+logger = logging.getLogger(__name__)
 
 YOUTUBE_ID_RE = re.compile(r"^[\w-]{11}$")
 YOUTUBE_HOSTS = {
@@ -750,15 +753,37 @@ def remove_song_from_queue(actor, item_id) -> dict:
         resolved_id = item.pk
         notify_member = actor.role == "admin" and actor.id != requester.id
 
+        actor_id = actor.pk
+        staff_rejected = actor.role == "admin"
+
         def _after_reject():
             from notifications.services import (
                 mark_staff_music_request_notifications_read,
                 notify_music_request_rejected,
+                notify_staff_music_request_resolved,
             )
 
             mark_staff_music_request_notifications_read(resolved_id)
             if notify_member:
                 notify_music_request_rejected(requester, item)
+            if staff_rejected:
+                try:
+                    acting = User.objects.get(pk=actor_id)
+                    result = notify_staff_music_request_resolved(
+                        acting, resolved_id, approved=False
+                    )
+                except Exception:
+                    logger.exception(
+                        "Staff music-request reject notify failed for %s",
+                        resolved_id,
+                    )
+                    return
+                if result.get("sent", 0) == 0:
+                    logger.warning(
+                        "Staff music-request reject notify sent=0 for %s: %s",
+                        resolved_id,
+                        result,
+                    )
 
         transaction.on_commit(_after_reject, robust=True)
 
@@ -782,15 +807,33 @@ def approve_song_in_queue(actor, item_id) -> dict:
 
     approved_id = item.pk
     requester = item.user
+    actor_id = actor.pk
 
     def _after_approve():
         from notifications.services import (
             mark_staff_music_request_notifications_read,
             notify_music_request_approved,
+            notify_staff_music_request_resolved,
         )
 
         mark_staff_music_request_notifications_read(approved_id)
         notify_music_request_approved(requester, item)
+        try:
+            acting = User.objects.get(pk=actor_id)
+            result = notify_staff_music_request_resolved(
+                acting, approved_id, approved=True
+            )
+        except Exception:
+            logger.exception(
+                "Staff music-request approve notify failed for %s", approved_id
+            )
+            return
+        if result.get("sent", 0) == 0:
+            logger.warning(
+                "Staff music-request approve notify sent=0 for %s: %s",
+                approved_id,
+                result,
+            )
 
     transaction.on_commit(_after_approve, robust=True)
     return get_queue_state(actor)
